@@ -37,6 +37,9 @@ const MIGRATIONS: &[&[&str]] = &[
         "CREATE INDEX IF NOT EXISTS idx_estaciones_municipio ON estaciones(municipio)",
         "CREATE INDEX IF NOT EXISTS idx_estaciones_rotulo ON estaciones(rotulo)",
     ],
+    &[
+        "CREATE INDEX IF NOT EXISTS idx_precios_fecha_solo ON precios(fecha)"
+    ]
 ];
 
 pub fn get_connection(db: &str) -> rusqlite::Result<Connection> {
