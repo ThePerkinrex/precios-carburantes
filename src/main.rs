@@ -97,7 +97,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Creamos un cliente con un User-Agent de un navegador moderno
     let client = reqwest::blocking::Client::builder()
-        .user_agent("PostmanRuntime/7.52.0")
+        .user_agent("PrecioCarburantes/1.0.0")
         .http1_only()
         .build()?;
 
