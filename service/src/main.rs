@@ -8,6 +8,7 @@ use tracing_subscriber::EnvFilter;
 type DbPool = Pool<SqliteConnectionManager>;
 
 mod api;
+mod files;
 
 #[tokio::main]
 async fn main() {
@@ -22,12 +23,13 @@ async fn main() {
 
     info!("Starting up process service");
 
-
     let manager = get_connection_manager(DEFAULT_DB_PATH).unwrap();
     let pool = r2d2::Pool::new(manager).unwrap();
 
-
-    let app = Router::new().nest("/api", api::get_router()).with_state(pool);
+    let app = Router::new()
+        .nest("/api", api::get_router())
+        .nest("/files", files::get_router())
+        .with_state(pool);
 
     let addr = std::env::var("PRICE_ADDR").unwrap_or_else(|_| "0.0.0.0:8001".into());
 
