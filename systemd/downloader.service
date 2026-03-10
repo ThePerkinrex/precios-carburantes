@@ -1,0 +1,17 @@
+[Unit]
+Description=Run Precios Carburantes Script
+# Only run if the executable exists at this path
+ConditionPathExists=$FILE_DEST/bin/downloader
+
+[Service]
+Type=oneshot
+User=pi
+WorkingDirectory=$FILE_DEST
+ExecStart=$FILE_DEST/bin/downloader
+# Optional: Logs output to syslog
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+

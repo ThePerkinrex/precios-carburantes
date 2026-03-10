@@ -1,0 +1,15 @@
+[package]
+name = "service"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+axum = "0.8.8"
+serde = { version = "1.0.228", features = ["derive"] }
+tokio = { version = "1.50.0", features = ["rt-multi-thread", "macros"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
+rusqlite = { version = "0.38.0", features = ["bundled"] }
+database-access = { path = "../database-access" }
+r2d2_sqlite = "0.32.0"
+r2d2 = "0.8.10"

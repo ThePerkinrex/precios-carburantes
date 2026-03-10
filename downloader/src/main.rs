@@ -1,11 +1,9 @@
 use chrono::Local;
-use rusqlite::{Connection, Result, params};
+use rusqlite::{Result, params};
 use serde::{Deserialize, Deserializer};
 use std::error::Error;
 
-use crate::migrations::get_connection;
-
-mod migrations;
+use database_access::{DEFAULT_DB_PATH, get_connection_manager};
 
 // --- Modelos de Datos ---
 
@@ -88,8 +86,9 @@ where
 // --- Lógica Principal ---
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let db_path = "precios_carburantes.db"; // Cambia esto a la ruta de tu pendrive
-    let mut conn = get_connection(db_path)?;
+    let manager = get_connection_manager(DEFAULT_DB_PATH)?;
+    let pool = r2d2::Pool::new(manager)?;
+    let mut conn = pool.get()?;
 
     // 2. Descargar Datos
     println!("Descargando datos de la API...");

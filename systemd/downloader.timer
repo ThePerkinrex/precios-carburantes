@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Precios Carburantes 3 times a day
+
+[Timer]
+# Runs at 8:00, 15:00, and 21:00 every day
+OnCalendar=*-*-* 08,15,21:00:00
+# Ensures it runs if the Pi was powered off during the scheduled time
+Persistent=true
+Unit=downloader.service
+
+[Install]
+WantedBy=timers.target

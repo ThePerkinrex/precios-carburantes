@@ -1,5 +1,6 @@
-use std::hash::{DefaultHasher, Hash, Hasher};
+use std::{hash::{DefaultHasher, Hash, Hasher}, path::Path};
 
+use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{Connection, OptionalExtension, params};
 
 const MIGRATIONS: &[&[&str]] = &[
@@ -42,9 +43,9 @@ const MIGRATIONS: &[&[&str]] = &[
     ]
 ];
 
-pub fn get_connection(db: &str) -> rusqlite::Result<Connection> {
-    let mut conn = Connection::open(db)?;
+pub const DEFAULT_DB_PATH: &str = "precios_carburantes.db";
 
+fn apply_init(conn: &mut Connection) -> rusqlite::Result<()> {
     conn.execute_batch(
         "
         PRAGMA journal_mode = WAL;
@@ -110,5 +111,9 @@ pub fn get_connection(db: &str) -> rusqlite::Result<Connection> {
 
     tx.commit()?;
 
-    Ok(conn)
+    Ok(())
+}
+
+pub fn get_connection_manager<P: AsRef<Path>>(db: P) -> rusqlite::Result<SqliteConnectionManager> {
+    Ok(SqliteConnectionManager::file(db).with_init(apply_init))
 }
