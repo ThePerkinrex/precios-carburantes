@@ -1,4 +1,8 @@
-use std::{hash::{DefaultHasher, Hash, Hasher}, path::Path};
+use std::{
+    hash::{DefaultHasher, Hash, Hasher},
+    path::Path,
+    sync::Mutex,
+};
 
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{Connection, OptionalExtension, params};
@@ -38,12 +42,11 @@ const MIGRATIONS: &[&[&str]] = &[
         "CREATE INDEX IF NOT EXISTS idx_estaciones_municipio ON estaciones(municipio)",
         "CREATE INDEX IF NOT EXISTS idx_estaciones_rotulo ON estaciones(rotulo)",
     ],
-    &[
-        "CREATE INDEX IF NOT EXISTS idx_precios_fecha_solo ON precios(fecha)"
-    ]
+    &["CREATE INDEX IF NOT EXISTS idx_precios_fecha_solo ON precios(fecha)"],
 ];
 
 pub const DEFAULT_DB_PATH: &str = "precios_carburantes.db";
+static MIGRATIONS_APPLIED: Mutex<bool> = Mutex::new(false);
 
 fn apply_init(conn: &mut Connection) -> rusqlite::Result<()> {
     conn.execute_batch(
@@ -54,62 +57,72 @@ fn apply_init(conn: &mut Connection) -> rusqlite::Result<()> {
     ",
     )?;
 
-    let mut tx = conn.transaction()?;
+    println!("Locking migrations");
+    let mut lock = MIGRATIONS_APPLIED.lock().unwrap();
 
-    tx.execute(
-        "CREATE TABLE IF NOT EXISTS migrations (
+    if !*lock {
+        println!("Applying migrations");
+        let mut tx = conn.transaction()?;
+
+        tx.execute(
+            "CREATE TABLE IF NOT EXISTS migrations (
             id INTEGER PRIMARY KEY,
             migration_hash INTEGER
         )",
-        [],
-    )?;
+            [],
+        )?;
 
-    for (i, &mig) in MIGRATIONS.iter().enumerate() {
-        let i = i as i64;
-        let mut hasher = DefaultHasher::new();
+        for (i, &mig) in MIGRATIONS.iter().enumerate() {
+            let i = i as i64;
+            let mut hasher = DefaultHasher::new();
 
-        mig.hash(&mut hasher);
+            mig.hash(&mut hasher);
 
-        let hash = hasher.finish() as i64;
+            let hash = hasher.finish() as i64;
 
-        let old_hash: Option<i64> = tx
-            .query_one(
-                "SELECT migration_hash FROM migrations WHERE id = ?",
-                params![&i],
-                |row| row.get("migration_hash"),
-            )
-            .optional()?;
-
-        if let Some(old_hash) = old_hash {
-            if hash != old_hash {
-                panic!(
-                    "Non matching hashes ({:x} vs applied {:x}) for migration {}: {:?}",
-                    hash as u64, old_hash as u64, i as u64, mig
+            let old_hash: Option<i64> = tx
+                .query_one(
+                    "SELECT migration_hash FROM migrations WHERE id = ?",
+                    params![&i],
+                    |row| row.get("migration_hash"),
                 )
+                .optional()?;
+
+            if let Some(old_hash) = old_hash {
+                if hash != old_hash {
+                    panic!(
+                        "Non matching hashes ({:x} vs applied {:x}) for migration {}: {:?}",
+                        hash as u64, old_hash as u64, i as u64, mig
+                    )
+                } else {
+                    println!(
+                        "Migration {} with hash {:x} already applied",
+                        i as u64, hash as u64
+                    );
+                }
             } else {
                 println!(
-                    "Migration {} with hash {:x} already applied",
+                    "Applying migration {} with hash {:x}",
                     i as u64, hash as u64
                 );
+                let savepoint = tx.savepoint()?;
+                for x in mig {
+                    savepoint.execute(x, params![])?;
+                }
+                savepoint.execute(
+                    "INSERT INTO migrations (id, migration_hash) VALUES (?1, ?2)",
+                    params![i, hash],
+                )?;
+                savepoint.commit()?;
             }
-        } else {
-            println!(
-                "Applying migration {} with hash {:x}",
-                i as u64, hash as u64
-            );
-            let savepoint = tx.savepoint()?;
-            for x in mig {
-                savepoint.execute(x, params![])?;
-            }
-            savepoint.execute(
-                "INSERT INTO migrations (id, migration_hash) VALUES (?1, ?2)",
-                params![i, hash],
-            )?;
-            savepoint.commit()?;
         }
+
+        tx.commit()?;
+
+        *lock = true;
     }
 
-    tx.commit()?;
+    drop(lock);
 
     Ok(())
 }
