@@ -1,5 +1,7 @@
-use axum::{Json, Router, extract::State, routing::get};
-use serde::Serialize;
+use axum::{Json, Router, extract::{Path, Query, State}, http::StatusCode, routing::get};
+use rusqlite::params;
+use serde::{Serialize, Deserialize};
+use tracing::{info, warn};
 
 use crate::DbPool;
 
@@ -7,9 +9,13 @@ use crate::DbPool;
 struct EstacionPrecio {
     id: i64,
     rotulo: Option<String>,
+    horario: Option<String>,
     direccion: Option<String>,
+    margen: Option<String>,
     municipio: Option<String>,
+    localidad: Option<String>,
     provincia: Option<String>,
+    cp: Option<String>,
     latitud: f64,
     longitud: f64,
     fecha: String,
@@ -19,7 +25,7 @@ struct EstacionPrecio {
 
 async fn latest_prices(
     State(state): State<DbPool>,
-) -> Result<Json<Vec<EstacionPrecio>>, String> {
+) -> Result<Json<Vec<EstacionPrecio>>, StatusCode> {
 
     let conn = state.get().unwrap();
 
@@ -39,13 +45,17 @@ async fn latest_prices(
                 e.longitud,
                 p.fecha,
                 p.gasoleo_a,
-                p.gasolina_95
+                p.gasolina_95,
+                e.margen,
+                e.localidad,
+                e.horario,
+                e.cp
             FROM estaciones e
             JOIN precios p ON p.id_estacion = e.id
             JOIN latest l ON p.fecha = l.fecha
             "#,
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| {warn!("SQL Error: {e}"); StatusCode::INTERNAL_SERVER_ERROR})?;
 
     let rows = stmt
         .query_map([], |row| {
@@ -60,21 +70,77 @@ async fn latest_prices(
                 fecha: row.get(7)?,
                 gasoleo_a: row.get(8)?,
                 gasolina_95: row.get(9)?,
+                margen: row.get(10)?,
+                localidad: row.get(11)?,
+                horario: row.get(12)?,
+                cp: row.get(13)?,
             })
         })
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| {warn!("SQL Error: {e}"); StatusCode::INTERNAL_SERVER_ERROR})?;
 
     let mut estaciones = Vec::new();
     for row in rows {
-        estaciones.push(row.map_err(|e| e.to_string())?);
+        estaciones.push(row.map_err(|e| {warn!("SQL Error: {e}"); StatusCode::INTERNAL_SERVER_ERROR})?);
     }
 
     Ok(Json(estaciones))
 }
 
+#[derive(Serialize)]
+struct PricePoint {
+    fecha: String,
+    gasoleo_a: Option<f64>,
+    gasolina_95: Option<f64>,
+}
+
+#[derive(Deserialize)]
+struct HistoryParams {
+    from: chrono::DateTime<chrono::Utc>
+}
+
+async fn price_history(Path(id): Path<i64>, Query(params): Query<HistoryParams>, State(state): State<DbPool>,
+) -> Result<Json<Vec<PricePoint>>, StatusCode> {
+    let conn = state.get().unwrap();
+    let tz = chrono::Local;
+
+    let mut stmt = conn
+        .prepare(
+            r#"
+            
+            SELECT 
+                fecha,
+                gasoleo_a,
+                gasolina_95
+            FROM precios
+            WHERE id_estacion = ? AND fecha >= ?
+            "#,
+        )
+        .map_err(|e| {warn!("SQL Error: {e}"); StatusCode::INTERNAL_SERVER_ERROR})?;
+    let fecha = params.from.with_timezone(&tz).format("%Y-%m-%d %H:%M:%S").to_string();
+    // info!("Filtering by {fecha}");
+    let rows = stmt
+        .query_map(params![id, fecha], |row| {
+            Ok(PricePoint {
+                fecha: row.get(0)?,
+                gasoleo_a: row.get(1)?,
+                gasolina_95: row.get(2)?,
+            })
+        })
+        .map_err(|e| {warn!("SQL Error: {e}"); StatusCode::INTERNAL_SERVER_ERROR})?;
+
+    let mut precios = Vec::new();
+    for row in rows {
+        precios.push(row.map_err(|e| {warn!("SQL Error: {e}"); StatusCode::INTERNAL_SERVER_ERROR})?);
+    }
+
+    Ok(Json(precios))
+}
+
 
 pub fn get_router() -> Router<DbPool> {
-	Router::new().route("/prices", get(latest_prices))
+	Router::new()
+        .route("/prices", get(latest_prices))
+        .route("/{id}/history", get(price_history))
 }
 
 
