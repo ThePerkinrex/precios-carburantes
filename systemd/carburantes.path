@@ -1,0 +1,12 @@
+[Unit]
+Description=Watch Servicio web de carburantes for changes
+
+[Path]
+PathExists=$FILE_DEST/bin/service
+PathModified=$FILE_DEST/bin/service
+
+
+Unit=carburantes.service
+
+[Install]
+WantedBy=multi-user.target

@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use axum::{body::Body, http::{StatusCode, header}, response::{AppendHeaders, IntoResponse, Response}};
+use axum::{body::Body, http::{StatusCode, header}, response::{IntoResponse, Response}};
 use tracing::warn;
 
 const STATIC_FILE_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/static/");
@@ -12,7 +12,7 @@ async fn match_entry<P: AsRef<Path>>(path: P) -> Result<Response<Body>, Response
 			Box::pin(match_entry(path.join("index.html"))).await
 		}else{
 			let mime = mime_guess::from_path(path).first_or_octet_stream();
-			Ok((StatusCode::OK, AppendHeaders([(header::CONTENT_TYPE, mime.essence_str())]), tokio::fs::read(path).await.map_err(|e| {
+			Ok((StatusCode::OK, [(header::CONTENT_TYPE, mime.essence_str())], tokio::fs::read(path).await.map_err(|e| {
 				warn!("Error reading file: {e}");
 				StatusCode::INTERNAL_SERVER_ERROR.into_response()
 			})?).into_response())

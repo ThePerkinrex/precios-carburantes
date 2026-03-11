@@ -1,0 +1,16 @@
+[Unit]
+Description=Servicio web de carburantes
+ConditionPathExists=$FILE_DEST/bin/service
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=$FILE_DEST
+ExecStart=$FILE_DEST/bin/service
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
