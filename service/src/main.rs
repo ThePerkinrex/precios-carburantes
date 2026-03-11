@@ -21,6 +21,8 @@ async fn main() {
         )
         .init();
 
+    info!("Features: {}", env!("BUILD_FEATURES"));
+
     info!("Starting up process service");
 
     let manager = get_connection_manager(DEFAULT_DB_PATH).unwrap();
