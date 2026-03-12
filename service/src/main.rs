@@ -1,3 +1,5 @@
+use std::fs::File;
+
 use axum::Router;
 use database_access::{DEFAULT_DB_PATH, get_connection_manager};
 use r2d2::Pool;
@@ -5,10 +7,14 @@ use r2d2_sqlite::SqliteConnectionManager;
 use tracing::{info, level_filters::LevelFilter};
 use tracing_subscriber::EnvFilter;
 
+use crate::config::Config;
+
 type DbPool = Pool<SqliteConnectionManager>;
 
 mod api;
 mod files;
+mod config;
+
 
 #[tokio::main]
 async fn main() {
@@ -23,6 +29,10 @@ async fn main() {
 
     info!("Features: {}", env!("BUILD_FEATURES"));
 
+    let config: Config = serde_json::from_reader(File::open("service.config.json").unwrap()).unwrap();
+
+    info!("Config: {config:#?}");
+
     info!("Starting up process service");
 
     let manager = get_connection_manager(DEFAULT_DB_PATH).unwrap();
@@ -33,10 +43,11 @@ async fn main() {
         .nest("/files", files::get_router())
         .with_state(pool);
 
-    let addr = std::env::var("PRICE_ADDR").unwrap_or_else(|_| "0.0.0.0:8001".into());
+    // let addr = std::env::var("PRICE_ADDR").unwrap_or_else(|_| "127.0.0.1:8001".into());
+    let addr = config.addr.to_slice();
 
     // run our app with hyper, listening globally on port 3000
-    let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
-    info!("Listening on {addr}");
+    let listener = tokio::net::TcpListener::bind(&*addr).await.unwrap();
+    info!("Listening on {}", listener.local_addr().unwrap());
     axum::serve(listener, app).await.unwrap();
 }
