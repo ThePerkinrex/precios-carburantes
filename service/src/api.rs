@@ -3,7 +3,7 @@ use rusqlite::params;
 use serde::{Serialize, Deserialize};
 use tracing::{info, warn};
 
-use crate::DbPool;
+use crate::{DbPool, auth::ClientAuth};
 
 #[derive(Serialize)]
 struct EstacionPrecio {
@@ -136,11 +136,20 @@ async fn price_history(Path(id): Path<i64>, Query(params): Query<HistoryParams>,
     Ok(Json(precios))
 }
 
+#[derive(Debug, Serialize)]
+struct UserInfo {
+    name: String
+}
+
+async fn user_info(auth: ClientAuth) -> Json<UserInfo> {
+    Json(UserInfo { name: auth.username })
+}
 
 pub fn get_router() -> Router<DbPool> {
 	Router::new()
         .route("/prices", get(latest_prices))
         .route("/{id}/history", get(price_history))
+        .route("/user/info", get(user_info))
 }
 
 

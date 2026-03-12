@@ -3,7 +3,7 @@ use std::{borrow::Cow, net::SocketAddr};
 use serde::Deserialize;
 
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 #[serde(untagged)]
 pub enum SocketAddrs {
 	Single(SocketAddr),
@@ -19,7 +19,14 @@ impl SocketAddrs {
 	}
 }
 
-#[derive(Debug, Deserialize)]
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct DevConfig {
+	pub user: String
+}
+
+#[derive(Debug, Deserialize, Clone)]
 pub struct Config {
-	pub addr: SocketAddrs
+	pub addr: SocketAddrs,
+	pub dev: Option<DevConfig>
 }

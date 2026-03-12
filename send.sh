@@ -19,8 +19,15 @@ for file in systemd/*; do
   envsubst < "$file" > "$TEMP_DIR/$(basename "$file")"
 done
 
+if [ ! -f "certs/ca.crt" ]; then
+    echo "CA does not exist, creating it."
+	./gen_ca.sh
+fi
+
 ssh $RPI_SSH_DEST "sudo systemctl stop $SYSTEMD_UNITS && echo 'Stopped successfully $SYSTEMD_UNITS'"
 
+
+scp -r certs/* $RPI_SSH_DEST:$FILE_DEST/certs/
 scp $BINS $RPI_SSH_DEST:$FILE_DEST/bin/
 scp config/* $RPI_SSH_DEST:$FILE_DEST/
 scp "$TEMP_DIR"/* $RPI_SSH_DEST:/home/pi/systemd/
