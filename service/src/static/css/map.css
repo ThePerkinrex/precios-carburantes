@@ -41,6 +41,11 @@ body {
 	box-sizing: border-box;
 }
 
+.icon.price-label {
+	
+  background: linear-gradient(135deg,#666 5px,white 0); 
+}
+
 .logo {
 	overflow-wrap: break-word;
 	max-width: 10em !important;
@@ -94,6 +99,7 @@ body {
 	background: #205f31;
 	color: #ffffff;
 }
+
 .open.soon {
 	background: #e9cc6d;
 	color: #000000;

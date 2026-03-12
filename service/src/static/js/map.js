@@ -33,14 +33,31 @@ async function load() {
 		// i++;
 		// if(i > 10) break;
 
+		let gasolina_short =
+			eess.gasolina_95 != null
+				? `<div class="gasolina">${eess.gasolina_95}€</div>`
+				: "";
+		let gasolina_long =
+			eess.gasolina_95 != null
+				? `<div class="gasolina">Gasolina 95: <b>${eess.gasolina_95}€</b></div>`
+				: "";
+		let gasoleo_short =
+			eess.gasoleo_a != null
+				? `<div class="gasoleo">${eess.gasoleo_a}€</div>`
+				: "";
+		let gasoleo_long =
+			eess.gasoleo_a != null
+				? `<div class="gasoleo">Gasoleo A: <b>${eess.gasoleo_a}€</b></div>`
+				: "";
+
 		// // console.log(eess);
 		// Crear un icono que muestre el precio directamente
 		const icon = L.divIcon({
 			className: "custom-div-icon",
-			html: `	<div class="price-label">
+			html: `	<div class="price-label icon">
 						${logo}
-						<div class="gasoleo">${eess.gasoleo_a}€</div>
-						<div class="gasolina">${eess.gasolina_95}€</div>
+						${gasoleo_short}
+						${gasolina_short}
 					</div>`,
 			//iconSize: [60, 40]
 		});
@@ -73,8 +90,9 @@ async function load() {
 				</div>
 
 				<div class="price-label">
-					<div class="gasoleo">Gasoleo A: <b>${eess.gasoleo_a}€</b></div>
-					<div class="gasolina">Gasolina 95: <b>${eess.gasolina_95}€</b></div>
+					
+					${gasoleo_long}
+					${gasolina_long}
 				</div>
 				<canvas class="chart"></canvas>
 			</div>`;
