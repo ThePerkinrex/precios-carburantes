@@ -1,3 +1,5 @@
+import { getStatus, formatOpenCloseDate } from "./schedules.js";
+
 async function load() {
 	let data = fetch("/api/prices").then((x) => x.json());
 	let logos = fetch("/files/data/logos.json").then((x) => x.json());
@@ -16,13 +18,13 @@ async function load() {
 
 	data = await data;
 	logos = await logos;
-	console.log(data);
+	// console.log(data);
 	const logos_sorted = Object.keys(logos).sort((a, b) => b.length - a.length);
 	let i = 0;
 	for (let eess of data) {
 		let logo = `<div class="logo"><b>${eess.rotulo}</b></div>`;
 		const lower_eess = eess.rotulo.toLowerCase();
-		for (let name in logos) {
+		for (let name of logos_sorted) {
 			if (lower_eess.includes(name)) {
 				logo = `<img class="logo" src="${logos[name]}"/>`;
 				break;
@@ -31,7 +33,7 @@ async function load() {
 		// i++;
 		// if(i > 10) break;
 
-		// console.log(eess);
+		// // console.log(eess);
 		// Crear un icono que muestre el precio directamente
 		const icon = L.divIcon({
 			className: "custom-div-icon",
@@ -43,6 +45,19 @@ async function load() {
 			//iconSize: [60, 40]
 		});
 
+		let status = getStatus(eess.horario, new Date());
+
+		let pill = "";
+		if (status.status == "open") {
+			pill = `<div class="pill open">Abierto; Cierre ${formatOpenCloseDate(status.nextClose)}</div>`;
+		} else if (status.status == "opensSoon") {
+			pill = `<div class="pill open soon">Abre pronto; Apertura ${formatOpenCloseDate(status.nextOpen)}</div>`;
+		} else if (status.status == "close") {
+			pill = `<div class="pill close">Cerrado; Apertura ${formatOpenCloseDate(status.nextOpen)}</div>`;
+		} else if (status.status == "closesSoon") {
+			pill = `<div class="pill close soon">Cierra pronto; Cierre ${formatOpenCloseDate(status.nextClose)}</div>`;
+		}
+
 		const marker = L.marker([eess.latitud, eess.longitud], {
 			icon: icon,
 		}).bindPopup(() => {
@@ -53,11 +68,14 @@ async function load() {
 					${eess.direccion}, margen ${eess.margen}<br>
 					${eess.localidad}, ${eess.municipio} ${eess.cp}<br>
 					<i>${eess.provincia}</i><br>
-					Horario: ${eess.horario}
+					Horario: ${eess.horario}<br>
+					${pill}
 				</div>
 
-				<div class="gasoleo">Gasoleo A: <b>${eess.gasoleo_a}€</b></div>
-				<div class="gasolina">Gasolina 95: <b>${eess.gasolina_95}€</b></div>
+				<div class="price-label">
+					<div class="gasoleo">Gasoleo A: <b>${eess.gasoleo_a}€</b></div>
+					<div class="gasolina">Gasolina 95: <b>${eess.gasolina_95}€</b></div>
+				</div>
 				<canvas class="chart"></canvas>
 			</div>`;
 		});
@@ -71,23 +89,23 @@ async function load() {
 			).then((x) => x.json());
 			const popup = document.getElementById(`gasolinera-${eess.id}`);
 			const chart = popup.getElementsByClassName("chart")[0];
-			
-			console.log(history, popup, chart);
+
+			// console.log(history, popup, chart);
 			new Chart(chart, {
 				type: "line",
 				data: {
-					labels: history.map(x => x.fecha),
+					labels: history.map((x) => x.fecha),
 					datasets: [
 						{
 							label: "Gasolina 95",
-							data: history.map(x => x.gasolina_95),
+							data: history.map((x) => x.gasolina_95),
 							fill: false,
 							borderColor: "green",
 							tension: 0.1,
 						},
 						{
 							label: "Gasoleo A",
-							data: history.map(x => x.gasoleo_a),
+							data: history.map((x) => x.gasoleo_a),
 							fill: false,
 							borderColor: "black",
 							tension: 0.1,

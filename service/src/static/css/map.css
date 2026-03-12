@@ -26,11 +26,15 @@ body {
 	width: fit-content;
 }
 
+.gasolinera>.price-label {
+	margin: 1em auto;
+}
+
 /* .price-label > div {
 	overflow: hidden;
 } */
 
-.price-label > img.logo {
+.price-label>img.logo {
 	width: 100% !important;
 	max-height: 4em !important;
 	padding: 5px;
@@ -45,7 +49,9 @@ body {
 	box-sizing: border-box;
 }
 
-.gasolina,.gasoleo,.logo{
+.gasolina,
+.gasoleo,
+.logo {
 	padding: 2px 5px;
 }
 
@@ -61,4 +67,34 @@ body {
 
 .rotulo {
 	font-size: 1.2em;
+}
+
+.pill {
+	font-size: 12px;
+	padding: 0.5em 1em;
+	margin: 0.25em;
+	border-radius: 1em;
+	border: none;
+	outline: none;
+	background: #dddddd;
+	display: inline-block;
+}
+
+.closed {
+	background: #5f2020;
+	color: #ffffff;
+}
+
+.closed.soon {
+	background: #e1600f;
+	color: #ffffff;
+}
+
+.open {
+	background: #205f31;
+	color: #ffffff;
+}
+.open.soon {
+	background: #e9cc6d;
+	color: #000000;
 }
