@@ -186,6 +186,7 @@ dependencies = [
  "iana-time-zone",
  "js-sys",
  "num-traits",
+ "serde",
  "wasm-bindgen",
  "windows-link",
 ]
@@ -1658,6 +1659,7 @@ name = "service"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "chrono",
  "database-access",
  "include_dir",
  "mime_guess",

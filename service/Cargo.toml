@@ -16,6 +16,7 @@ r2d2 = "0.8.10"
 include_dir = {version = "0.7.4", optional = true}
 mime_guess = "2.0.5"
 serde_json = "1.0.149"
+chrono = {version = "0.4.44", features = ["serde"]}
 
 [features]
 include-static = ["dep:include_dir"]
