@@ -1,12 +1,25 @@
 import { getStatus, formatOpenCloseDate } from "./schedules.js";
 
+function onLocationFound(map, e) {
+	const radius = e.accuracy;
+
+	L.marker(e.latlng).addTo(map);
+
+	L.circle(e.latlng, radius).addTo(map);
+	console.log("Got location");
+}
+
+function onLocationError(e) {
+	console.error(e.message);
+}
+
 function addSelectAllButtons(layerControl, overlays, map) {
 	// Get the container where Leaflet lists the overlays
 	const container = layerControl.getContainer();
-	const form = container.querySelector('section.leaflet-control-layers-list');
+	const form = container.querySelector("section.leaflet-control-layers-list");
 
 	// Create a wrapper for our new buttons
-	const buttonWrapper = document.createElement('div');
+	const buttonWrapper = document.createElement("div");
 	buttonWrapper.innerHTML = `
 		<button class="selectAll">All</button>
 		<button class="unselectAll">None</button>
@@ -14,11 +27,11 @@ function addSelectAllButtons(layerControl, overlays, map) {
 	form.prepend(buttonWrapper); // Put them at the top of the list
 
 	// Add event listeners
-	buttonWrapper.querySelector('.selectAll').onclick = () => {
+	buttonWrapper.querySelector(".selectAll").onclick = () => {
 		for (let overlay of overlays) map.addLayer(overlay);
 	};
 
-	buttonWrapper.querySelector('.unselectAll').onclick = () => {
+	buttonWrapper.querySelector(".unselectAll").onclick = () => {
 		for (let overlay of overlays) {
 			if (map.hasLayer(overlay)) map.removeLayer(overlay);
 		}
@@ -37,24 +50,45 @@ async function load() {
 			'&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>',
 	}).addTo(map);
 
+	map.on("locationfound", (x) => {
+		map.off("locationfound");
+		onLocationFound(map, x);
+		map.locate({ watch: true, maximumAge: 5000 });
+		map.on("locationfound", (x) => {
+			console.log('watching location');
+			onLocationFound(map, x);
+		});
+	});
+
+	map.on("locationerror", onLocationError);
+	map.locate({ setView: true, maxZoom: 12, maximumAge: 5000 });
+	//map.locate({watch: true});
+
 	// Capa para agrupar los marcadores
-	const markers = L.markerClusterGroup(), control = L.control.layers(null, null, { collapsed: true });
+	const markers = L.markerClusterGroup(),
+		control = L.control.layers(null, null, { collapsed: true });
 	map.addLayer(markers);
 
 	data = await data;
 	logos = await logos;
 
-	let subgroups = Object.fromEntries(Object.keys(logos).map(k => [k, []]))
-	subgroups['other'] = []
+	let subgroups = Object.fromEntries(Object.keys(logos).map((k) => [k, []]));
+	subgroups["other"] = [];
 	// console.log(data);
 	const logos_sorted = Object.keys(logos).sort((a, b) => b.length - a.length);
 	let i = 0;
 	for (let eess of data) {
 		let logo = `<div class="logo"><b>${eess.rotulo}</b></div>`;
-		let subgroup = subgroups['other']
+		let subgroup = subgroups["other"];
 		const lower_eess = eess.rotulo.toLowerCase();
 		for (let name of logos_sorted) {
-			if (lower_eess.includes(name) || ("alternatives" in logos[name] && logos[name].alternatives.some(x => lower_eess.includes(x)))) {
+			if (
+				lower_eess.includes(name) ||
+				("alternatives" in logos[name] &&
+					logos[name].alternatives.some((x) =>
+						lower_eess.includes(x),
+					))
+			) {
 				logo = `<img class="logo" src="${logos[name].image}"/>`;
 				subgroup = subgroups[name];
 				break;
@@ -166,14 +200,29 @@ async function load() {
 		// markers.addLayer(marker);
 		subgroup.push(marker);
 	}
-	subgroups = Object.entries(subgroups).map(([name, layers]) => [name, L.featureGroup.subGroup(markers, layers), layers.length]).toSorted(([name1, stations1, len1], [name2, stations2, len2]) => (name1 == 'other' ? 1 : (name2 == 'other' ? -1 :len2 - len1)));
-	console.log(subgroups)
+	subgroups = Object.entries(subgroups)
+		.map(([name, layers]) => [
+			name,
+			L.featureGroup.subGroup(markers, layers),
+			layers.length,
+		])
+		.toSorted(([name1, stations1, len1], [name2, stations2, len2]) =>
+			name1 == "other" ? 1 : name2 == "other" ? -1 : len2 - len1,
+		);
+	console.log(subgroups);
 	for (let [name, subgroup] of subgroups) {
-		control.addOverlay(subgroup, name == 'other' ? "Otras" : logos[name].text);
+		control.addOverlay(
+			subgroup,
+			name == "other" ? "Otras" : logos[name].text,
+		);
 		subgroup.addTo(map);
 	}
 	control.addTo(map);
-	addSelectAllButtons(control, subgroups.map(x => x[1]), map);
+	addSelectAllButtons(
+		control,
+		subgroups.map((x) => x[1]),
+		map,
+	);
 }
 
 load();
