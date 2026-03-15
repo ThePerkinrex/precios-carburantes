@@ -1,5 +1,6 @@
 import { getStatus, formatOpenCloseDate } from "./schedules.js";
 
+
 async function load() {
 	let data = fetch("/api/prices").then((x) => x.json());
 	let logos = fetch("/files/data/logos.json").then((x) => x.json());
@@ -13,20 +14,25 @@ async function load() {
 	}).addTo(map);
 
 	// Capa para agrupar los marcadores
-	const markers = L.markerClusterGroup();
+	const markers = L.markerClusterGroup(), control = L.control.layers(null, null, { collapsed: false });
 	map.addLayer(markers);
 
 	data = await data;
 	logos = await logos;
+
+	let subgroups = Object.fromEntries(Object.keys(logos).map(k => [k, []]))
+	subgroups['other'] = []
 	// console.log(data);
 	const logos_sorted = Object.keys(logos).sort((a, b) => b.length - a.length);
 	let i = 0;
 	for (let eess of data) {
 		let logo = `<div class="logo"><b>${eess.rotulo}</b></div>`;
+		let subgroup = subgroups['other']
 		const lower_eess = eess.rotulo.toLowerCase();
 		for (let name of logos_sorted) {
 			if (lower_eess.includes(name)) {
 				logo = `<img class="logo" src="${logos[name]}"/>`;
+				subgroup = subgroups[name];
 				break;
 			}
 		}
@@ -133,8 +139,15 @@ async function load() {
 			});
 		});
 
-		markers.addLayer(marker);
+		// markers.addLayer(marker);
+		subgroup.push(marker);
 	}
+	subgroups = Object.fromEntries(Object.entries(subgroups).map(([name, layers]) => [name, L.featureGroup.subGroup(markers, layers)]));
+	for (let name in subgroups) {
+		control.addOverlay(subgroups[name], name);
+		subgroups[name].addTo(map);
+	}
+	control.addTo(map);
 }
 
 load();
