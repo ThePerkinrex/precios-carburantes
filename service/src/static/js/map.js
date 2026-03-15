@@ -1,5 +1,29 @@
 import { getStatus, formatOpenCloseDate } from "./schedules.js";
 
+function addSelectAllButtons(layerControl, overlays, map) {
+	// Get the container where Leaflet lists the overlays
+	const container = layerControl.getContainer();
+	const form = container.querySelector('section.leaflet-control-layers-list');
+
+	// Create a wrapper for our new buttons
+	const buttonWrapper = document.createElement('div');
+	buttonWrapper.innerHTML = `
+		<button class="selectAll">All</button>
+		<button class="unselectAll">None</button>
+	`;
+	form.prepend(buttonWrapper); // Put them at the top of the list
+
+	// Add event listeners
+	buttonWrapper.querySelector('.selectAll').onclick = () => {
+		for (let overlay of overlays) map.addLayer(overlay);
+	};
+
+	buttonWrapper.querySelector('.unselectAll').onclick = () => {
+		for (let overlay of overlays) {
+			if (map.hasLayer(overlay)) map.removeLayer(overlay);
+		}
+	};
+}
 
 async function load() {
 	let data = fetch("/api/prices").then((x) => x.json());
@@ -14,7 +38,7 @@ async function load() {
 	}).addTo(map);
 
 	// Capa para agrupar los marcadores
-	const markers = L.markerClusterGroup(), control = L.control.layers(null, null, { collapsed: false });
+	const markers = L.markerClusterGroup(), control = L.control.layers(null, null, { collapsed: true });
 	map.addLayer(markers);
 
 	data = await data;
@@ -30,8 +54,8 @@ async function load() {
 		let subgroup = subgroups['other']
 		const lower_eess = eess.rotulo.toLowerCase();
 		for (let name of logos_sorted) {
-			if (lower_eess.includes(name)) {
-				logo = `<img class="logo" src="${logos[name]}"/>`;
+			if (lower_eess.includes(name) || ("alternatives" in logos[name] && logos[name].alternatives.some(x => lower_eess.includes(x)))) {
+				logo = `<img class="logo" src="${logos[name].image}"/>`;
 				subgroup = subgroups[name];
 				break;
 			}
@@ -142,12 +166,14 @@ async function load() {
 		// markers.addLayer(marker);
 		subgroup.push(marker);
 	}
-	subgroups = Object.fromEntries(Object.entries(subgroups).map(([name, layers]) => [name, L.featureGroup.subGroup(markers, layers)]));
-	for (let name in subgroups) {
-		control.addOverlay(subgroups[name], name);
-		subgroups[name].addTo(map);
+	subgroups = Object.entries(subgroups).map(([name, layers]) => [name, L.featureGroup.subGroup(markers, layers), layers.length]).toSorted(([name1, stations1, len1], [name2, stations2, len2]) => (name1 == 'other' ? 1 : (name2 == 'other' ? -1 :len2 - len1)));
+	console.log(subgroups)
+	for (let [name, subgroup] of subgroups) {
+		control.addOverlay(subgroup, name == 'other' ? "Otras" : logos[name].text);
+		subgroup.addTo(map);
 	}
 	control.addTo(map);
+	addSelectAllButtons(control, subgroups.map(x => x[1]), map);
 }
 
 load();

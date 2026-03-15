@@ -1,18 +1,99 @@
 {
-	"ballenoil": "/files/images/ballenoil.png",
-	"plenergy": "/files/images/plenergy.png",
-	"bp": "/files/images/bp.svg",
-	"cepsa": "/files/images/cepsa.svg",
-	"galp": "/files/images/galp.svg",
-	"moeve": "/files/images/moeve.svg",
-	"petroprix": "/files/images/petroprix.svg",
-	"repsol": "/files/images/repsol.svg",
-	"alcampo": "/files/images/alcampo.jpg",
-	"valcarce": "/files/images/valcarce.jpg",
-	"campsa": "/files/images/campsa.png",
-	"petronor": "/files/images/petronor.png",
-	"q8": "/files/images/q8.png",
-	"carrefour": "/files/images/carrefour.svg",
-	"costco": "/files/images/costco.svg",
-	"shell": "/files/images/shell.svg"
+	"ballenoil": {
+		"image": "/files/images/ballenoil.png",
+		"text": "Ballenoil"
+	},
+	"plenergy": {
+		"image": "/files/images/plenergy.png",
+		"text": "Plenergy"
+	},
+	"bp": {
+		"image": "/files/images/bp.svg",
+		"text": "BP",
+		"alternatives": ["b.p."]
+	},
+	"cepsa": {
+		"image": "/files/images/cepsa.svg",
+		"text": "Cepsa"
+	},
+	"galp": {
+		"image": "/files/images/galp.svg",
+		"text": "Galp"
+	},
+	"moeve": {
+		"image": "/files/images/moeve.svg",
+		"text": "Moeve"
+	},
+	"petroprix": {
+		"image": "/files/images/petroprix.svg",
+		"text": "Petroprix"
+	},
+	"repsol": {
+		"image": "/files/images/repsol.svg",
+		"text": "Repsol"
+	},
+	"alcampo": {
+		"image": "/files/images/alcampo.jpg",
+		"text": "Alcampo"
+	},
+	"valcarce": {
+		"image": "/files/images/valcarce.jpg",
+		"text": "Valcarce"
+	},
+	"campsa": {
+		"image": "/files/images/campsa.png",
+		"text": "CAMPSA"
+	},
+	"petronor": {
+		"image": "/files/images/petronor.png",
+		"text": "Petronor"
+	},
+	"q8": {
+		"image": "/files/images/q8.png",
+		"text": "Q8"
+	},
+	"carrefour": {
+		"image": "/files/images/carrefour.svg",
+		"text": "Carrefour"
+	},
+	"costco": {
+		"image": "/files/images/costco.svg",
+		"text": "Costco"
+	},
+	"shell": {
+		"image": "/files/images/shell.svg",
+		"text": "Shell"
+	},
+	"eroski": {
+		"image": "/files/images/eroski.svg",
+		"text": "Eroski"
+	},
+	"avia": {
+		"image": "/files/images/avia.svg",
+		"text": "AVIA"
+	},
+	"disa": {
+		"image": "/files/images/disa.svg",
+		"text": "Disa"
+	},
+	"eni": {
+		"image": "/files/images/eni.svg",
+		"text": "Eni"
+	},
+	"meroil": {
+		"image": "/files/images/meroil.svg",
+		"text": "Meroil"
+	},
+	"bonarea": {
+		"image": "/files/images/bonArea.svg",
+		"text": "BonArea"
+	},
+	"petrocat": {
+		"image": "/files/images/petrocat.svg",
+		"text": "Petrocat"
+	},
+	"esclatoil": {
+		"image": "/files/images/esclatoil.svg",
+		"text": "EsclatOil"
+	}
 }
