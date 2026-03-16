@@ -113,13 +113,21 @@ fn main() -> Result<(), Box<dyn Error>> {
     // 3. Inserción Eficiente (Transacción)
     let tx = conn.transaction()?;
 
-    for est in resp.lista_eess {
-        let id: i32 = est.id_eess.parse().unwrap_or(0);
+    {
+        let mut insert_price = tx.prepare(
+            "INSERT OR IGNORE INTO precios_valores (gasoleo_a, gasolina_95)
+                    VALUES (?1, ?2)",
+        )?;
 
-        // Actualizamos metadatos y gestionamos fechas de avistamiento
-        // COALESCE asegura que 'first_seen' solo se escriba la primera vez
-        tx.execute(
-            "INSERT INTO estaciones (
+        let mut insert_reading = tx.prepare(
+            "INSERT OR REPLACE INTO precios_lecturas (fecha, id_estacion, id_precio)
+                    SELECT ?1, ?2, id
+                    FROM precios_valores
+                    WHERE gasoleo_a IS ?3
+                    AND gasolina_95 IS ?4",
+        )?;
+    
+        let mut insert_station = tx.prepare("INSERT INTO estaciones (
                 id, rotulo, direccion, margen, cp, horario, municipio, 
                 localidad, provincia, id_municipio, id_provincia, id_ccaa, 
                 longitud, latitud, first_seen, last_seen
@@ -128,32 +136,45 @@ fn main() -> Result<(), Box<dyn Error>> {
                 rotulo = excluded.rotulo,
                 direccion = excluded.direccion,
                 horario = excluded.horario,
-                last_seen = excluded.last_seen",
-            params![
-                id,
-                est.rotulo,
-                est.direccion,
-                est.margen,
-                est.postal_code,
-                est.horario,
-                est.municipio,
-                est.localidad,
-                est.provincia,
-                est.id_municipio,
-                est.id_provincia,
-                est.id_ccaa,
-                est.longitud,
-                est.latitud,
-                ahora
-            ],
-        )?;
+                last_seen = excluded.last_seen")?;
 
-        // Insertar precio diario
-        tx.execute(
-            "INSERT OR REPLACE INTO precios (fecha, id_estacion, gasoleo_a, gasolina_95) 
-             VALUES (?1, ?2, ?3, ?4)",
-            params![ahora, id, est.precio_gasoleo_a, est.precio_gasolina_95],
-        )?;
+        for est in resp.lista_eess {
+            let id: i32 = est.id_eess.parse().unwrap_or(0);
+
+            // Actualizamos metadatos y gestionamos fechas de avistamiento
+            // COALESCE asegura que 'first_seen' solo se escriba la primera vez
+            insert_station.execute(
+                params![
+                    id,
+                    est.rotulo,
+                    est.direccion,
+                    est.margen,
+                    est.postal_code,
+                    est.horario,
+                    est.municipio,
+                    est.localidad,
+                    est.provincia,
+                    est.id_municipio,
+                    est.id_provincia,
+                    est.id_ccaa,
+                    est.longitud,
+                    est.latitud,
+                    ahora
+                ],
+            )?;
+
+            // Insertar precio diario
+            // 1. Ensure price pair exists
+            insert_price.execute(params![est.precio_gasoleo_a, est.precio_gasolina_95])?;
+
+            // 2. Insert reading referencing the price pair
+            insert_reading.execute(params![
+                ahora,
+                id,
+                est.precio_gasoleo_a,
+                est.precio_gasolina_95
+            ])?;
+        }
     }
 
     tx.commit()?;
