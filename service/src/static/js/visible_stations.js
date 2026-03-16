@@ -72,12 +72,10 @@ export function addVisibleStationsControl(map, clusterGroup, allMarkers) {
 
             // Handle click/touch toggle for mobile
             L.DomEvent.on(header, 'click', () => {
-                if (contentWrapper.style.display === 'none') {
-                    show();
-                } else {
-                    hide();
-                }
+                show();
             });
+
+			map.on('click', hide);
 
             // Update list dynamically if map is panned/zoomed while list is open
             map.on('moveend', () => {
