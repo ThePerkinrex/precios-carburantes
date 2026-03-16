@@ -42,8 +42,8 @@ body {
 }
 
 .icon.price-label {
-	
-  background: linear-gradient(135deg,#666 5px,white 0); 
+
+	background: linear-gradient(135deg, #666 5px, white 0);
 }
 
 .logo {
@@ -103,4 +103,29 @@ body {
 .open.soon {
 	background: #e9cc6d;
 	color: #000000;
+}
+
+.stations-header {
+	font-weight: bold;
+	cursor: pointer;
+	min-height: 44px;
+	min-width: 44px;
+	align-content: center;
+	text-align: center;
+}
+
+.custom-stations-list {
+	background-color: white;
+	max-height: 60vh;
+	overflow-y: auto;
+}
+
+.custom-stations-list .content-wrapper {
+	padding: 8px;
+}
+
+.content-header{
+	font-weight: bold;
+	font-size: 1.5em;
+	margin-bottom: 0.8em;
 }

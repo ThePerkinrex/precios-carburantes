@@ -1,4 +1,5 @@
 import { getStatus, formatOpenCloseDate } from "./schedules.js";
+import { addVisibleStationsControl } from "./visible_stations.js"
 
 function onLocationFound(map, e) {
 	const radius = e.accuracy;
@@ -77,6 +78,7 @@ async function load() {
 	// console.log(data);
 	const logos_sorted = Object.keys(logos).sort((a, b) => b.length - a.length);
 	let i = 0;
+	const allMarkers = []; // Array to keep track of all markers
 	for (let eess of data) {
 		let logo = `<div class="logo"><b>${eess.rotulo}</b></div>`;
 		let subgroup = subgroups["other"];
@@ -197,6 +199,10 @@ async function load() {
 			});
 		});
 
+		// ADD THESE TWO LINES:
+		marker.eess = eess; // Store the raw data for sorting and displaying
+		allMarkers.push(marker);
+
 		// markers.addLayer(marker);
 		subgroup.push(marker);
 	}
@@ -223,6 +229,8 @@ async function load() {
 		subgroups.map((x) => x[1]),
 		map,
 	);
+
+	addVisibleStationsControl(map, markers, allMarkers);
 }
 
 load();

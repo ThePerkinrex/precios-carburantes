@@ -69,7 +69,7 @@
 		"text": "Eroski"
 	},
 	"avia": {
-		"image": "/files/images/avia.svg",
+		"image": "/files/images/avia.png",
 		"text": "AVIA"
 	},
 	"disa": {
@@ -81,7 +81,7 @@
 		"text": "Eni"
 	},
 	"meroil": {
-		"image": "/files/images/meroil.svg",
+		"image": "/files/images/meroil.png",
 		"text": "Meroil"
 	},
 	"bonarea": {
