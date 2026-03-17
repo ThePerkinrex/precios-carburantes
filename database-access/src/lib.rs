@@ -43,6 +43,11 @@ const MIGRATIONS: &[&[&str]] = &[
         "CREATE INDEX IF NOT EXISTS idx_estaciones_rotulo ON estaciones(rotulo)",
     ],
     &["CREATE INDEX IF NOT EXISTS idx_precios_fecha_solo ON precios(fecha)"],
+    &["CREATE TABLE IF NOT EXISTS user_configs (
+            username TEXT PRIMARY KEY,
+            display_name TEXT NOT NULL,
+            last_filter TEXT NOT NULL DEFAULT 'all'
+        )"],
 ];
 
 pub const DEFAULT_DB_PATH: &str = "precios_carburantes.db";

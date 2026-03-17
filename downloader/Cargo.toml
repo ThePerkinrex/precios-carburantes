@@ -8,8 +8,8 @@ reqwest = { version = "0.13.2", features = ["blocking", "json", "native-tls"] }
 openssl = { version = "0.10", features = ["vendored"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
-rusqlite = { version = "0.38.0", features = ["bundled"] }
-r2d2_sqlite = "0.32.0"
+rusqlite = { version = "0.39.0", features = ["bundled"] }
+r2d2_sqlite = "0.33.0"
 r2d2 = "0.8.10"
 chrono = { version = "0.4.44"}
 database-access = { path = "../database-access" }

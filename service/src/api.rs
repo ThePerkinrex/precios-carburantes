@@ -1,9 +1,11 @@
 use axum::{Json, Router, extract::{Path, Query, State}, http::StatusCode, routing::get};
 use rusqlite::params;
 use serde::{Serialize, Deserialize};
-use tracing::{info, warn};
+use tracing::warn;
 
-use crate::{DbPool, auth::ClientAuth};
+use crate::DbPool;
+
+mod user;
 
 #[derive(Serialize)]
 struct EstacionPrecio {
@@ -136,20 +138,11 @@ async fn price_history(Path(id): Path<i64>, Query(params): Query<HistoryParams>,
     Ok(Json(precios))
 }
 
-#[derive(Debug, Serialize)]
-struct UserInfo {
-    name: String
-}
-
-async fn user_info(auth: ClientAuth) -> Json<UserInfo> {
-    Json(UserInfo { name: auth.username })
-}
-
 pub fn get_router() -> Router<DbPool> {
 	Router::new()
         .route("/prices", get(latest_prices))
         .route("/{id}/history", get(price_history))
-        .route("/user/info", get(user_info))
+        .nest("/user", user::get_router())
 }
 
 
