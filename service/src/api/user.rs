@@ -1,6 +1,6 @@
-use axum::{Json, Router, extract::State, http::StatusCode, routing::get};
+use axum::{Json, Router, extract::State, http::StatusCode, routing::{get, put}};
 use rusqlite::{Connection, params};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tracing::warn;
 
 use crate::{DbPool, auth::ClientAuth};
@@ -92,6 +92,53 @@ async fn user_state(
         .map(Json)
 }
 
+#[derive(Debug, Deserialize)]
+struct PutDisplayName {
+    display_name: String
+}
+
+async fn set_user_display_name(
+    State(pool): State<DbPool>,
+    auth: ClientAuth,
+    Json(params): Json<PutDisplayName>
+) -> Result<StatusCode, StatusCode> {
+    let conn = pool.get().map_err(|e| {
+        warn!("Pool error: {e}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    update_user_display_name(&conn, &auth.username, &params.display_name)
+        .map_err(|e| {
+            warn!("Get state error: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    Ok(StatusCode::OK)
+}
+
+#[derive(Debug, Deserialize)]
+struct PutFilter {
+    filter: String
+}
+
+async fn set_filter(
+    State(pool): State<DbPool>,
+    auth: ClientAuth,
+    Json(params): Json<PutFilter>
+) -> Result<StatusCode, StatusCode> {
+    let conn = pool.get().map_err(|e| {
+        warn!("Pool error: {e}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    update_user_filter(&conn, &auth.username, &params.filter)
+        .map_err(|e| {
+            warn!("Get state error: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    Ok(StatusCode::OK)
+}
+
 pub fn get_router() -> Router<DbPool> {
-    Router::new().route("/state", get(user_state))
+    Router::new()
+        .route("/state", get(user_state))
+        .route("/name/diplay", put(set_user_display_name))
+        .route("/filter", put(set_filter))
 }

@@ -1,12 +1,27 @@
 import { getStatus, formatOpenCloseDate } from "./schedules.js";
-import { addVisibleStationsControl } from "./visible_stations.js"
+import { addVisibleStationsControl } from "./visible_stations.js";
+import { getLatestPrices, getUserState, updateFilter } from "./api.js";
+import { getLogos } from "./logos.js";
+
+let marker = undefined;
 
 function onLocationFound(map, e) {
 	const radius = e.accuracy;
 
-	L.marker(e.latlng).addTo(map);
+	if (marker === undefined) {
+		marker = {
+			marker: L.marker(e.latlng),
+			circle: L.circle(e.latlng, radius)
+		}
+		marker.marker.addTo(map);
+		marker.circle.addTo(map);
+	}else{
+		marker.marker.setLatLng(e.latlng);
+		marker.circle.setLatLng(e.latlng);
+		marker.circle.setRadius(radius);
+	}
 
-	L.circle(e.latlng, radius).addTo(map);
+
 	console.log("Got location");
 }
 
@@ -40,8 +55,9 @@ function addSelectAllButtons(layerControl, overlays, map) {
 }
 
 async function load() {
-	let data = fetch("/api/prices").then((x) => x.json());
-	let logos = fetch("/files/data/logos.json").then((x) => x.json());
+	let data = getLatestPrices();
+	let logos = getLogos();
+	let state = getUserState();
 
 	const map = L.map("map").setView([40.4165, -3.70256], 11);
 
@@ -56,7 +72,7 @@ async function load() {
 		onLocationFound(map, x);
 		map.locate({ watch: true, maximumAge: 5000 });
 		map.on("locationfound", (x) => {
-			console.log('watching location');
+			console.log("watching location");
 			onLocationFound(map, x);
 		});
 	});
@@ -215,13 +231,23 @@ async function load() {
 		.toSorted(([name1, stations1, len1], [name2, stations2, len2]) =>
 			name1 == "other" ? 1 : name2 == "other" ? -1 : len2 - len1,
 		);
-	console.log(subgroups);
+
+	state = await state;
+	console.log(subgroups, state);
 	for (let [name, subgroup] of subgroups) {
 		control.addOverlay(
 			subgroup,
 			name == "other" ? "Otras" : logos[name].text,
 		);
-		subgroup.addTo(map);
+		if (state.filter.has(name)) subgroup.addTo(map);
+		subgroup.on('add', () => {
+			state.filter.add(name)
+			updateFilter(state.filter)
+		})
+		subgroup.on('remove', () => {
+			state.filter.delete(name)
+			updateFilter(state.filter)
+		})
 	}
 	control.addTo(map);
 	addSelectAllButtons(
@@ -231,6 +257,8 @@ async function load() {
 	);
 
 	addVisibleStationsControl(map, markers, allMarkers);
+
+	// console.log()
 }
 
 load();

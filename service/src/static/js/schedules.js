@@ -9,15 +9,15 @@ const DAYS = {
 };
 
 function splitFirst(s, sep, limit = 2) {
-	let res = []
-	for(let i = 1;i<limit;i++) {
-		let index = s.indexOf(sep)
+	let res = [];
+	for (let i = 1; i < limit; i++) {
+		let index = s.indexOf(sep);
 		if (index == -1) break;
-		res.push(s.substring(0, index))
-		s = s.substring(index+1)
+		res.push(s.substring(0, index));
+		s = s.substring(index + 1);
 	}
-	if(s.length > 0) res.push(s)
-	return res
+	if (s.length > 0) res.push(s);
+	return res;
 }
 
 export function parseSchedule(text) {
@@ -26,15 +26,17 @@ export function parseSchedule(text) {
 		const schedule = {};
 
 		for (let part of parts) {
-			const [daysPart, timePart] = splitFirst(part, ":", 2).map((x) => x.trim());
+			const [daysPart, timePart] = splitFirst(part, ":", 2).map((x) =>
+				x.trim(),
+			);
 
 			// console.log(daysPart, timePart)
 
 			if (!daysPart || !timePart) return { valid: false };
 
-			 
-
-			const [startDay, endDay] = (daysPart.includes('-')) ? daysPart.split("-") : [daysPart, daysPart];
+			const [startDay, endDay] = daysPart.includes("-")
+				? daysPart.split("-")
+				: [daysPart, daysPart];
 
 			// console.log(startDay, endDay)
 
@@ -104,7 +106,7 @@ export function getStatus(scheduleText, date, soonMinutes = 30) {
 		if (today.fullDay) {
 			return {
 				status: "open",
-				nextClose: minutesToDate(date, 1, 0)
+				nextClose: minutesToDate(date, 1, 0),
 			};
 		}
 
@@ -116,7 +118,7 @@ export function getStatus(scheduleText, date, soonMinutes = 30) {
 
 			return {
 				status: open - minutes <= soonMinutes ? "opensSoon" : "closed",
-				nextOpen
+				nextOpen,
 			};
 		}
 
@@ -125,7 +127,7 @@ export function getStatus(scheduleText, date, soonMinutes = 30) {
 
 			return {
 				status: close - minutes <= soonMinutes ? "closesSoon" : "open",
-				nextClose
+				nextClose,
 			};
 		}
 	}
@@ -140,13 +142,13 @@ export function getStatus(scheduleText, date, soonMinutes = 30) {
 		if (sched.fullDay) {
 			return {
 				status: "closed",
-				nextOpen: minutesToDate(date, i, 0)
+				nextOpen: minutesToDate(date, i, 0),
 			};
 		}
 
 		return {
 			status: "closed",
-			nextOpen: minutesToDate(date, i, toMinutes(sched.open))
+			nextOpen: minutesToDate(date, i, toMinutes(sched.open)),
 		};
 	}
 
@@ -157,7 +159,7 @@ export function formatOpenCloseDate(targetDate, now = new Date()) {
 	const time = targetDate.toLocaleTimeString("es-ES", {
 		hour: "2-digit",
 		minute: "2-digit",
-		hour12: false
+		hour12: false,
 	});
 
 	const today = new Date(now);
@@ -181,4 +183,3 @@ export function formatOpenCloseDate(targetDate, now = new Date()) {
 
 	return `${date} - ${time}`;
 }
-
