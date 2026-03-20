@@ -30,28 +30,56 @@ function onLocationError(e) {
 }
 
 function addSelectAllButtons(layerControl, overlays, map) {
-	// Get the container where Leaflet lists the overlays
-	const container = layerControl.getContainer();
-	const form = container.querySelector("section.leaflet-control-layers-list");
+    // Get the container where Leaflet lists the overlays
+    const container = layerControl.getContainer();
+    const form = container.querySelector("section.leaflet-control-layers-list");
 
-	// Create a wrapper for our new buttons
-	const buttonWrapper = document.createElement("div");
-	buttonWrapper.innerHTML = `
-		<button class="selectAll">All</button>
-		<button class="unselectAll">None</button>
-	`;
-	form.prepend(buttonWrapper); // Put them at the top of the list
+    // Create a wrapper for our new buttons
+    const buttonWrapper = document.createElement("div");
+    buttonWrapper.className = "layer-select-buttons"; // Good for custom CSS styling if needed
+    buttonWrapper.innerHTML = `
+        <button class="selectAll">All</button>
+        <button class="unselectAll">None</button>
+    `;
+    
+    // IMPORTANT: Prevent clicks from bleeding through to the map underneath
+    L.DomEvent.disableClickPropagation(buttonWrapper);
+    
+    form.prepend(buttonWrapper);
 
-	// Add event listeners
-	buttonWrapper.querySelector(".selectAll").onclick = () => {
-		for (let overlay of overlays) map.addLayer(overlay);
-	};
+    // --- GHOST CLICK PREVENTION ---
+    let ignoreClicks = false;
 
-	buttonWrapper.querySelector(".unselectAll").onclick = () => {
-		for (let overlay of overlays) {
-			if (map.hasLayer(overlay)) map.removeLayer(overlay);
-		}
-	};
+    // Listen for mobile touches on the main control container
+    container.addEventListener('touchstart', () => {
+        // If the control isn't expanded yet, the user is tapping to open it.
+        if (!container.classList.contains('leaflet-control-layers-expanded')) {
+            ignoreClicks = true; // Lock the buttons
+            setTimeout(() => { ignoreClicks = false; }, 400); // Unlock after 400ms
+        }
+    }, { passive: true });
+    // ------------------------------
+
+    // Add event listeners (using L.DomEvent to safely handle Leaflet event propagation)
+    const selectAllBtn = buttonWrapper.querySelector(".selectAll");
+    L.DomEvent.on(selectAllBtn, 'click', (ev) => {
+        L.DomEvent.stop(ev); // Stops the event from bubbling
+        if (ignoreClicks) return; // Abort if we are in the cooldown window
+        
+        console.log('All', container.checkVisibility(), ev);
+        for (let overlay of overlays) map.addLayer(overlay);
+    });
+
+    const unselectAllBtn = buttonWrapper.querySelector(".unselectAll");
+    L.DomEvent.on(unselectAllBtn, 'click', (ev) => {
+        L.DomEvent.stop(ev);
+        if (ignoreClicks) return;
+
+        console.log('None', container.checkVisibility(), container.classList.contains('leaflet-control-layers-expanded'), ev);
+        for (let overlay of overlays) {
+            if (map.hasLayer(overlay)) map.removeLayer(overlay);
+        }
+    });
 }
 
 async function load() {
@@ -241,10 +269,12 @@ async function load() {
 		);
 		if (state.filter.has(name)) subgroup.addTo(map);
 		subgroup.on('add', () => {
+			console.log('Add ' + name)
 			state.filter.add(name)
 			updateFilter(state.filter)
 		})
 		subgroup.on('remove', () => {
+			console.log('Remove ' + name)
 			state.filter.delete(name)
 			updateFilter(state.filter)
 		})
