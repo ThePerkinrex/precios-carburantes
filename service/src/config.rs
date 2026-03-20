@@ -22,7 +22,9 @@ impl SocketAddrs {
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct DevConfig {
-	pub user: String
+	pub user: String,
+	#[serde(default)]
+	pub roles: Vec<String>
 }
 
 #[derive(Debug, Deserialize, Clone)]

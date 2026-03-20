@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 rusqlite = { version = "0.39.0", features = ["bundled"] }
 r2d2_sqlite = "0.33.0"
+sha2 = "0.10"

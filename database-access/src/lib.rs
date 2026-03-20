@@ -1,11 +1,11 @@
 use std::{
-    hash::{DefaultHasher, Hash, Hasher},
     path::Path,
     sync::Mutex,
 };
 
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{Connection, OptionalExtension, params};
+use sha2::{Digest, Sha256};
 
 const MIGRATIONS: &[&[&str]] = &[
     &[
@@ -48,10 +48,31 @@ const MIGRATIONS: &[&[&str]] = &[
             display_name TEXT NOT NULL,
             last_filter TEXT NOT NULL DEFAULT 'all'
         )"],
+    &[
+        "CREATE TABLE IF NOT EXISTS user_roles (
+            username TEXT NOT NULL,
+            role TEXT NOT NULL,
+            PRIMARY KEY (username, role)
+        )",
+        "CREATE INDEX IF NOT EXISTS idx_user_roles_username ON user_roles(username)",
+    ], // Index 4: New migration
 ];
 
 pub const DEFAULT_DB_PATH: &str = "precios_carburantes.db";
 static MIGRATIONS_APPLIED: Mutex<bool> = Mutex::new(false);
+
+fn get_hash(mig: &[&str]) -> String {
+    let mut hasher = Sha256::new();
+    for statement in mig {
+        hasher.update(statement.as_bytes());
+    }
+    let result = hasher.finalize();
+    result.iter().map(|b| format!("{:02x}", b)).collect()
+}
+
+pub fn get_migration_hashes() -> impl Iterator<Item = (usize, String)> {
+    MIGRATIONS.iter().map(|&x| get_hash(x)).enumerate()
+}
 
 fn apply_init(conn: &mut Connection) -> rusqlite::Result<()> {
     conn.execute_batch(
@@ -72,20 +93,16 @@ fn apply_init(conn: &mut Connection) -> rusqlite::Result<()> {
         tx.execute(
             "CREATE TABLE IF NOT EXISTS migrations (
             id INTEGER PRIMARY KEY,
-            migration_hash INTEGER
+            migration_hash TEXT
         )",
             [],
         )?;
 
         for (i, &mig) in MIGRATIONS.iter().enumerate() {
             let i = i as i64;
-            let mut hasher = DefaultHasher::new();
+            let hash = get_hash(mig);
 
-            mig.hash(&mut hasher);
-
-            let hash = hasher.finish() as i64;
-
-            let old_hash: Option<i64> = tx
+            let old_hash: Option<String> = tx
                 .query_one(
                     "SELECT migration_hash FROM migrations WHERE id = ?",
                     params![&i],
@@ -96,19 +113,19 @@ fn apply_init(conn: &mut Connection) -> rusqlite::Result<()> {
             if let Some(old_hash) = old_hash {
                 if hash != old_hash {
                     panic!(
-                        "Non matching hashes ({:x} vs applied {:x}) for migration {}: {:?}",
-                        hash as u64, old_hash as u64, i as u64, mig
+                        "Non matching hashes ({:?} vs applied {:?}) for migration {}: {:?}",
+                        hash, old_hash, i as u64, mig
                     )
                 } else {
                     println!(
-                        "Migration {} with hash {:x} already applied",
-                        i as u64, hash as u64
+                        "Migration {} with hash {:?} already applied",
+                        i as u64, hash
                     );
                 }
             } else {
                 println!(
-                    "Applying migration {} with hash {:x}",
-                    i as u64, hash as u64
+                    "Applying migration {} with hash {:?}",
+                    i as u64, hash
                 );
                 let savepoint = tx.savepoint()?;
                 for x in mig {

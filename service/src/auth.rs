@@ -1,22 +1,28 @@
 use std::sync::Arc;
 
 use axum::{
-    Extension, extract::{FromRequestParts, Request},
+    Extension,
+    extract::{FromRef, FromRequestParts, Request, State},
     http::{HeaderMap, StatusCode},
     middleware::Next,
     response::{IntoResponse, Response},
 };
+use rusqlite::params;
+use tracing::warn;
 
-use crate::config::Config;
+use crate::{
+    DbPool,
+    config::{Config, DevConfig},
+};
 
 fn validate_auth<'a>(
     headers: &HeaderMap,
     config: &'a Config,
-) -> Result<Option<&'a String>, (StatusCode, &'static str)> {
+) -> Result<Option<&'a DevConfig>, (StatusCode, &'static str)> {
     let verify_status = headers.get("X-SSL-Client-Verify");
     match (verify_status, &config.dev) {
         (Some(x), _) if x == "SUCCESS" => Ok(None),
-        (None, Some(dev)) => Ok(Some(&dev.user)),
+        (None, Some(dev)) => Ok(Some(dev)),
         _ => Err((
             StatusCode::UNAUTHORIZED,
             "Valid client certificate required",
@@ -46,13 +52,23 @@ pub async fn auth_middleware(
     }
 }
 
+pub const ADMIN_USERS_ROLE: &str = "admin_users";
+
 pub struct ClientAuth {
     pub username: String,
+    pub roles: Vec<String>,
+}
+
+impl ClientAuth {
+    pub fn has_role(&self, role: &str) -> bool {
+        self.roles.iter().any(|x| x == role)
+    }
 }
 
 impl<S> FromRequestParts<S> for ClientAuth
 where
     S: Send + Sync,
+    DbPool: FromRef<S>,
 {
     type Rejection = Response;
 
@@ -63,13 +79,17 @@ where
         let Extension(config) = Extension::<Arc<Config>>::from_request_parts(parts, state)
             .await
             .map_err(IntoResponse::into_response)?;
+        let State(pool) = State::<DbPool>::from_request_parts(parts, state)
+            .await
+            .map_err(IntoResponse::into_response)?;
         // 1. Check if Nginx verified the cert
-        let dev_user =
+        let dev_config =
             validate_auth(&parts.headers, &config).map_err(IntoResponse::into_response)?;
 
-        if let Some(dev_user) = dev_user.cloned() {
+        if let Some(dev_config) = dev_config {
             Ok(Self {
-                username: dev_user,
+                username: dev_config.user.clone(),
+                roles: dev_config.roles.clone(),
             })
         } else {
             // 2. Extract the Distinguished Name (DN)
@@ -86,7 +106,34 @@ where
                 .map(|s| s.replace("CN=", ""))
                 .unwrap_or_else(|| "Unknown".to_string());
 
-            Ok(Self { username })
+            let mut roles = Vec::new();
+            {
+                let conn = pool.get().map_err(|e| {
+                    warn!("SQL Error: {e}");
+                    StatusCode::INTERNAL_SERVER_ERROR.into_response()
+                })?;
+                let mut stmt = conn
+                    .prepare("SELECT role FROM user_roles WHERE username = ?")
+                    .map_err(|e| {
+                        warn!("SQL Error: {e}");
+                        StatusCode::INTERNAL_SERVER_ERROR.into_response()
+                    })?;
+                let result = stmt
+                    .query_map(params![username], |r| r.get(0))
+                    .map_err(|e| {
+                        warn!("SQL Error: {e}");
+                        StatusCode::INTERNAL_SERVER_ERROR.into_response()
+                    })?;
+
+                for role in result {
+                    roles.push(role.map_err(|e| {
+                        warn!("SQL Error: {e}");
+                        StatusCode::INTERNAL_SERVER_ERROR.into_response()
+                    })?);
+                }
+            }
+
+            Ok(Self { username, roles })
         }
     }
 }

@@ -1,6 +1,7 @@
 {
 	"addr": ["0.0.0.0:8001"],
 	"dev": {
-		"user": "dev"
+		"user": "dev",
+		"roles": ["admin_users"]
 	}
 }

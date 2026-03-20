@@ -10,9 +10,10 @@ pub struct UserState {
     username: String,
     display_name: String,
     filter: String,
+    roles: Vec<String>
 }
 
-fn get_user_state(conn: &Connection, username: &str) -> rusqlite::Result<UserState> {
+fn get_user_state(conn: &Connection, username: &str, roles: Vec<String>) -> rusqlite::Result<UserState> {
     conn.query_row(
         "
         SELECT
@@ -39,6 +40,7 @@ fn get_user_state(conn: &Connection, username: &str) -> rusqlite::Result<UserSta
                 username: row.get(0)?,
                 display_name: row.get(1)?,
                 filter: row.get(2)?,
+                roles
             })
         },
     )
@@ -84,7 +86,7 @@ async fn user_state(
         warn!("Pool error: {e}");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
-    get_user_state(&conn, &auth.username)
+    get_user_state(&conn, &auth.username, auth.roles.clone())
         .map_err(|e| {
             warn!("Get state error: {e}");
             StatusCode::INTERNAL_SERVER_ERROR
