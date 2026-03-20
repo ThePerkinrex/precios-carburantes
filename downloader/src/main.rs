@@ -1,7 +1,7 @@
 use chrono::Local;
 use rusqlite::{Result, params};
 use serde::{Deserialize, Deserializer};
-use std::error::Error;
+use std::{error::Error, time::Instant};
 
 use database_access::{DEFAULT_DB_PATH, get_connection_manager};
 
@@ -85,10 +85,12 @@ where
 
 // --- Lógica Principal ---
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn main_internal() -> Result<(), Box<dyn Error>> {
     let manager = get_connection_manager(DEFAULT_DB_PATH)?;
     let pool = r2d2::Pool::new(manager)?;
     let mut conn = pool.get()?;
+
+    let start = Instant::now();
 
     // 2. Descargar Datos
     println!("Descargando datos de la API...");
@@ -106,6 +108,14 @@ fn main() -> Result<(), Box<dyn Error>> {
         .header(reqwest::header::ACCEPT, "application/json")
         .send()?
         .json()?;
+
+    let num_estaciones = resp.lista_eess.len();
+    if num_estaciones == 0 {
+        println!("Ninguna estación encontrada");
+        // This will cause the service to fail, and systemd will show it as an error
+        return Err("La API devolvió 0 estaciones. Abortando para evitar registros vacíos.".into());
+    }
+    println!("Descargadas {} estaciones en {:.2}s.", num_estaciones, start.elapsed().as_secs_f32());
 
     // Normalizar fecha de la API (tomamos solo la parte de la fecha)
     let ahora = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
@@ -157,7 +167,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     tx.commit()?;
-    println!("Datos guardados correctamente para la fecha: {}", ahora);
+    println!("Datos guardados correctamente para la fecha: {} en {:.2}s", ahora, start.elapsed().as_secs_f32());
 
     Ok(())
+}
+
+fn main() -> Result<(), Box<dyn Error>> {
+    let start = Instant::now();
+    let res = main_internal();
+    println!("Completado con resultado {res:?} en {:.2}s", start.elapsed().as_secs_f32());
+    res
 }
