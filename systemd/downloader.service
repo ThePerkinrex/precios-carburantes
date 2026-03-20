@@ -2,15 +2,21 @@
 Description=Run Precios Carburantes Script
 # Only run if the executable exists at this path
 ConditionPathExists=$FILE_DEST/bin/downloader
+StartLimitIntervalSec=300
+StartLimitBurst=3
 
 [Service]
-Type=oneshot
+Type=exec
 User=pi
 WorkingDirectory=$FILE_DEST
 ExecStart=$FILE_DEST/bin/downloader
 # Optional: Logs output to syslog
 StandardOutput=journal
 StandardError=journal
+# Restart only if the script exits with an error code (non-zero)
+Restart=on-failure
+# Wait 30 seconds before trying again
+RestartSec=30
 
 [Install]
 WantedBy=multi-user.target
