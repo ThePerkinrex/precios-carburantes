@@ -1,0 +1,44 @@
+:root {
+    --bg: #f4f7f6;
+    --card: #ffffff;
+    --primary: #2c3e50;
+}
+
+body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background-color: var(--bg);
+    margin: 0;
+    padding: 20px;
+}
+
+.dashboard {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+}
+
+.filters {
+    display: flex;
+    gap: 10px;
+}
+
+select {
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    background: white;
+}
+
+.chart-container {
+    background: var(--card);
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    height: 60vh;
+}
