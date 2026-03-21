@@ -132,7 +132,7 @@ async fn price_history_station(
                 gasolina_95
             FROM precios
             WHERE id_estacion = ? AND fecha >= ?
-ORDER BY p.fecha ASC;
+ORDER BY fecha ASC;
             "#,
         )
         .map_err(|e| {
