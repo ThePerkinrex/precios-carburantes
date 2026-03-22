@@ -12,7 +12,7 @@ use crate::{DbPool, error::AppError};
 
 mod geo;
 mod user;
-mod route;
+pub mod route;
 
 #[derive(Serialize)]
 struct EstacionPrecio {

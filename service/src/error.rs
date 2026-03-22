@@ -8,6 +8,8 @@ use axum::{
 use reqwest::StatusCode;
 use thiserror::Error;
 
+use crate::api::route::RouteError;
+
 #[derive(Debug, Error)]
 pub struct GenericLoggedError {
     pub response: Box<Response>,
@@ -66,6 +68,8 @@ pub enum AppError {
 	IO(#[from] std::io::Error),
 	#[error("File not found")]
 	FileNotFound,
+    #[error(transparent)]
+    Route(#[from] RouteError),
 }
 
 impl From<Infallible> for AppError {
@@ -109,7 +113,12 @@ impl IntoResponse for AppError {
                 StatusCode::INTERNAL_SERVER_ERROR.into_response(),
                 Some(format!("IO Error: {e}").into()),
             ),
-			Self::FileNotFound => (StatusCode::NOT_FOUND.into_response(), None)
+			Self::FileNotFound => (StatusCode::NOT_FOUND.into_response(), None),
+			Self::Route(e) => (
+                StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+                Some(format!("Route Error: {e}").into()),
+            ),
+
         };
 
         if let Some(msg) = msg {
