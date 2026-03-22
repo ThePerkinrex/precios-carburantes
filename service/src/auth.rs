@@ -3,39 +3,28 @@ use std::sync::Arc;
 use axum::{
     Extension,
     extract::{FromRef, FromRequestParts, Request, State},
-    http::{HeaderMap, StatusCode},
+    http::{HeaderMap},
     middleware::Next,
     response::{IntoResponse, Response},
 };
 use rusqlite::params;
-use tracing::warn;
 
 use crate::{
     DbPool,
     config::{Config, DevConfig},
+    error::{AppError},
 };
 
 fn validate_auth<'a>(
     headers: &HeaderMap,
     config: &'a Config,
-) -> Result<Option<&'a DevConfig>, (StatusCode, &'static str)> {
+) -> Result<Option<&'a DevConfig>, AppError> {
     let verify_status = headers.get("X-SSL-Client-Verify");
     match (verify_status, &config.dev) {
         (Some(x), _) if x == "SUCCESS" => Ok(None),
         (None, Some(dev)) => Ok(Some(dev)),
-        _ => Err((
-            StatusCode::UNAUTHORIZED,
-            "Valid client certificate required",
-        )),
+        _ => Err(AppError::Auth),
     }
-    // if verify_status.map(|v| v != "SUCCESS").unwrap_or_else(|| config.dev.is_none()) { // Pass if dev config is setup
-    //     Err((
-    //         StatusCode::UNAUTHORIZED,
-    //         "Valid client certificate required",
-    //     ))
-    // } else {
-    //     Ok()
-    // }
 }
 
 pub async fn auth_middleware(
@@ -70,21 +59,16 @@ where
     S: Send + Sync,
     DbPool: FromRef<S>,
 {
-    type Rejection = Response;
+    type Rejection = AppError;
 
     async fn from_request_parts(
         parts: &mut axum::http::request::Parts,
         state: &S,
     ) -> Result<Self, Self::Rejection> {
-        let Extension(config) = Extension::<Arc<Config>>::from_request_parts(parts, state)
-            .await
-            .map_err(IntoResponse::into_response)?;
-        let State(pool) = State::<DbPool>::from_request_parts(parts, state)
-            .await
-            .map_err(IntoResponse::into_response)?;
+        let Extension(config) = Extension::<Arc<Config>>::from_request_parts(parts, state).await?;
+        let State(pool) = State::<DbPool>::from_request_parts(parts, state).await?;
         // 1. Check if Nginx verified the cert
-        let dev_config =
-            validate_auth(&parts.headers, &config).map_err(IntoResponse::into_response)?;
+        let dev_config = validate_auth(&parts.headers, &config)?;
 
         if let Some(dev_config) = dev_config {
             Ok(Self {
@@ -108,28 +92,14 @@ where
 
             let mut roles = Vec::new();
             {
-                let conn = pool.get().map_err(|e| {
-                    warn!("SQL Error: {e}");
-                    StatusCode::INTERNAL_SERVER_ERROR.into_response()
-                })?;
+                let conn = pool.get()?;
                 let mut stmt = conn
-                    .prepare("SELECT role FROM user_roles WHERE username = ?")
-                    .map_err(|e| {
-                        warn!("SQL Error: {e}");
-                        StatusCode::INTERNAL_SERVER_ERROR.into_response()
-                    })?;
+                    .prepare("SELECT role FROM user_roles WHERE username = ?")?;
                 let result = stmt
-                    .query_map(params![username], |r| r.get(0))
-                    .map_err(|e| {
-                        warn!("SQL Error: {e}");
-                        StatusCode::INTERNAL_SERVER_ERROR.into_response()
-                    })?;
+                    .query_map(params![username], |r| r.get(0))?;
 
                 for role in result {
-                    roles.push(role.map_err(|e| {
-                        warn!("SQL Error: {e}");
-                        StatusCode::INTERNAL_SERVER_ERROR.into_response()
-                    })?);
+                    roles.push(role?);
                 }
             }
 

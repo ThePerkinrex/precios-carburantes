@@ -8,7 +8,7 @@ use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use tracing::warn;
 
-use crate::DbPool;
+use crate::{DbPool, error::AppError};
 
 mod geo;
 mod user;
@@ -34,7 +34,7 @@ struct EstacionPrecio {
 
 async fn latest_prices(
     State(state): State<DbPool>,
-) -> Result<Json<Vec<EstacionPrecio>>, StatusCode> {
+) -> Result<Json<Vec<EstacionPrecio>>, AppError> {
     let conn = state.get().unwrap();
 
     let mut stmt = conn
@@ -62,11 +62,7 @@ async fn latest_prices(
             JOIN precios p ON p.id_estacion = e.id
             JOIN latest l ON p.fecha = l.fecha
             "#,
-        )
-        .map_err(|e| {
-            warn!("SQL Error: {e}");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+        )?;
 
     let rows = stmt
         .query_map([], |row| {
@@ -86,18 +82,11 @@ async fn latest_prices(
                 horario: row.get(12)?,
                 cp: row.get(13)?,
             })
-        })
-        .map_err(|e| {
-            warn!("SQL Error: {e}");
-            StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
     let mut estaciones = Vec::new();
     for row in rows {
-        estaciones.push(row.map_err(|e| {
-            warn!("SQL Error: {e}");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?);
+        estaciones.push(row?);
     }
 
     Ok(Json(estaciones))
@@ -119,7 +108,7 @@ async fn price_history_station(
     Path(id): Path<i64>,
     Query(params): Query<StationHistoryParams>,
     State(state): State<DbPool>,
-) -> Result<Json<Vec<PricePoint>>, StatusCode> {
+) -> Result<Json<Vec<PricePoint>>, AppError> {
     let conn = state.get().unwrap();
     let tz = chrono::Local;
 
@@ -135,11 +124,7 @@ async fn price_history_station(
             WHERE id_estacion = ? AND fecha >= ?
 ORDER BY fecha ASC;
             "#,
-        )
-        .map_err(|e| {
-            warn!("SQL Error: {e}");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+        )?;
     let fecha = params
         .from
         .with_timezone(&tz)
@@ -153,18 +138,11 @@ ORDER BY fecha ASC;
                 gasoleo_a: row.get(1)?,
                 gasolina_95: row.get(2)?,
             })
-        })
-        .map_err(|e| {
-            warn!("SQL Error: {e}");
-            StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
     let mut precios = Vec::new();
     for row in rows {
-        precios.push(row.map_err(|e| {
-            warn!("SQL Error: {e}");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?);
+        precios.push(row?);
     }
 
     Ok(Json(precios))
@@ -181,7 +159,7 @@ async fn price_history(
     State(state): State<DbPool>,
 ) -> Result<Json<Vec<PricePoint>>, StatusCode> {
     let conn = state.get().unwrap();
-    let tz = chrono::Local;
+    // let tz = chrono::Local;
 
     let mut stmt = conn
         .prepare(

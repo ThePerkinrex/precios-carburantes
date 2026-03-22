@@ -15,6 +15,7 @@ mod api;
 mod files;
 mod config;
 mod auth;
+mod error;
 
 #[tokio::main]
 async fn main() {
@@ -45,6 +46,7 @@ async fn main() {
         .nest("/api", api::get_router())
         .nest("/files", files::get_router())
         .layer(middleware::from_fn(auth::auth_middleware))
+        .layer(middleware::from_fn(error::log_app_errors))
         .layer(Extension(Arc::new(config)))
         .with_state(pool);
 

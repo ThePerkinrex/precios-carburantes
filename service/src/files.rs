@@ -1,14 +1,10 @@
 use std::path::{PathBuf};
 
 use axum::{
-    Router,
-    body::Body,
-    extract::Path,
-    http::Response,
-    routing::get,
+    Router, extract::Path, response::Response, routing::get
 };
 
-use crate::DbPool;
+use crate::{DbPool, error::AppError};
 
 #[cfg(feature = "include-static")]
 mod static_load;
@@ -23,7 +19,7 @@ mod dynamic_load;
 use dynamic_load as load;
 
 
-async fn file(Path(path): Path<PathBuf>) -> Response<Body> {
+async fn file(Path(path): Path<PathBuf>) -> Result<Response, AppError> {
 	// info!("!{}", path.display());
 	// for e in PROJECT_DIR.entries() {
 	// 	info!(" + {}", e.path().display())

@@ -1,9 +1,8 @@
 use axum::{Json, Router, extract::State, http::StatusCode, routing::{get, put}};
 use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};
-use tracing::warn;
 
-use crate::{DbPool, auth::ClientAuth};
+use crate::{DbPool, auth::ClientAuth, error::AppError};
 
 #[derive(Debug, Serialize)]
 pub struct UserState {
@@ -81,17 +80,9 @@ fn update_user_display_name(
 async fn user_state(
     State(pool): State<DbPool>,
     auth: ClientAuth,
-) -> Result<Json<UserState>, StatusCode> {
-    let conn = pool.get().map_err(|e| {
-        warn!("Pool error: {e}");
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    get_user_state(&conn, &auth.username, auth.roles.clone())
-        .map_err(|e| {
-            warn!("Get state error: {e}");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })
-        .map(Json)
+) -> Result<Json<UserState>, AppError> {
+    let conn = pool.get()?;
+    Ok(Json(get_user_state(&conn, &auth.username, auth.roles.clone())?))
 }
 
 #[derive(Debug, Deserialize)]
@@ -103,16 +94,9 @@ async fn set_user_display_name(
     State(pool): State<DbPool>,
     auth: ClientAuth,
     Json(params): Json<PutDisplayName>
-) -> Result<StatusCode, StatusCode> {
-    let conn = pool.get().map_err(|e| {
-        warn!("Pool error: {e}");
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    update_user_display_name(&conn, &auth.username, &params.display_name)
-        .map_err(|e| {
-            warn!("Get state error: {e}");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+) -> Result<StatusCode, AppError> {
+    let conn = pool.get()?;
+    update_user_display_name(&conn, &auth.username, &params.display_name)?;
     Ok(StatusCode::OK)
 }
 
@@ -125,16 +109,9 @@ async fn set_filter(
     State(pool): State<DbPool>,
     auth: ClientAuth,
     Json(params): Json<PutFilter>
-) -> Result<StatusCode, StatusCode> {
-    let conn = pool.get().map_err(|e| {
-        warn!("Pool error: {e}");
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    update_user_filter(&conn, &auth.username, &params.filter)
-        .map_err(|e| {
-            warn!("Get state error: {e}");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+) -> Result<StatusCode, AppError> {
+    let conn = pool.get()?;
+    update_user_filter(&conn, &auth.username, &params.filter)?;
     Ok(StatusCode::OK)
 }
 
