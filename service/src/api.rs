@@ -12,6 +12,7 @@ use crate::DbPool;
 
 mod geo;
 mod user;
+mod route;
 
 #[derive(Serialize)]
 struct EstacionPrecio {
@@ -234,4 +235,5 @@ pub fn get_router() -> Router<DbPool> {
         .route("/{id}/history", get(price_history_station))
         .nest("/user", user::get_router())
         .nest("/geo", geo::get_router())
+        .nest("/route/", route::get_router())
 }
