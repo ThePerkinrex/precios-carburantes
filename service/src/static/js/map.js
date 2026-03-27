@@ -11,16 +11,15 @@ function onLocationFound(map, e) {
 	if (marker === undefined) {
 		marker = {
 			marker: L.marker(e.latlng),
-			circle: L.circle(e.latlng, radius)
-		}
+			circle: L.circle(e.latlng, radius),
+		};
 		marker.marker.addTo(map);
 		marker.circle.addTo(map);
-	}else{
+	} else {
 		marker.marker.setLatLng(e.latlng);
 		marker.circle.setLatLng(e.latlng);
 		marker.circle.setRadius(radius);
 	}
-
 
 	console.log("Got location");
 }
@@ -30,56 +29,69 @@ function onLocationError(e) {
 }
 
 function addSelectAllButtons(layerControl, overlays, map) {
-    // Get the container where Leaflet lists the overlays
-    const container = layerControl.getContainer();
-    const form = container.querySelector("section.leaflet-control-layers-list");
+	// Get the container where Leaflet lists the overlays
+	const container = layerControl.getContainer();
+	const form = container.querySelector("section.leaflet-control-layers-list");
 
-    // Create a wrapper for our new buttons
-    const buttonWrapper = document.createElement("div");
-    buttonWrapper.className = "layer-select-buttons"; // Good for custom CSS styling if needed
-    buttonWrapper.innerHTML = `
+	// Create a wrapper for our new buttons
+	const buttonWrapper = document.createElement("div");
+	buttonWrapper.className = "layer-select-buttons"; // Good for custom CSS styling if needed
+	buttonWrapper.innerHTML = `
         <button class="selectAll">All</button>
         <button class="unselectAll">None</button>
     `;
-    
-    // IMPORTANT: Prevent clicks from bleeding through to the map underneath
-    L.DomEvent.disableClickPropagation(buttonWrapper);
-    
-    form.prepend(buttonWrapper);
 
-    // --- GHOST CLICK PREVENTION ---
-    let ignoreClicks = false;
+	// IMPORTANT: Prevent clicks from bleeding through to the map underneath
+	L.DomEvent.disableClickPropagation(buttonWrapper);
 
-    // Listen for mobile touches on the main control container
-    container.addEventListener('touchstart', () => {
-        // If the control isn't expanded yet, the user is tapping to open it.
-        if (!container.classList.contains('leaflet-control-layers-expanded')) {
-            ignoreClicks = true; // Lock the buttons
-            setTimeout(() => { ignoreClicks = false; }, 400); // Unlock after 400ms
-        }
-    }, { passive: true });
-    // ------------------------------
+	form.prepend(buttonWrapper);
 
-    // Add event listeners (using L.DomEvent to safely handle Leaflet event propagation)
-    const selectAllBtn = buttonWrapper.querySelector(".selectAll");
-    L.DomEvent.on(selectAllBtn, 'click', (ev) => {
-        L.DomEvent.stop(ev); // Stops the event from bubbling
-        if (ignoreClicks) return; // Abort if we are in the cooldown window
-        
-        console.log('All', container.checkVisibility(), ev);
-        for (let overlay of overlays) map.addLayer(overlay);
-    });
+	// --- GHOST CLICK PREVENTION ---
+	let ignoreClicks = false;
 
-    const unselectAllBtn = buttonWrapper.querySelector(".unselectAll");
-    L.DomEvent.on(unselectAllBtn, 'click', (ev) => {
-        L.DomEvent.stop(ev);
-        if (ignoreClicks) return;
+	// Listen for mobile touches on the main control container
+	container.addEventListener(
+		"touchstart",
+		() => {
+			// If the control isn't expanded yet, the user is tapping to open it.
+			if (
+				!container.classList.contains("leaflet-control-layers-expanded")
+			) {
+				ignoreClicks = true; // Lock the buttons
+				setTimeout(() => {
+					ignoreClicks = false;
+				}, 400); // Unlock after 400ms
+			}
+		},
+		{ passive: true },
+	);
+	// ------------------------------
 
-        console.log('None', container.checkVisibility(), container.classList.contains('leaflet-control-layers-expanded'), ev);
-        for (let overlay of overlays) {
-            if (map.hasLayer(overlay)) map.removeLayer(overlay);
-        }
-    });
+	// Add event listeners (using L.DomEvent to safely handle Leaflet event propagation)
+	const selectAllBtn = buttonWrapper.querySelector(".selectAll");
+	L.DomEvent.on(selectAllBtn, "click", (ev) => {
+		L.DomEvent.stop(ev); // Stops the event from bubbling
+		if (ignoreClicks) return; // Abort if we are in the cooldown window
+
+		console.log("All", container.checkVisibility(), ev);
+		for (let overlay of overlays) map.addLayer(overlay);
+	});
+
+	const unselectAllBtn = buttonWrapper.querySelector(".unselectAll");
+	L.DomEvent.on(unselectAllBtn, "click", (ev) => {
+		L.DomEvent.stop(ev);
+		if (ignoreClicks) return;
+
+		console.log(
+			"None",
+			container.checkVisibility(),
+			container.classList.contains("leaflet-control-layers-expanded"),
+			ev,
+		);
+		for (let overlay of overlays) {
+			if (map.hasLayer(overlay)) map.removeLayer(overlay);
+		}
+	});
 }
 
 async function load() {
@@ -185,6 +197,20 @@ async function load() {
 			pill = `<div class="pill close soon">Cierra pronto; Cierre ${formatOpenCloseDate(status.nextClose)}</div>`;
 		}
 
+		// https://www.google.com/maps/search/?api=1&query=47.5951518%2C-122.3316393
+		const maps_url_params = new URLSearchParams({
+			api: '1',
+			query: `${eess.latitud},${eess.longitud}`
+		})
+		const maps_url = `https://www.google.com/maps/search/?${maps_url_params}`;
+		const directions_params = new URLSearchParams({
+			api: "1",
+			destination: `${eess.rotulo} ${eess.direccion} ${eess.localidad}`,
+			destination_place_id: "", // optional
+		});
+
+		const directions = `https://www.google.com/maps/dir/?${directions_params}`;
+
 		const marker = L.marker([eess.latitud, eess.longitud], {
 			icon: icon,
 		}).bindPopup(() => {
@@ -196,7 +222,9 @@ async function load() {
 					${eess.localidad}, ${eess.municipio} ${eess.cp}<br>
 					<i>${eess.provincia}</i><br>
 					Horario: ${eess.horario}<br>
-					${pill}
+					${pill}<br>
+					<a href="${maps_url}" target="_blank" rel="noopener noreferrer"><div class="google-maps pill"><img src="/files/images/google_maps.svg" class="google-maps-logo"><span class="google-maps-text">Dónde está</span></div></a>
+					<a href="${directions}" target="_blank" rel="noopener noreferrer"><div class="google-maps pill"><img src="/files/images/google_maps.svg" class="google-maps-logo"><span class="google-maps-text">Cómo llegar</span></div></a>
 				</div>
 
 				<div class="price-label">
@@ -268,16 +296,16 @@ async function load() {
 			name == "other" ? "Otras" : logos[name].text,
 		);
 		if (state.filter.has(name)) subgroup.addTo(map);
-		subgroup.on('add', () => {
-			console.log('Add ' + name)
-			state.filter.add(name)
-			updateFilter(state.filter)
-		})
-		subgroup.on('remove', () => {
-			console.log('Remove ' + name)
-			state.filter.delete(name)
-			updateFilter(state.filter)
-		})
+		subgroup.on("add", () => {
+			console.log("Add " + name);
+			state.filter.add(name);
+			updateFilter(state.filter);
+		});
+		subgroup.on("remove", () => {
+			console.log("Remove " + name);
+			state.filter.delete(name);
+			updateFilter(state.filter);
+		});
 	}
 	control.addTo(map);
 	addSelectAllButtons(

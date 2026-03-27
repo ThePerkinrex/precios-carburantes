@@ -129,3 +129,24 @@ body {
 	font-size: 1.5em;
 	margin-bottom: 0.8em;
 }
+
+
+.google-maps {
+  display: inline-flex;
+  align-items: center; /* vertically align image and text */
+  gap: 1em; /* space between image and text */
+  background: #ebdaa4;
+  color: black;
+  font-weight: bold;
+}
+
+.google-maps-logo {
+  height: 1.2em; /* match text height */
+  width: auto; /* keep aspect ratio */
+}
+
+.google-maps-text {
+  font-size: 1em; /* ensures consistent scaling */
+  line-height: 1; /* prevents extra vertical spacing */
+}
+
