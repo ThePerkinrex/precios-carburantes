@@ -3,6 +3,8 @@ use std::path::Path;
 use axum::{body::Body, http::{StatusCode, header}, response::{IntoResponse, Response}};
 use include_dir::{Dir, DirEntry, include_dir};
 
+use crate::error::AppError;
+
 static PROJECT_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/src/static");
 
 fn match_entry(entry: Option<&DirEntry>) -> Result<Response, AppError> {
