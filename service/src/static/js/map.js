@@ -205,8 +205,7 @@ async function load() {
 		const maps_url = `https://www.google.com/maps/search/?${maps_url_params}`;
 		const directions_params = new URLSearchParams({
 			api: "1",
-			destination: `${eess.rotulo} ${eess.direccion} ${eess.localidad}`,
-			destination_place_id: "", // optional
+			destination: `${eess.latitud},${eess.longitud}`
 		});
 
 		const directions = `https://www.google.com/maps/dir/?${directions_params}`;
