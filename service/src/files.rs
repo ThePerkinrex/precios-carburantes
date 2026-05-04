@@ -19,7 +19,7 @@ mod dynamic_load;
 use dynamic_load as load;
 
 
-async fn file(Path(path): Path<PathBuf>) -> Result<Response, AppError> {
+pub async fn file(Path(path): Path<PathBuf>) -> Result<Response, AppError> {
 	// info!("!{}", path.display());
 	// for e in PROJECT_DIR.entries() {
 	// 	info!(" + {}", e.path().display())
