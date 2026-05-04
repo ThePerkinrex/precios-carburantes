@@ -45,7 +45,7 @@ async fn main() {
     let app = Router::new()
         .nest("/api", api::get_router())
         .nest("/files", files::get_router())
-        .route("/", get(|| async {Redirect::to("/files/")}))
+        .route("/", get(|| async {Redirect::to("/files/index.html")}))
         .layer(middleware::from_fn(auth::auth_middleware))
         .layer(middleware::from_fn(error::log_app_errors))
         .layer(Extension(Arc::new(config)))
