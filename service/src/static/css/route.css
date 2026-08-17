@@ -1,0 +1,93 @@
+.route-control {
+	background: white;
+	border-radius: 8px;
+	box-shadow: 0 1px 5px rgba(0, 0, 0, 0.4);
+	font-size: 14px;
+	max-width: min(320px, 90vw);
+}
+
+.route-toggle {
+	width: 100%;
+	min-height: 44px;
+	padding: 8px 12px;
+	border: none;
+	background: white;
+	border-radius: 8px;
+	font-size: 15px;
+	cursor: pointer;
+}
+
+.route-panel {
+	padding: 8px;
+	max-height: 60vh;
+	overflow-y: auto;
+}
+
+.route-actions {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 6px;
+	margin-bottom: 8px;
+}
+
+.route-btn {
+	min-height: 44px;
+	border: 1px solid #ccc;
+	border-radius: 6px;
+	background: #f7f7f7;
+	cursor: pointer;
+	font-size: 14px;
+}
+
+.route-btn.active {
+	background: #2a6fdb;
+	color: white;
+	border-color: #2a6fdb;
+}
+
+.route-list {
+	list-style: none;
+	margin: 0 0 8px;
+	padding: 0;
+}
+
+.route-item {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 6px 4px;
+	border-bottom: 1px solid #eee;
+}
+
+.route-item-buttons button {
+	min-width: 32px;
+	min-height: 32px;
+	border: 1px solid #ccc;
+	border-radius: 4px;
+	background: white;
+	margin-left: 4px;
+}
+
+.route-status {
+	font-style: italic;
+	color: #666;
+	min-height: 1.2em;
+}
+
+.route-summary {
+	font-weight: bold;
+}
+
+.route-marker {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	border-radius: 50%;
+	background: #2a6fdb;
+	color: white;
+	font-weight: bold;
+	border: 2px solid white;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}

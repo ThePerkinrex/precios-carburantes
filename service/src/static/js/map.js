@@ -2,8 +2,34 @@ import { getStatus, formatOpenCloseDate } from "./schedules.js";
 import { addVisibleStationsControl } from "./visible_stations.js";
 import { getLatestPrices, getUserState, updateFilter } from "./api.js";
 import { getLogos } from "./logos.js";
+import { addRouteControl } from "./route.js";
 
 let marker = undefined;
+
+const MAX_DATA_AGE_MS = 3 * 60 * 60 * 1000; // 3 hours
+let lastLoadTime = Date.now();
+
+function reloadIfStale() {
+	const age = Date.now() - lastLoadTime;
+	if (age > MAX_DATA_AGE_MS) {
+		console.log(`Data is ${Math.round(age / 60000)} min old, reloading`);
+		location.reload();
+	}
+}
+
+// Mobile Safari/Chrome often restore the page from bfcache without a
+// normal "load" — visibilitychange covers most cases, pageshow covers bfcache restores.
+document.addEventListener("visibilitychange", () => {
+	if (document.visibilityState === "visible") {
+		reloadIfStale();
+	}
+});
+
+window.addEventListener("pageshow", (event) => {
+	if (event.persisted) {
+		reloadIfStale();
+	}
+});
 
 function onLocationFound(map, e) {
 	const radius = e.accuracy;
@@ -128,6 +154,7 @@ async function load() {
 
 	data = await data;
 	logos = await logos;
+	lastLoadTime = Date.now();
 
 	let subgroups = Object.fromEntries(Object.keys(logos).map((k) => [k, []]));
 	subgroups["other"] = [];
@@ -314,6 +341,7 @@ async function load() {
 	);
 
 	addVisibleStationsControl(map, markers, allMarkers);
+	addRouteControl(map);
 
 	// console.log()
 }

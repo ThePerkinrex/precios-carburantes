@@ -34,3 +34,13 @@ export async function updateFilter(newFilter) {
 		body: JSON.stringify({ filter: await mapFilterToString(newFilter) }),
 	});
 }
+
+export async function getRoute(waypoints) {
+    return await fetch(API_LOCATION + "/route/", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ waypoints }),
+    }).then((x) => x.json());
+}
