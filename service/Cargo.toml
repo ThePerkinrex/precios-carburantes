@@ -22,6 +22,8 @@ reqwest = { version = "0.13.2", features = ["json"] }
 polyline = "0.11.0"
 geo-types = {version = "0.7.18", features = ["serde"]}
 thiserror = "2.0.18"
+sha3 = "0.12.0"
+bytemuck = { version = "1.25.2", features = ["derive"] }
 
 [features]
 include-static = ["dep:include_dir"]

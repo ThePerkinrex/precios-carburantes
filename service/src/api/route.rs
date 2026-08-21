@@ -1,7 +1,9 @@
 use axum::{Json, Router, routing::{get, post}};
+use bytemuck::{Pod, Zeroable};
 use geo_types::LineString;
 use polyline::errors::PolylineError;
 use serde::{Deserialize, Serialize};
+use sha3::{Digest, Sha3_256};
 use thiserror::Error;
 
 use crate::{DbPool, error::AppError};
@@ -18,9 +20,13 @@ pub enum RouteError {
     NoRoute(String),
 }
 
+#[derive(Debug, Deserialize, Pod, Clone, Copy, PartialEq, Zeroable)]
+#[repr(C)]
+struct Waypoint(f64, f64);
+
 #[derive(Debug, Deserialize)]
 struct RouteRequest {
-    waypoints: Vec<(f64, f64)>,
+    waypoints: Vec<Waypoint>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -60,13 +66,13 @@ struct RouteResponse {
     distance: f64,
 }
 
-async fn forward_route(waypoints: &[(f64, f64)]) -> Result<Vec<RouteResponse>, RouteError> {
+async fn forward_route(waypoints: &[Waypoint]) -> Result<Vec<RouteResponse>, RouteError> {
     const BASE_URI: &str = "http://router.project-osrm.org/route/v1/driving/";
     let url = format!(
-        "{BASE_URI}{}?annotations=distance,duration",
+        "{BASE_URI}{}?annotations=distance,duration&overview=full&alternatives=3",
         waypoints
             .iter()
-            .map(|(lat, lon)| format!("{lon},{lat}"))
+            .map(|Waypoint(lat, lon)| format!("{lon},{lat}"))
             .collect::<Vec<_>>()
             .join(";")
     );
@@ -82,7 +88,9 @@ async fn forward_route(waypoints: &[(f64, f64)]) -> Result<Vec<RouteResponse>, R
     let status = resp.status();
     let body = resp.text().await?; // read raw text, not .json()
 
-    tracing::info!("OSRM status={status} body={body}");
+    if !status.is_success() {
+        tracing::warn!("OSRM status={status} body={body}");
+    }
 
     let parsed: RouteOSRMResponse = match serde_json::from_str(&body) {
         Ok(p) => p,
@@ -117,6 +125,10 @@ async fn forward_route(waypoints: &[(f64, f64)]) -> Result<Vec<RouteResponse>, R
 }
 
 async fn get_route(Json(req): Json<RouteRequest>) -> Result<Json<Vec<RouteResponse>>, AppError> {
+    let hash = Sha3_256::new().chain_update(bytemuck::cast_slice(&req.waypoints)).finalize();
+
+    tracing::info!("Hash: {}", hash.iter().map(|a| format!("{a:02x}")).reduce(|a, b| a + &b).unwrap_or_default());
+
     Ok(Json(forward_route(&req.waypoints).await?))
 }
 

@@ -56,6 +56,16 @@ const MIGRATIONS: &[&[&str]] = &[
         )",
         "CREATE INDEX IF NOT EXISTS idx_user_roles_username ON user_roles(username)",
     ], // Index 4: New migration
+    &[
+        "CREATE TABLE IF NOT EXISTS routes (
+            hash TEXT NOT NULL,
+            owner TEXT NOT NULL,
+            perms TEXT NOT NULL,
+            data TEXT NOT NULL,
+            PRIMARY KEY (hash),
+            FOREIGN KEY (owner) REFERENCES user_configs(username)
+        )"
+    ]
 ];
 
 pub const DEFAULT_DB_PATH: &str = "precios_carburantes.db";
