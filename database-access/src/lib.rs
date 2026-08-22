@@ -59,12 +59,18 @@ const MIGRATIONS: &[&[&str]] = &[
     &[
         "CREATE TABLE IF NOT EXISTS routes (
             hash TEXT NOT NULL,
-            owner TEXT NOT NULL,
-            perms TEXT NOT NULL,
             data TEXT NOT NULL,
-            PRIMARY KEY (hash),
-            FOREIGN KEY (owner) REFERENCES user_configs(username)
-        )"
+            PRIMARY KEY (hash)
+        )",
+        "CREATE TABLE IF NOT EXISTS route_searches (
+            hash TEXT NOT NULL,
+            username TEXT NOT NULL,
+            last_view INTEGER NOT NULL,
+            PRIMARY KEY (hash, username),
+            FOREIGN KEY (username) REFERENCES user_configs(username),
+            FOREIGN KEY (hash) REFERENCES routes(hash)
+        )",
+        "CREATE INDEX IF NOT EXISTS idx_route_searches_user ON route_searches(username)",
     ]
 ];
 

@@ -24,6 +24,7 @@ geo-types = {version = "0.7.18", features = ["serde"]}
 thiserror = "2.0.18"
 sha3 = "0.12.0"
 bytemuck = { version = "1.25.2", features = ["derive"] }
+axum-macros = "0.5.1"
 
 [features]
 include-static = ["dep:include_dir"]

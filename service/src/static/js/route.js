@@ -1,283 +1,356 @@
-import { getRoute } from "./api.js";
+import { createRoute, getRoute } from "./api.js";
 
-const ROUTE_COLORS = ["#2a6fdb", "#e0a800", "#28a745", "#dc3545", "#6f42c1"];
+// Colors used to distinguish alternative routes on the map and in the tabs.
+const ROUTE_COLORS = ["#2563eb", "#f97316", "#16a34a", "#9333ea", "#dc2626"];
 
-// Adjust this if the backend's LineString serialization differs from
-// plain {x, y} coordinate objects (x = lon, y = lat).
-function coordToLatLng(coord) {
-	if (Array.isArray(coord)) return [coord[1], coord[0]]; // [lon, lat] -> [lat, lon]
-	return [coord.y, coord.x];
-}
-
-function labelForRole(role) {
-	if (role === "origin") return "el origen";
-	if (role === "destination") return "el destino";
-	return "una parada";
+function formatDistance(meters) {
+	if (meters >= 1000) return `${(meters / 1000).toFixed(1)} km`;
+	return `${Math.round(meters)} m`;
 }
 
 function formatDuration(seconds) {
-	const mins = Math.round(seconds / 60);
-	if (mins < 60) return `${mins} min`;
-	const h = Math.floor(mins / 60);
-	const m = mins % 60;
-	return m === 0 ? `${h} h` : `${h} h ${m} min`;
+	const totalMin = Math.round(seconds / 60);
+	const h = Math.floor(totalMin / 60);
+	const m = totalMin % 60;
+	if (h > 0) return `${h} h ${m} min`;
+	return `${m} min`;
 }
 
-function formatDistance(meters) {
-	if (meters < 1000) return `${Math.round(meters)} m`;
-	return `${(meters / 1000).toFixed(1)} km`;
+// The backend's `geometry` field is a geo_types LineString using GeoJSON's
+// coordinate order (x = lon, y = lat), but geo_types serializes each point
+// as an {x, y} object rather than a [lon, lat] tuple.
+function coordToLatLng({ x, y }) {
+	return [y, x];
 }
+
+function waypointDivIcon(index, isFirst, isLast) {
+	const cls = isFirst ? "start" : isLast ? "end" : "";
+	return L.divIcon({
+		className: "route-waypoint-icon",
+		html: `<div class="route-waypoint-marker ${cls}">${index + 1}</div>`,
+		iconSize: [28, 28],
+		iconAnchor: [14, 14],
+	});
+}
+
+const FAB_ICON = `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+	<circle cx="6" cy="19" r="2.25"></circle>
+	<circle cx="18" cy="5" r="2.25"></circle>
+	<path d="M6 16.75V13a4 4 0 0 1 4-4h4a4 4 0 0 0 4-4"></path>
+</svg>`;
+
+const HANDLE_ICON = `<svg viewBox="0 0 20 20" width="16" height="16" fill="currentColor">
+	<circle cx="6" cy="4" r="1.5"></circle>
+	<circle cx="6" cy="10" r="1.5"></circle>
+	<circle cx="6" cy="16" r="1.5"></circle>
+	<circle cx="14" cy="4" r="1.5"></circle>
+	<circle cx="14" cy="10" r="1.5"></circle>
+	<circle cx="14" cy="16" r="1.5"></circle>
+</svg>`;
 
 export function addRouteControl(map) {
-	const waypoints = []; // { lat, lng, marker }
-	const routeLayer = L.layerGroup().addTo(map);
-	let pendingRole = null; // "origin" | "destination" | "waypoint" | null
-	let fetchToken = 0;
-	let debounceTimer = null;
+	const state = {
+		active: false,
+		waypoints: [], // { marker, latlng }
+		routeLayers: [],
+		routes: [],
+		selectedRouteIndex: 0,
+		loading: false,
+	};
 
-	// In-memory cache so identical searches this session don't re-hit the
-	// server. Persisting this across sessions/users is planned separately.
-	const routeCache = new Map();
+	// --- Build the FAB + panel DOM (kept outside the map container so
+	// touches on them never reach Leaflet's own click handling) ---
+	const fab = document.createElement("button");
+	fab.type = "button";
+	fab.className = "route-fab";
+	fab.setAttribute("aria-label", "Buscar ruta");
+	fab.innerHTML = FAB_ICON;
 
-	const RoutePanel = L.Control.extend({
-		options: { position: "bottomleft" },
-		onAdd: function () {
-			const container = L.DomUtil.create("div", "route-control");
-			L.DomEvent.disableClickPropagation(container);
-			L.DomEvent.disableScrollPropagation(container);
+	const panel = document.createElement("div");
+	panel.className = "route-panel hidden";
+	panel.innerHTML = `
+		<div class="route-panel-header">
+			<span>Ruta</span>
+			<button type="button" class="route-close" aria-label="Cerrar">&times;</button>
+		</div>
+		<div class="route-hint">Toca el mapa para añadir puntos de ruta</div>
+		<ul class="route-waypoint-list"></ul>
+		<div class="route-summary hidden"></div>
+		<div class="route-actions">
+			<button type="button" class="route-clear" disabled>Vaciar</button>
+			<button type="button" class="route-calc" disabled>Calcular ruta</button>
+		</div>
+	`;
 
-			container.innerHTML = `
-				<button class="route-toggle" type="button" aria-label="Planificar ruta">🧭 Ruta</button>
-				<div class="route-panel" hidden>
-					<div class="route-actions">
-						<button type="button" data-role="origin" class="route-btn">📍 Origen</button>
-						<button type="button" data-role="destination" class="route-btn">🏁 Destino</button>
-						<button type="button" data-role="waypoint" class="route-btn">➕ Parada</button>
-						<button type="button" class="route-btn route-clear">🗑 Limpiar</button>
-					</div>
-					<ul class="route-list"></ul>
-					<div class="route-status"></div>
-					<div class="route-summary"></div>
-				</div>
-			`;
+	document.body.appendChild(panel);
+	document.body.appendChild(fab);
 
-			const toggleBtn = container.querySelector(".route-toggle");
-			const panel = container.querySelector(".route-panel");
-			toggleBtn.addEventListener("click", () => {
-				panel.hidden = !panel.hidden;
-			});
+	const listEl = panel.querySelector(".route-waypoint-list");
+	const calcBtn = panel.querySelector(".route-calc");
+	const clearBtn = panel.querySelector(".route-clear");
+	const closeBtn = panel.querySelector(".route-close");
+	const summaryEl = panel.querySelector(".route-summary");
+	const hintEl = panel.querySelector(".route-hint");
 
-			container.querySelectorAll(".route-btn[data-role]").forEach((btn) =>
-				btn.addEventListener("click", () => {
-					pendingRole = btn.dataset.role;
-					container
-						.querySelectorAll(".route-btn[data-role]")
-						.forEach((b) => b.classList.remove("active"));
-					btn.classList.add("active");
-					setStatus(
-						`Toca el mapa para colocar ${labelForRole(pendingRole)}`,
-					);
-				}),
-			);
-
-			container
-				.querySelector(".route-clear")
-				.addEventListener("click", clearRoute);
-
-			this._container = container;
-			this._list = container.querySelector(".route-list");
-			this._status = container.querySelector(".route-status");
-			this._summary = container.querySelector(".route-summary");
-			return container;
-		},
-	});
-
-	const control = new RoutePanel();
-	control.addTo(map);
-
-	function setStatus(text) {
-		control._status.textContent = text || "";
-	}
-	function setSummary(text) {
-		control._summary.textContent = text || "";
-	}
-
-	function createMarker(wp, idx) {
-		const label =
-			idx === 0
-				? "A"
-				: idx === waypoints.length - 1
-					? "B"
-					: String(idx + 1);
-		const marker = L.marker([wp.lat, wp.lng], {
-			draggable: true,
-			icon: L.divIcon({
-				className: "route-marker-icon",
-				html: `<div class="route-marker">${label}</div>`,
-			}),
+	function updateWaypointIcons() {
+		const last = state.waypoints.length - 1;
+		state.waypoints.forEach((wp, i) => {
+			wp.marker.setIcon(waypointDivIcon(i, i === 0, i === last && last > 0));
 		});
-		marker.on("dragend", () => {
-			const pos = marker.getLatLng();
-			wp.lat = pos.lat;
-			wp.lng = pos.lng;
-			scheduleRoute();
-		});
-		marker.addTo(map);
-		return marker;
-	}
-
-	function rebuildMarkers() {
-		waypoints.forEach((wp) => wp.marker && map.removeLayer(wp.marker));
-		waypoints.forEach((wp, idx) => {
-			wp.marker = createMarker(wp, idx);
-		});
-		renderList();
-		scheduleRoute();
 	}
 
 	function renderList() {
-		control._list.innerHTML = "";
-		waypoints.forEach((wp, idx) => {
-			const label =
-				idx === 0
-					? "Origen"
-					: idx === waypoints.length - 1
-						? "Destino"
-						: `Parada ${idx}`;
+		listEl.innerHTML = "";
+		for (const [i, wp] of state.waypoints.entries()) {
 			const li = document.createElement("li");
-			li.className = "route-item";
+			li.className = "route-waypoint-item";
 			li.innerHTML = `
-				<span>${label}</span>
-				<span class="route-item-buttons">
-					<button type="button" class="route-move-up" ${idx === 0 ? "disabled" : ""}>↑</button>
-					<button type="button" class="route-move-down" ${idx === waypoints.length - 1 ? "disabled" : ""}>↓</button>
-					<button type="button" class="route-remove">✕</button>
-				</span>
+				<button type="button" class="route-waypoint-handle" aria-label="Arrastrar para reordenar el punto ${i + 1}">${HANDLE_ICON}</button>
+				<span class="route-waypoint-index">${i + 1}</span>
+				<span class="route-waypoint-coords">${wp.latlng.lat.toFixed(5)}, ${wp.latlng.lng.toFixed(5)}</span>
+				<button type="button" class="route-waypoint-remove" aria-label="Eliminar punto ${i + 1}">&times;</button>
 			`;
-			li.querySelector(".route-remove").addEventListener("click", () => {
-				waypoints.splice(idx, 1);
-				rebuildMarkers();
-			});
-			li.querySelector(".route-move-up").addEventListener("click", () => {
-				[waypoints[idx - 1], waypoints[idx]] = [
-					waypoints[idx],
-					waypoints[idx - 1],
-				];
-				rebuildMarkers();
-			});
-			li.querySelector(".route-move-down").addEventListener(
-				"click",
-				() => {
-					[waypoints[idx + 1], waypoints[idx]] = [
-						waypoints[idx],
-						waypoints[idx + 1],
-					];
-					rebuildMarkers();
-				},
-			);
-			control._list.appendChild(li);
+			li.querySelector(".route-waypoint-remove").addEventListener("click", () => removeWaypoint(i));
+			attachDragHandlers(li);
+			listEl.appendChild(li);
+		}
+		calcBtn.disabled = state.waypoints.length < 2 || state.loading;
+		clearBtn.disabled = state.waypoints.length === 0 || state.loading;
+		hintEl.classList.toggle("hidden", state.waypoints.length > 0);
+	}
+
+	// Lets a waypoint row be dragged (mouse or touch, via Pointer Events) to
+	// a new position in the list, so a middle stop can be added by tapping
+	// the map (which appends it at the end) and then dragging it between
+	// the start and end rows, instead of deleting and re-adding points.
+	function attachDragHandlers(li) {
+		const handle = li.querySelector(".route-waypoint-handle");
+
+		handle.addEventListener("pointerdown", (e) => {
+			if (e.pointerType === "mouse" && e.button !== 0) return;
+			e.preventDefault();
+
+			const order = Array.from(listEl.children);
+			const startIndex = order.indexOf(li);
+			const itemHeight = li.getBoundingClientRect().height;
+			const startY = e.clientY;
+			let currentIndex = startIndex;
+
+			li.classList.add("dragging");
+			handle.setPointerCapture(e.pointerId);
+
+			function updateSiblingPositions(newIndex) {
+				order.forEach((el, i) => {
+					if (i === startIndex) return;
+					let shift = 0;
+					if (startIndex < newIndex && i > startIndex && i <= newIndex) shift = -1;
+					else if (startIndex > newIndex && i >= newIndex && i < startIndex) shift = 1;
+					el.style.transform = shift ? `translateY(${shift * itemHeight}px)` : "";
+				});
+			}
+
+			function onMove(ev) {
+				const deltaY = ev.clientY - startY;
+				li.style.transform = `translateY(${deltaY}px)`;
+				const rawIndex = startIndex + Math.round(deltaY / itemHeight);
+				const newIndex = Math.max(0, Math.min(order.length - 1, rawIndex));
+				if (newIndex !== currentIndex) {
+					currentIndex = newIndex;
+					updateSiblingPositions(currentIndex);
+				}
+			}
+
+			function onUp(ev) {
+				handle.releasePointerCapture(ev.pointerId);
+				handle.removeEventListener("pointermove", onMove);
+				handle.removeEventListener("pointerup", onUp);
+				handle.removeEventListener("pointercancel", onUp);
+
+				li.classList.remove("dragging");
+				li.style.transform = "";
+				for (const el of order) el.style.transform = "";
+
+				if (currentIndex !== startIndex) {
+					const [wp] = state.waypoints.splice(startIndex, 1);
+					state.waypoints.splice(currentIndex, 0, wp);
+					updateWaypointIcons();
+					renderList();
+					clearRouteLayers();
+				}
+			}
+
+			handle.addEventListener("pointermove", onMove);
+			handle.addEventListener("pointerup", onUp);
+			handle.addEventListener("pointercancel", onUp);
 		});
 	}
 
-	function clearRoute() {
-		waypoints.forEach((wp) => wp.marker && map.removeLayer(wp.marker));
-		waypoints.length = 0;
-		routeLayer.clearLayers();
+	function clearRouteLayers() {
+		for (const layer of state.routeLayers) map.removeLayer(layer);
+		state.routeLayers = [];
+		state.routes = [];
+		state.selectedRouteIndex = 0;
+		summaryEl.classList.add("hidden");
+		summaryEl.innerHTML = "";
+	}
+
+	function addWaypoint(latlng) {
+		const wp = { marker: null, latlng };
+		const marker = L.marker(latlng, { draggable: true }).addTo(map);
+		wp.marker = marker;
+
+		marker.on("drag", (e) => {
+			wp.latlng = e.target.getLatLng();
+			renderList();
+		});
+		marker.on("dragend", clearRouteLayers);
+
+		state.waypoints.push(wp);
+		updateWaypointIcons();
 		renderList();
-		setSummary("");
-		setStatus("");
+		clearRouteLayers();
 	}
 
-	function placeWaypoint(latlng, role) {
-		const point = { lat: latlng.lat, lng: latlng.lng };
-		if (role === "origin") {
-			if (waypoints.length === 0) waypoints.push(point);
-			else waypoints[0] = point;
-		} else if (role === "destination") {
-			if (waypoints.length < 2) waypoints.push(point);
-			else waypoints[waypoints.length - 1] = point;
-		} else {
-			const insertAt =
-				waypoints.length >= 2 ? waypoints.length - 1 : waypoints.length;
-			waypoints.splice(insertAt, 0, point);
-		}
-		rebuildMarkers();
+	function removeWaypoint(index) {
+		const [wp] = state.waypoints.splice(index, 1);
+		map.removeLayer(wp.marker);
+		updateWaypointIcons();
+		renderList();
+		clearRouteLayers();
 	}
 
-	map.on("click", (e) => {
-		if (!pendingRole) return;
-		placeWaypoint(e.latlng, pendingRole);
-		pendingRole = null;
-		control._container
-			.querySelectorAll(".route-btn[data-role]")
-			.forEach((b) => b.classList.remove("active"));
-		setStatus("");
-	});
-
-	function scheduleRoute() {
-		clearTimeout(debounceTimer);
-		if (waypoints.length < 2) {
-			routeLayer.clearLayers();
-			setSummary("");
-			return;
-		}
-		debounceTimer = setTimeout(fetchRoute, 300);
+	function clearAll() {
+		for (const wp of state.waypoints) map.removeLayer(wp.marker);
+		state.waypoints = [];
+		clearRouteLayers();
+		renderList();
 	}
 
-	async function fetchRoute() {
-		const coords = waypoints.map((w) => [w.lat, w.lng]);
-		const cacheKey = JSON.stringify(coords);
-		const token = ++fetchToken;
-
-		if (routeCache.has(cacheKey)) {
-			drawRoutes(routeCache.get(cacheKey));
-			return;
-		}
-
-		setStatus("Buscando ruta…");
-		try {
-			const data = await getRoute(coords);
-			if (token !== fetchToken) return; // superseded by a newer request
-			routeCache.set(cacheKey, data);
-			drawRoutes(data);
-			setStatus("");
-		} catch (err) {
-			console.error("Route fetch failed", err);
-			if (token === fetchToken) setStatus("No se pudo calcular la ruta");
-		}
+	function onMapClick(e) {
+		if (!state.active || state.loading) return;
+		addWaypoint(e.latlng);
 	}
 
-	function drawRoutes(routes) {
-		routeLayer.clearLayers();
-		if (!routes || routes.length === 0) {
-			setSummary("Sin resultados");
-			return;
-		}
-		routes.forEach((route, idx) => {
+	function setActive(active) {
+		state.active = active;
+		panel.classList.toggle("hidden", !active);
+		fab.classList.toggle("active", active);
+		map.getContainer().classList.toggle("route-crosshair", active);
+	}
+
+	fab.addEventListener("click", () => setActive(!state.active));
+	closeBtn.addEventListener("click", () => setActive(false));
+	clearBtn.addEventListener("click", clearAll);
+	calcBtn.addEventListener("click", calculateRoute);
+
+	map.on("click", onMapClick);
+
+	function drawRoutes() {
+		for (const layer of state.routeLayers) map.removeLayer(layer);
+		state.routeLayers = [];
+
+		// Draw the non-selected alternatives first (thin, dashed, behind),
+		// then the selected route on top (thick, solid).
+		state.routes.forEach((route, i) => {
+			if (i === state.selectedRouteIndex) return;
 			const latlngs = route.geometry.map(coordToLatLng);
-			const line = L.polyline(latlngs, {
-				color: ROUTE_COLORS[idx % ROUTE_COLORS.length],
-				weight: idx === 0 ? 6 : 4,
-				opacity: idx === 0 ? 0.9 : 0.5,
-			}).addTo(routeLayer);
-
-			line.bindTooltip(
-				`${formatDuration(route.duration)} · ${formatDistance(route.distance)}`,
-				{ sticky: true },
-			);
-			line.on("click", () => {
-				setSummary(
-					`Ruta ${idx + 1}: ${formatDuration(route.duration)}, ${formatDistance(route.distance)}`,
-				);
-			});
+			const layer = L.polyline(latlngs, {
+				color: ROUTE_COLORS[i % ROUTE_COLORS.length],
+				weight: 4,
+				opacity: 0.55,
+				dashArray: "6 8",
+			}).addTo(map);
+			layer.on("click", () => selectRoute(i));
+			state.routeLayers.push(layer);
 		});
 
-		const bounds = L.latLngBounds(routes[0].geometry.map(coordToLatLng));
-		map.fitBounds(bounds, { padding: [40, 40] });
-
-		const best = routes[0];
-		setSummary(
-			`${routes.length} ruta(s) · mejor: ${formatDuration(best.duration)}, ${formatDistance(best.distance)}`,
-		);
+		const main = state.routes[state.selectedRouteIndex];
+		if (main) {
+			const latlngs = main.geometry.map(coordToLatLng);
+			const layer = L.polyline(latlngs, {
+				color: ROUTE_COLORS[state.selectedRouteIndex % ROUTE_COLORS.length],
+				weight: 6,
+				opacity: 0.95,
+			}).addTo(map);
+			state.routeLayers.push(layer);
+			map.fitBounds(layer.getBounds(), { padding: [40, 40] });
+		}
 	}
+
+	function selectRoute(index) {
+		state.selectedRouteIndex = index;
+		drawRoutes();
+		renderSummary();
+	}
+
+	function renderSummary() {
+		summaryEl.classList.remove("hidden");
+		summaryEl.innerHTML = "";
+
+		if (state.routes.length > 1) {
+			const tabs = document.createElement("div");
+			tabs.className = "route-tabs";
+			state.routes.forEach((route, i) => {
+				const tab = document.createElement("button");
+				tab.type = "button";
+				tab.className = "route-tab" + (i === state.selectedRouteIndex ? " selected" : "");
+				tab.style.setProperty("--route-color", ROUTE_COLORS[i % ROUTE_COLORS.length]);
+				tab.textContent = `Ruta ${i + 1}`;
+				tab.addEventListener("click", () => selectRoute(i));
+				tabs.appendChild(tab);
+			});
+			summaryEl.appendChild(tabs);
+		}
+
+		const selected = state.routes[state.selectedRouteIndex];
+		const info = document.createElement("div");
+		info.className = "route-info";
+		info.innerHTML = `
+			<span class="route-distance">${formatDistance(selected.distance)}</span>
+			<span class="route-duration">${formatDuration(selected.duration)}</span>
+		`;
+		summaryEl.appendChild(info);
+	}
+
+	async function calculateRoute() {
+		if (state.waypoints.length < 2 || state.loading) return;
+
+		state.loading = true;
+		calcBtn.disabled = true;
+		clearBtn.disabled = true;
+		calcBtn.textContent = "Calculando...";
+		clearRouteLayers();
+
+		try {
+			const payload = state.waypoints.map((wp) => [wp.latlng.lat, wp.latlng.lng]);
+			const { hash } = await createRoute(payload);
+			const data = await getRoute(hash);
+
+			if (!data.routes || data.routes.length === 0) {
+				throw new Error("empty route list");
+			}
+
+			state.routes = data.routes;
+			state.selectedRouteIndex = 0;
+			drawRoutes();
+			renderSummary();
+		} catch (err) {
+			console.error("Error calculando la ruta", err);
+			summaryEl.classList.remove("hidden");
+			summaryEl.innerHTML = `<div class="route-error">No se pudo calcular la ruta. Inténtalo de nuevo.</div>`;
+		} finally {
+			state.loading = false;
+			calcBtn.textContent = "Calcular ruta";
+			renderList();
+		}
+	}
+
+	return {
+		destroy() {
+			map.off("click", onMapClick);
+			clearAll();
+			fab.remove();
+			panel.remove();
+		},
+	};
 }

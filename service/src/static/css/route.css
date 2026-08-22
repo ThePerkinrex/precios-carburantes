@@ -1,93 +1,332 @@
-.route-control {
-	background: white;
-	border-radius: 8px;
-	box-shadow: 0 1px 5px rgba(0, 0, 0, 0.4);
-	font-size: 14px;
-	max-width: min(320px, 90vw);
+/* Route search: floating action button + bottom-sheet panel.
+   Mobile-first; the panel widens into a fixed side card on larger screens. */
+
+:root {
+	--route-accent: #2563eb;
+	--route-surface: #ffffff;
+	--route-surface-muted: #f3f4f6;
+	--route-border: #e5e7eb;
+	--route-text: #1f2937;
+	--route-text-muted: #6b7280;
+	--route-danger: #dc2626;
 }
 
-.route-toggle {
-	width: 100%;
-	min-height: 44px;
-	padding: 8px 12px;
+.route-fab {
+	position: fixed;
+	right: 16px;
+	bottom: 20px;
+	z-index: 1001;
+	width: 56px;
+	height: 56px;
+	border-radius: 999px;
 	border: none;
-	background: white;
-	border-radius: 8px;
-	font-size: 15px;
-	cursor: pointer;
-}
-
-.route-panel {
-	padding: 8px;
-	max-height: 60vh;
-	overflow-y: auto;
-}
-
-.route-actions {
-	display: grid;
-	grid-template-columns: 1fr 1fr;
-	gap: 6px;
-	margin-bottom: 8px;
-}
-
-.route-btn {
-	min-height: 44px;
-	border: 1px solid #ccc;
-	border-radius: 6px;
-	background: #f7f7f7;
-	cursor: pointer;
-	font-size: 14px;
-}
-
-.route-btn.active {
-	background: #2a6fdb;
-	color: white;
-	border-color: #2a6fdb;
-}
-
-.route-list {
-	list-style: none;
-	margin: 0 0 8px;
-	padding: 0;
-}
-
-.route-item {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	padding: 6px 4px;
-	border-bottom: 1px solid #eee;
-}
-
-.route-item-buttons button {
-	min-width: 32px;
-	min-height: 32px;
-	border: 1px solid #ccc;
-	border-radius: 4px;
-	background: white;
-	margin-left: 4px;
-}
-
-.route-status {
-	font-style: italic;
-	color: #666;
-	min-height: 1.2em;
-}
-
-.route-summary {
-	font-weight: bold;
-}
-
-.route-marker {
+	background: var(--route-surface);
+	color: var(--route-text);
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	width: 28px;
-	height: 28px;
-	border-radius: 50%;
-	background: #2a6fdb;
-	color: white;
-	font-weight: bold;
-	border: 2px solid white;
-	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+	cursor: pointer;
+	transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+
+.route-fab:active {
+	transform: scale(0.94);
+}
+
+.route-fab.active {
+	background: var(--route-accent);
+	color: #fff;
+}
+
+/* Panel: bottom sheet on narrow viewports, side card on wide ones */
+.route-panel {
+	position: fixed;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	z-index: 1000;
+	max-height: 60vh;
+	display: flex;
+	flex-direction: column;
+	background: var(--route-surface);
+	border-radius: 16px 16px 0 0;
+	box-shadow: 0 -2px 16px rgba(0, 0, 0, 0.2);
+	padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+	font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+	color: var(--route-text);
+	transition: transform 0.2s ease;
+}
+
+.route-panel.hidden {
+	transform: translateY(110%);
+	pointer-events: none;
+}
+
+.route-panel-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	font-weight: 600;
+	font-size: 1.05rem;
+	margin-bottom: 4px;
+}
+
+.route-close {
+	border: none;
+	background: transparent;
+	font-size: 1.4rem;
+	line-height: 1;
+	color: var(--route-text-muted);
+	cursor: pointer;
+	padding: 4px 8px;
+}
+
+.route-hint {
+	font-size: 0.9rem;
+	color: var(--route-text-muted);
+	padding: 8px 0;
+}
+
+.route-hint.hidden {
+	display: none;
+}
+
+.route-waypoint-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	overflow-y: auto;
+	flex: 1 1 auto;
+}
+
+.route-waypoint-item {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 8px 4px;
+	border-bottom: 1px solid var(--route-border);
+	position: relative;
+	background: var(--route-surface);
+	transition: transform 150ms ease;
+}
+
+.route-waypoint-item.dragging {
+	transition: none;
+	z-index: 5;
+	background: var(--route-surface-muted);
+	box-shadow: 0 3px 10px rgba(0, 0, 0, 0.18);
+	border-radius: 8px;
+}
+
+.route-waypoint-item:last-child {
+	border-bottom: none;
+}
+
+.route-waypoint-handle {
+	flex: 0 0 auto;
+	width: 32px;
+	height: 32px;
+	border-radius: 8px;
+	border: none;
+	background: transparent;
+	color: var(--route-text-muted);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	cursor: grab;
+	touch-action: none;
+}
+
+.route-waypoint-handle:active {
+	cursor: grabbing;
+	color: var(--route-text);
+}
+
+.route-waypoint-index {
+	flex: 0 0 auto;
+	width: 22px;
+	height: 22px;
+	border-radius: 999px;
+	background: var(--route-surface-muted);
+	color: var(--route-text);
+	font-size: 0.8rem;
+	font-weight: 600;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.route-waypoint-coords {
+	flex: 1 1 auto;
+	font-size: 0.9rem;
+	color: var(--route-text-muted);
+	font-variant-numeric: tabular-nums;
+}
+
+.route-waypoint-remove {
+	flex: 0 0 auto;
+	width: 32px;
+	height: 32px;
+	border-radius: 999px;
+	border: none;
+	background: transparent;
+	color: var(--route-danger);
+	font-size: 1.2rem;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.route-summary {
+	border-top: 1px solid var(--route-border);
+	padding-top: 10px;
+	margin-top: 4px;
+}
+
+.route-summary.hidden {
+	display: none;
+}
+
+.route-tabs {
+	display: flex;
+	gap: 8px;
+	overflow-x: auto;
+	padding-bottom: 8px;
+}
+
+.route-tab {
+	flex: 0 0 auto;
+	border: 1px solid var(--route-border);
+	background: var(--route-surface);
+	color: var(--route-text);
+	border-radius: 999px;
+	padding: 6px 12px;
+	font-size: 0.85rem;
+	cursor: pointer;
+	position: relative;
+	padding-left: 20px;
+}
+
+.route-tab::before {
+	content: "";
+	position: absolute;
+	left: 8px;
+	top: 50%;
+	transform: translateY(-50%);
+	width: 8px;
+	height: 8px;
+	border-radius: 999px;
+	background: var(--route-color, var(--route-accent));
+}
+
+.route-tab.selected {
+	border-color: var(--route-color, var(--route-accent));
+	background: var(--route-surface-muted);
+	font-weight: 600;
+}
+
+.route-info {
+	display: flex;
+	gap: 16px;
+	font-size: 1rem;
+	font-weight: 600;
+	padding: 4px 4px 2px;
+}
+
+.route-distance::before {
+	content: "📏 ";
+	font-size: 0.85em;
+}
+
+.route-duration::before {
+	content: "⏱ ";
+	font-size: 0.85em;
+}
+
+.route-error {
+	color: var(--route-danger);
+	font-size: 0.9rem;
+	padding: 4px;
+}
+
+.route-actions {
+	display: flex;
+	gap: 10px;
+	padding-top: 10px;
+}
+
+.route-actions button {
+	flex: 1 1 auto;
+	border: none;
+	border-radius: 10px;
+	padding: 12px;
+	font-size: 0.95rem;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.route-clear {
+	background: var(--route-surface-muted);
+	color: var(--route-text);
+}
+
+.route-calc {
+	background: var(--route-accent);
+	color: #fff;
+}
+
+.route-actions button:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+/* Waypoint markers on the map */
+.route-waypoint-icon {
+	background: transparent;
+	border: none;
+}
+
+.route-waypoint-marker {
+	width: 26px;
+	height: 26px;
+	border-radius: 999px;
+	background: var(--route-accent);
+	color: #fff;
+	font-size: 0.8rem;
+	font-weight: 700;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+	border: 2px solid #fff;
+}
+
+.route-waypoint-marker.start {
+	background: #16a34a;
+}
+
+.route-waypoint-marker.end {
+	background: var(--route-danger);
+}
+
+/* Cursor hint while in "tap to add waypoint" mode */
+.leaflet-container.route-crosshair {
+	cursor: crosshair;
+}
+
+/* Wider viewports: dock the panel as a card instead of a full-width sheet */
+@media (min-width: 640px) {
+	.route-panel {
+		left: auto;
+		right: 16px;
+		bottom: 90px;
+		width: 340px;
+		max-height: 70vh;
+		border-radius: 16px;
+	}
+
+	.route-panel.hidden {
+		transform: translateY(20px);
+		opacity: 0;
+	}
 }

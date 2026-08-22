@@ -149,5 +149,3 @@ body {
   font-size: 1em; /* ensures consistent scaling */
   line-height: 1; /* prevents extra vertical spacing */
 }
-
-@import url("route.css");

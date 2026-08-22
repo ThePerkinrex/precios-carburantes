@@ -1,7 +1,12 @@
-use axum::{Json, Router, routing::{get, post}};
+use axum::{
+    Json, Router,
+    extract::{Path, State},
+    routing::{get, post},
+};
 use bytemuck::{Pod, Zeroable};
 use geo_types::LineString;
 use polyline::errors::PolylineError;
+use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use sha3::{Digest, Sha3_256};
 use thiserror::Error;
@@ -18,6 +23,8 @@ pub enum RouteError {
     Parse(#[from] serde_json::Error),
     #[error("OSRM could not find a route: {0}")]
     NoRoute(String),
+    #[error("DB: {0}")]
+    Db(#[from] rusqlite::Error),
 }
 
 #[derive(Debug, Deserialize, Pod, Clone, Copy, PartialEq, Zeroable)]
@@ -29,44 +36,59 @@ struct RouteRequest {
     waypoints: Vec<Waypoint>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 struct OSMRLeg {
     duration: f64,
     distance: f64,
-    annotation: OSMRAnnotation
+    annotation: OSMRAnnotation,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 struct OSMRAnnotation {
     distance: Vec<f64>,
-    duration: Vec<f64>
+    duration: Vec<f64>,
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+struct OSRMWaypoint {
+    hint: String,
+    name: String,
+    distance: f64,
+    location: (f64, f64),
+}
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 struct OSRMRoute {
     geometry: String,
     duration: f64,
     distance: f64,
-    // legs: Vec<OSMRLeg>
+    legs: Vec<OSMRLeg>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 struct RouteOSRMResponse {
     code: String,
     #[serde(default)]
     routes: Vec<OSRMRoute>,
+    #[serde(default)]
+    waypoints: Vec<OSRMWaypoint>,
     message: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
-struct RouteResponse {
+struct Route {
     geometry: LineString<f64>,
     duration: f64,
     distance: f64,
 }
 
-async fn forward_route(waypoints: &[Waypoint]) -> Result<Vec<RouteResponse>, RouteError> {
+#[derive(Debug, Serialize)]
+struct RoutesResponse {
+    waypoints: Vec<OSRMWaypoint>,
+    routes: Vec<Route>,
+}
+
+async fn query_osrm(waypoints: &[Waypoint]) -> Result<RouteOSRMResponse, RouteError> {
     const BASE_URI: &str = "http://router.project-osrm.org/route/v1/driving/";
     let url = format!(
         "{BASE_URI}{}?annotations=distance,duration&overview=full&alternatives=3",
@@ -101,37 +123,116 @@ async fn forward_route(waypoints: &[Waypoint]) -> Result<Vec<RouteResponse>, Rou
     };
 
     if parsed.code != "Ok" {
-        return Err(RouteError::NoRoute(
-            parsed.message.unwrap_or(parsed.code),
-        ));
+        return Err(RouteError::NoRoute(parsed.message.unwrap_or(parsed.code)));
     }
 
+    Ok(parsed)
+}
+
+async fn get_route_from_db(
+    pool: DbPool,
+    hash: &str,
+) -> Result<Option<RouteOSRMResponse>, RouteError> {
+    let conn = pool.get().unwrap();
+
+    let data: Option<String> = conn.query_one(
+        "SELECT data FROM routes WHERE hash = ?",
+        params![hash],
+        |r| r.get(0),
+    ).optional()?;
+
+    if let Some(data) = data {
+        let res: RouteOSRMResponse = serde_json::from_str(&data)?;
+
+        Ok(Some(res))
+    } else {
+        Ok(None)
+    }
+}
+
+async fn find_routes(pool: DbPool, waypoints: &[Waypoint]) -> Result<String, RouteError> {
+    let hash = Sha3_256::new()
+        .chain_update(bytemuck::cast_slice(waypoints))
+        .finalize();
+    let hash = hash
+        .iter()
+        .map(|a| format!("{a:02x}"))
+        .reduce(|a, b| a + &b)
+        .unwrap_or_default();
+
+    tracing::info!("Hash: {hash}");
+
+    if get_route_from_db(pool.clone(), &hash).await?.is_none() {
+        let conn = pool.get().unwrap();
+
+        let data = query_osrm(waypoints).await?;
+        let data = serde_json::to_string(&data)?;
+
+        conn.execute(
+            "INSERT INTO routes(hash, data) VALUES(?, ?)",
+            params![&hash, &data],
+        )?;
+    }
 
     // tracing::info!("Trips: {resp:#?}");
 
+    // Ok(parsed
+    //     .routes
+    //     .into_iter()
+    //     .map(|x| {
+    //         Ok(RouteResponse {
+    //             geometry: polyline::decode_polyline(&x.geometry, 5)?,
+    //             duration: x.duration,
+    //             distance: x.distance,
+    //         })
+    //     })
+    //     .collect::<Result<Vec<_>, PolylineError>>()?)
 
-
-    Ok(parsed
-        .routes
-        .into_iter()
-        .map(|x| {
-            Ok(RouteResponse {
-                geometry: polyline::decode_polyline(&x.geometry, 5)?,
-                duration: x.duration,
-                distance: x.distance,
-            })
-        })
-        .collect::<Result<Vec<_>, PolylineError>>()?)
+    Ok(hash)
 }
 
-async fn get_route(Json(req): Json<RouteRequest>) -> Result<Json<Vec<RouteResponse>>, AppError> {
-    let hash = Sha3_256::new().chain_update(bytemuck::cast_slice(&req.waypoints)).finalize();
+#[derive(Debug, Serialize)]
+struct CreateRouteResponse {
+    hash: String,
+}
 
-    tracing::info!("Hash: {}", hash.iter().map(|a| format!("{a:02x}")).reduce(|a, b| a + &b).unwrap_or_default());
+async fn create_route(
+    State(state): State<DbPool>,
+    Json(req): Json<RouteRequest>,
+) -> Result<Json<CreateRouteResponse>, AppError> {
+    Ok(Json(CreateRouteResponse {
+        hash: find_routes(state, &req.waypoints).await?,
+    }))
+}
 
-    Ok(Json(forward_route(&req.waypoints).await?))
+#[axum_macros::debug_handler]
+async fn get_route(
+    State(pool): State<DbPool>,
+    Path(hash): Path<String>,
+) -> Result<Json<RoutesResponse>, AppError> {
+    let data = get_route_from_db(pool, &hash)
+        .await?
+        .ok_or(AppError::FileNotFound)?;
+
+    Ok(Json(RoutesResponse {
+        waypoints: data.waypoints,
+        routes: data
+            .routes
+            .into_iter()
+            .map(|x| {
+                Ok(Route {
+                    geometry: polyline::decode_polyline(&x.geometry, 5)?,
+                    duration: x.duration,
+                    distance: x.distance,
+                })
+            })
+            .collect::<Result<Vec<_>, PolylineError>>()
+            .map_err(RouteError::Polyline)?,
+    }))
 }
 
 pub fn get_router() -> Router<DbPool> {
-    Router::new().route("/", post(get_route))
+    Router::new()
+        .route("/", post(create_route))
+        .route("/{hash}", get(get_route))
 }

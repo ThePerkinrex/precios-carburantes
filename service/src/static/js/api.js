@@ -35,12 +35,23 @@ export async function updateFilter(newFilter) {
 	});
 }
 
-export async function getRoute(waypoints) {
-    return await fetch(API_LOCATION + "/route/", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ waypoints }),
-    }).then((x) => x.json());
+// Kicks off route calculation for a list of [lat, lon] waypoints and
+// returns { hash }. The backend computes (or reuses a cached) route
+// synchronously, so the hash is immediately fetchable via getRoute().
+export async function createRoute(waypoints) {
+	return await fetch(API_LOCATION + "/route/", {
+		method: "POST",
+
+		headers: {
+			"Content-Type": "application/json",
+		},
+
+		body: JSON.stringify({ waypoints }),
+	}).then((x) => x.json());
+}
+
+// Fetches a previously computed route by hash:
+// { waypoints, routes: [{ geometry, duration, distance }, ...] }
+export async function getRoute(hash) {
+	return await fetch(`${API_LOCATION}/route/${hash}`).then((x) => x.json());
 }

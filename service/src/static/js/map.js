@@ -226,13 +226,13 @@ async function load() {
 
 		// https://www.google.com/maps/search/?api=1&query=47.5951518%2C-122.3316393
 		const maps_url_params = new URLSearchParams({
-			api: '1',
-			query: `${eess.latitud},${eess.longitud}`
-		})
+			api: "1",
+			query: `${eess.latitud},${eess.longitud}`,
+		});
 		const maps_url = `https://www.google.com/maps/search/?${maps_url_params}`;
 		const directions_params = new URLSearchParams({
 			api: "1",
-			destination: `${eess.latitud},${eess.longitud}`
+			destination: `${eess.latitud},${eess.longitud}`,
 		});
 
 		const directions = `https://www.google.com/maps/dir/?${directions_params}`;
