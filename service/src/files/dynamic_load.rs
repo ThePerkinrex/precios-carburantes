@@ -5,7 +5,8 @@ use tracing::warn;
 
 use crate::error::AppError;
 
-const STATIC_FILE_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/static/");
+const STATIC_FILE_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/static/visible");
+const STATIC_HIDDEN_FILE_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/static/hidden");
 
 async fn match_entry<P: AsRef<Path>>(path: P) -> Result<Response, AppError> {
 	let path = path.as_ref();
@@ -23,4 +24,8 @@ async fn match_entry<P: AsRef<Path>>(path: P) -> Result<Response, AppError> {
 
 pub async fn load_file<P: AsRef<Path>>(path: P) -> Result<Response, AppError> {
 	match_entry(Path::new(STATIC_FILE_PATH).join(path)).await
+}
+
+pub async fn load_file_hidden<P: AsRef<Path>>(path: P) -> Result<Response, AppError> {
+	match_entry(Path::new(STATIC_HIDDEN_FILE_PATH).join(path)).await
 }

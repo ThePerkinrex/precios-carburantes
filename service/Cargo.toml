@@ -25,6 +25,8 @@ thiserror = "2.0.18"
 sha3 = "0.12.0"
 bytemuck = { version = "1.25.2", features = ["derive"] }
 axum-macros = "0.5.1"
+dotenvy = "0.15.7"
+form_urlencoded = "1.2.2"
 
 [features]
 include-static = ["dep:include_dir"]

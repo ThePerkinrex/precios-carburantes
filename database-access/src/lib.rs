@@ -64,13 +64,17 @@ const MIGRATIONS: &[&[&str]] = &[
         )",
         "CREATE TABLE IF NOT EXISTS route_searches (
             hash TEXT NOT NULL,
+            route_index INTEGER NOT NULL,
             username TEXT NOT NULL,
-            last_view INTEGER NOT NULL,
             PRIMARY KEY (hash, username),
             FOREIGN KEY (username) REFERENCES user_configs(username),
             FOREIGN KEY (hash) REFERENCES routes(hash)
         )",
         "CREATE INDEX IF NOT EXISTS idx_route_searches_user ON route_searches(username)",
+    ],
+    &[
+        "ALTER TABLE user_configs ADD COLUMN tank_maximum REAL",
+        "ALTER TABLE user_configs ADD COLUMN avg_consumption REAL"
     ]
 ];
 

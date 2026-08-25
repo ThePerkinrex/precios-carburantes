@@ -5,7 +5,8 @@ use include_dir::{Dir, DirEntry, include_dir};
 
 use crate::error::AppError;
 
-static PROJECT_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/src/static");
+static PROJECT_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/src/static/visible");
+static PROJECT_HIDDEN_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/src/static/hidden");
 
 fn match_entry(entry: Option<&DirEntry>) -> Result<Response, AppError> {
 	// info!(">{entry:?}");
@@ -26,4 +27,12 @@ pub async fn load_file<P: AsRef<Path>>(path: P) -> Result<Response, AppError> {
 	// 	info!(" + {}", e.path().display())
 	// }
 	match_entry(PROJECT_DIR.get_entry(path))
+}
+
+pub async fn load_file_hidden<P: AsRef<Path>>(path: P) -> Result<Response, AppError> {
+	// info!("!{}", path.display());
+	// for e in PROJECT_DIR.entries() {
+	// 	info!(" + {}", e.path().display())
+	// }
+	match_entry(PROJECT_HIDDEN_DIR.get_entry(path))
 }

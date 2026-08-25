@@ -1,6 +1,8 @@
 use axum::{
     Json, Router,
     extract::{Path, State},
+    http::HeaderMap,
+    response::Redirect,
     routing::{get, post},
 };
 use bytemuck::{Pod, Zeroable};
@@ -10,6 +12,7 @@ use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use sha3::{Digest, Sha3_256};
 use thiserror::Error;
+use tracing::info;
 
 use crate::{DbPool, error::AppError};
 
@@ -37,14 +40,14 @@ struct RouteRequest {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-struct OSMRLeg {
+pub struct OSMRLeg {
     duration: f64,
     distance: f64,
     annotation: OSMRAnnotation,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-struct OSMRAnnotation {
+pub struct OSMRAnnotation {
     distance: Vec<f64>,
     duration: Vec<f64>,
 }
@@ -58,7 +61,7 @@ struct OSRMWaypoint {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-struct OSRMRoute {
+pub struct OSRMRoute {
     geometry: String,
     duration: f64,
     distance: f64,
@@ -66,10 +69,10 @@ struct OSRMRoute {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-struct RouteOSRMResponse {
+pub struct RouteOSRMResponse {
     code: String,
     #[serde(default)]
-    routes: Vec<OSRMRoute>,
+    pub routes: Vec<OSRMRoute>,
     #[serde(default)]
     waypoints: Vec<OSRMWaypoint>,
     message: Option<String>,
@@ -86,6 +89,12 @@ struct Route {
 struct RoutesResponse {
     waypoints: Vec<OSRMWaypoint>,
     routes: Vec<Route>,
+}
+
+#[derive(Debug, Serialize)]
+struct RouteResponse {
+    waypoints: Vec<OSRMWaypoint>,
+    route: Route,
 }
 
 async fn query_osrm(waypoints: &[Waypoint]) -> Result<RouteOSRMResponse, RouteError> {
@@ -129,17 +138,19 @@ async fn query_osrm(waypoints: &[Waypoint]) -> Result<RouteOSRMResponse, RouteEr
     Ok(parsed)
 }
 
-async fn get_route_from_db(
+pub async fn get_route_from_db(
     pool: DbPool,
     hash: &str,
 ) -> Result<Option<RouteOSRMResponse>, RouteError> {
     let conn = pool.get().unwrap();
 
-    let data: Option<String> = conn.query_one(
-        "SELECT data FROM routes WHERE hash = ?",
-        params![hash],
-        |r| r.get(0),
-    ).optional()?;
+    let data: Option<String> = conn
+        .query_one(
+            "SELECT data FROM routes WHERE hash = ?",
+            params![hash],
+            |r| r.get(0),
+        )
+        .optional()?;
 
     if let Some(data) = data {
         let res: RouteOSRMResponse = serde_json::from_str(&data)?;
@@ -206,7 +217,7 @@ async fn create_route(
 }
 
 #[axum_macros::debug_handler]
-async fn get_route(
+async fn get_routes(
     State(pool): State<DbPool>,
     Path(hash): Path<String>,
 ) -> Result<Json<RoutesResponse>, AppError> {
@@ -231,8 +242,32 @@ async fn get_route(
     }))
 }
 
+async fn get_route(
+    State(pool): State<DbPool>,
+    Path((hash, route_idx)): Path<(String, usize)>,
+) -> Result<Json<RouteResponse>, AppError> {
+
+    let data = get_route_from_db(pool, &hash)
+        .await?
+        .ok_or(AppError::FileNotFound)?;
+
+    let route = data.routes.get(route_idx).ok_or(AppError::FileNotFound)?;
+
+    let route = Route {
+        geometry: polyline::decode_polyline(&route.geometry, 5).map_err(RouteError::Polyline)?,
+        duration: route.duration,
+        distance: route.distance,
+    };
+
+    Ok(Json(RouteResponse {
+        waypoints: data.waypoints,
+        route,
+    }))
+}
+
 pub fn get_router() -> Router<DbPool> {
     Router::new()
         .route("/", post(create_route))
-        .route("/{hash}", get(get_route))
+        .route("/{hash}", get(get_routes))
+        .route("/{hash}/{route_idx}", get(get_route))
 }
