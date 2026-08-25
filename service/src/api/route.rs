@@ -39,14 +39,14 @@ struct RouteRequest {
     waypoints: Vec<Waypoint>,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct OSMRLeg {
     duration: f64,
     distance: f64,
     annotation: OSMRAnnotation,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct OSMRAnnotation {
     distance: Vec<f64>,
     duration: Vec<f64>,
@@ -60,7 +60,7 @@ struct OSRMWaypoint {
     location: (f64, f64),
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct OSRMRoute {
     geometry: String,
     duration: f64,
@@ -83,6 +83,20 @@ struct Route {
     geometry: LineString<f64>,
     duration: f64,
     distance: f64,
+    legs: Vec<OSMRLeg>,
+}
+
+impl TryFrom<OSRMRoute> for Route {
+    type Error = PolylineError;
+
+    fn try_from(x: OSRMRoute) -> Result<Self, Self::Error> {
+        Ok(Self {
+            geometry: polyline::decode_polyline(&x.geometry, 5)?,
+            duration: x.duration,
+            distance: x.distance,
+            legs: x.legs,
+        })
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -230,13 +244,7 @@ async fn get_routes(
         routes: data
             .routes
             .into_iter()
-            .map(|x| {
-                Ok(Route {
-                    geometry: polyline::decode_polyline(&x.geometry, 5)?,
-                    duration: x.duration,
-                    distance: x.distance,
-                })
-            })
+            .map(TryFrom::try_from)
             .collect::<Result<Vec<_>, PolylineError>>()
             .map_err(RouteError::Polyline)?,
     }))
@@ -246,18 +254,13 @@ async fn get_route(
     State(pool): State<DbPool>,
     Path((hash, route_idx)): Path<(String, usize)>,
 ) -> Result<Json<RouteResponse>, AppError> {
-
     let data = get_route_from_db(pool, &hash)
         .await?
         .ok_or(AppError::FileNotFound)?;
 
     let route = data.routes.get(route_idx).ok_or(AppError::FileNotFound)?;
 
-    let route = Route {
-        geometry: polyline::decode_polyline(&route.geometry, 5).map_err(RouteError::Polyline)?,
-        duration: route.duration,
-        distance: route.distance,
-    };
+    let route = Route::try_from(route.clone()).map_err(RouteError::Polyline)?;
 
     Ok(Json(RouteResponse {
         waypoints: data.waypoints,

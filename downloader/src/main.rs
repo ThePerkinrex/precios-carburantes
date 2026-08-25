@@ -115,7 +115,11 @@ fn main_internal() -> Result<(), Box<dyn Error>> {
         // This will cause the service to fail, and systemd will show it as an error
         return Err("La API devolvió 0 estaciones. Abortando para evitar registros vacíos.".into());
     }
-    println!("Descargadas {} estaciones en {:.2}s.", num_estaciones, start.elapsed().as_secs_f32());
+    println!(
+        "Descargadas {} estaciones en {:.2}s.",
+        num_estaciones,
+        start.elapsed().as_secs_f32()
+    );
 
     // Normalizar fecha de la API (tomamos solo la parte de la fecha)
     let ahora = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
@@ -167,7 +171,11 @@ fn main_internal() -> Result<(), Box<dyn Error>> {
     }
 
     tx.commit()?;
-    println!("Datos guardados correctamente para la fecha: {} en {:.2}s", ahora, start.elapsed().as_secs_f32());
+    println!(
+        "Datos guardados correctamente para la fecha: {} en {:.2}s",
+        ahora,
+        start.elapsed().as_secs_f32()
+    );
 
     Ok(())
 }
@@ -175,6 +183,9 @@ fn main_internal() -> Result<(), Box<dyn Error>> {
 fn main() -> Result<(), Box<dyn Error>> {
     let start = Instant::now();
     let res = main_internal();
-    println!("Completado con resultado {res:?} en {:.2}s", start.elapsed().as_secs_f32());
+    println!(
+        "Completado con resultado {res:?} en {:.2}s",
+        start.elapsed().as_secs_f32()
+    );
     res
 }

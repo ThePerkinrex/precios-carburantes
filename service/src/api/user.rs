@@ -1,4 +1,9 @@
-use axum::{Json, Router, extract::State, http::StatusCode, routing::{get, put}};
+use axum::{
+    Json, Router,
+    extract::State,
+    http::StatusCode,
+    routing::{get, put},
+};
 use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};
 
@@ -9,10 +14,14 @@ pub struct UserState {
     username: String,
     display_name: String,
     filter: String,
-    roles: Vec<String>
+    roles: Vec<String>,
 }
 
-fn get_user_state(conn: &Connection, username: &str, roles: Vec<String>) -> rusqlite::Result<UserState> {
+fn get_user_state(
+    conn: &Connection,
+    username: &str,
+    roles: Vec<String>,
+) -> rusqlite::Result<UserState> {
     conn.query_row(
         "
         SELECT
@@ -39,7 +48,7 @@ fn get_user_state(conn: &Connection, username: &str, roles: Vec<String>) -> rusq
                 username: row.get(0)?,
                 display_name: row.get(1)?,
                 filter: row.get(2)?,
-                roles
+                roles,
             })
         },
     )
@@ -82,18 +91,22 @@ async fn user_state(
     auth: ClientAuth,
 ) -> Result<Json<UserState>, AppError> {
     let conn = pool.get()?;
-    Ok(Json(get_user_state(&conn, &auth.username, auth.roles.clone())?))
+    Ok(Json(get_user_state(
+        &conn,
+        &auth.username,
+        auth.roles.clone(),
+    )?))
 }
 
 #[derive(Debug, Deserialize)]
 struct PutDisplayName {
-    display_name: String
+    display_name: String,
 }
 
 async fn set_user_display_name(
     State(pool): State<DbPool>,
     auth: ClientAuth,
-    Json(params): Json<PutDisplayName>
+    Json(params): Json<PutDisplayName>,
 ) -> Result<StatusCode, AppError> {
     let conn = pool.get()?;
     update_user_display_name(&conn, &auth.username, &params.display_name)?;
@@ -102,13 +115,13 @@ async fn set_user_display_name(
 
 #[derive(Debug, Deserialize)]
 struct PutFilter {
-    filter: String
+    filter: String,
 }
 
 async fn set_filter(
     State(pool): State<DbPool>,
     auth: ClientAuth,
-    Json(params): Json<PutFilter>
+    Json(params): Json<PutFilter>,
 ) -> Result<StatusCode, AppError> {
     let conn = pool.get()?;
     update_user_filter(&conn, &auth.username, &params.filter)?;

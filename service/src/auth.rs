@@ -3,7 +3,7 @@ use std::sync::Arc;
 use axum::{
     Extension,
     extract::{FromRef, FromRequestParts, Request, State},
-    http::{HeaderMap},
+    http::HeaderMap,
     middleware::Next,
     response::{IntoResponse, Response},
 };
@@ -12,7 +12,7 @@ use rusqlite::params;
 use crate::{
     DbPool,
     config::{Config, DevConfig},
-    error::{AppError},
+    error::AppError,
 };
 
 fn validate_auth<'a>(
@@ -93,10 +93,8 @@ where
             let mut roles = Vec::new();
             {
                 let conn = pool.get()?;
-                let mut stmt = conn
-                    .prepare("SELECT role FROM user_roles WHERE username = ?")?;
-                let result = stmt
-                    .query_map(params![username], |r| r.get(0))?;
+                let mut stmt = conn.prepare("SELECT role FROM user_roles WHERE username = ?")?;
+                let result = stmt.query_map(params![username], |r| r.get(0))?;
 
                 for role in result {
                     roles.push(role?);

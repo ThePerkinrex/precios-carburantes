@@ -1,14 +1,14 @@
-import { createRoute, getRoute } from "./api.js";
+import { createRoute, getRoutes } from "./api.js";
 
 // Colors used to distinguish alternative routes on the map and in the tabs.
-const ROUTE_COLORS = ["#2563eb", "#f97316", "#16a34a", "#9333ea", "#dc2626"];
+export const ROUTE_COLORS = ["#2563eb", "#f97316", "#16a34a", "#9333ea", "#dc2626"];
 
-function formatDistance(meters) {
+export function formatDistance(meters) {
 	if (meters >= 1000) return `${(meters / 1000).toFixed(1)} km`;
 	return `${Math.round(meters)} m`;
 }
 
-function formatDuration(seconds) {
+export function formatDuration(seconds) {
 	const totalMin = Math.round(seconds / 60);
 	const h = Math.floor(totalMin / 60);
 	const m = totalMin % 60;
@@ -19,11 +19,11 @@ function formatDuration(seconds) {
 // The backend's `geometry` field is a geo_types LineString using GeoJSON's
 // coordinate order (x = lon, y = lat), but geo_types serializes each point
 // as an {x, y} object rather than a [lon, lat] tuple.
-function coordToLatLng({ x, y }) {
+export function coordToLatLng({ x, y }) {
 	return [y, x];
 }
 
-function waypointDivIcon(index, isFirst, isLast) {
+export function waypointDivIcon(index, isFirst, isLast) {
 	const cls = isFirst ? "start" : isLast ? "end" : "";
 	return L.divIcon({
 		className: "route-waypoint-icon",
@@ -324,7 +324,7 @@ export function addRouteControl(map) {
 		try {
 			const payload = state.waypoints.map((wp) => [wp.latlng.lat, wp.latlng.lng]);
 			const { hash } = await createRoute(payload);
-			const data = await getRoute(hash);
+			const data = await getRoutes(hash);
 
 			if (!data.routes || data.routes.length === 0) {
 				throw new Error("empty route list");

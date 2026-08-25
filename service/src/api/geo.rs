@@ -360,16 +360,17 @@ const PROVINCIAS: [ProvinciaData; 52] = [
 
 #[derive(Serialize)]
 struct FilterData<'a> {
-    ccaa: &'a[CCAAData<'a>],
-    provincias: &'a[ProvinciaData<'a>]
+    ccaa: &'a [CCAAData<'a>],
+    provincias: &'a [ProvinciaData<'a>],
 }
 
 async fn filter() -> Json<FilterData<'static>> {
-    Json(FilterData { ccaa: &CCAA, provincias: &PROVINCIAS })
+    Json(FilterData {
+        ccaa: &CCAA,
+        provincias: &PROVINCIAS,
+    })
 }
 
-
 pub fn get_router() -> Router<DbPool> {
-    Router::new()
-        .route("/filter", get(filter))
+    Router::new().route("/filter", get(filter))
 }

@@ -52,6 +52,10 @@ export async function createRoute(waypoints) {
 
 // Fetches a previously computed route by hash:
 // { waypoints, routes: [{ geometry, duration, distance }, ...] }
-export async function getRoute(hash) {
+export async function getRoutes(hash) {
 	return await fetch(`${API_LOCATION}/route/${hash}`).then((x) => x.json());
+}
+
+export async function getRoute(hash, idx) {
+	return await fetch(`${API_LOCATION}/route/${hash}/${idx}`).then((x) => x.json());
 }

@@ -11,8 +11,8 @@ use tracing::warn;
 use crate::{DbPool, error::AppError};
 
 mod geo;
-mod user;
 pub mod route;
+mod user;
 
 #[derive(Serialize)]
 struct EstacionPrecio {
@@ -32,14 +32,11 @@ struct EstacionPrecio {
     gasolina_95: Option<f64>,
 }
 
-async fn latest_prices(
-    State(state): State<DbPool>,
-) -> Result<Json<Vec<EstacionPrecio>>, AppError> {
+async fn latest_prices(State(state): State<DbPool>) -> Result<Json<Vec<EstacionPrecio>>, AppError> {
     let conn = state.get().unwrap();
 
-    let mut stmt = conn
-        .prepare(
-            r#"
+    let mut stmt = conn.prepare(
+        r#"
             WITH latest AS (
                 SELECT MAX(fecha) AS fecha FROM precios
             )
@@ -62,27 +59,26 @@ async fn latest_prices(
             JOIN precios p ON p.id_estacion = e.id
             JOIN latest l ON p.fecha = l.fecha
             "#,
-        )?;
+    )?;
 
-    let rows = stmt
-        .query_map([], |row| {
-            Ok(EstacionPrecio {
-                id: row.get(0)?,
-                rotulo: row.get(1)?,
-                direccion: row.get(2)?,
-                municipio: row.get(3)?,
-                provincia: row.get(4)?,
-                latitud: row.get(5)?,
-                longitud: row.get(6)?,
-                fecha: row.get(7)?,
-                gasoleo_a: row.get(8)?,
-                gasolina_95: row.get(9)?,
-                margen: row.get(10)?,
-                localidad: row.get(11)?,
-                horario: row.get(12)?,
-                cp: row.get(13)?,
-            })
-        })?;
+    let rows = stmt.query_map([], |row| {
+        Ok(EstacionPrecio {
+            id: row.get(0)?,
+            rotulo: row.get(1)?,
+            direccion: row.get(2)?,
+            municipio: row.get(3)?,
+            provincia: row.get(4)?,
+            latitud: row.get(5)?,
+            longitud: row.get(6)?,
+            fecha: row.get(7)?,
+            gasoleo_a: row.get(8)?,
+            gasolina_95: row.get(9)?,
+            margen: row.get(10)?,
+            localidad: row.get(11)?,
+            horario: row.get(12)?,
+            cp: row.get(13)?,
+        })
+    })?;
 
     let mut estaciones = Vec::new();
     for row in rows {
@@ -112,9 +108,8 @@ async fn price_history_station(
     let conn = state.get().unwrap();
     let tz = chrono::Local;
 
-    let mut stmt = conn
-        .prepare(
-            r#"
+    let mut stmt = conn.prepare(
+        r#"
             
             SELECT 
                 fecha,
@@ -124,21 +119,20 @@ async fn price_history_station(
             WHERE id_estacion = ? AND fecha >= ?
 ORDER BY fecha ASC;
             "#,
-        )?;
+    )?;
     let fecha = params
         .from
         .with_timezone(&tz)
         .format("%Y-%m-%d %H:%M:%S")
         .to_string();
     // info!("Filtering by {fecha}");
-    let rows = stmt
-        .query_map(params![id, fecha], |row| {
-            Ok(PricePoint {
-                fecha: row.get(0)?,
-                gasoleo_a: row.get(1)?,
-                gasolina_95: row.get(2)?,
-            })
-        })?;
+    let rows = stmt.query_map(params![id, fecha], |row| {
+        Ok(PricePoint {
+            fecha: row.get(0)?,
+            gasoleo_a: row.get(1)?,
+            gasolina_95: row.get(2)?,
+        })
+    })?;
 
     let mut precios = Vec::new();
     for row in rows {
@@ -180,7 +174,7 @@ ORDER BY p.fecha ASC;
             warn!("SQL Error: {e}");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
-   
+
     // info!("Filtering by {fecha}");
     let rows = stmt
         .query_map(params![params.ccaa_id, params.provincia_id], |row| {
