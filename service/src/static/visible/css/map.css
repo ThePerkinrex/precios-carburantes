@@ -1,25 +1,101 @@
+/* Shared design tokens — same values as route.css so every control
+   (layers, visible-stations, route) reads from one palette. Falling
+   back to literal values means this file doesn't depend on load order. */
+:root {
+	--route-accent: #2563eb;
+	--route-surface: #ffffff;
+	--route-surface-muted: #f3f4f6;
+	--route-border: #e5e7eb;
+	--route-text: #1f2937;
+	--route-text-muted: #6b7280;
+	--route-danger: #dc2626;
+	--route-success: #16a34a;
+	--route-radius-lg: 16px;
+	--route-radius-md: 10px;
+	--route-radius-pill: 999px;
+	--route-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+	--route-font: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
 html,
 body {
 	margin: 0;
 	padding: 0;
 	width: 100%;
 	height: 100%;
+	font-family: var(--route-font);
+	color: var(--route-text);
 }
 
 #map {
 	height: 100%;
 }
 
+/* ---------- Leaflet layer control ("Otras", brand overlays) ---------- */
+.leaflet-control-layers {
+	border-radius: var(--route-radius-lg) !important;
+	box-shadow: var(--route-shadow) !important;
+	border: 1px solid var(--route-border) !important;
+	font-family: var(--route-font);
+	color: var(--route-text);
+	background: var(--route-surface) !important;
+}
+
+.leaflet-control-layers-toggle {
+	width: 40px !important;
+	height: 40px !important;
+	border-radius: var(--route-radius-pill) !important;
+}
+
+.leaflet-control-layers-list {
+	padding: 8px 10px;
+}
+
+.leaflet-control-layers label {
+	font-size: 0.85rem;
+	padding: 3px 0;
+}
+
+.leaflet-control-layers-separator {
+	border-top: 1px solid var(--route-border) !important;
+	margin: 8px -10px !important;
+}
+
+/* All / None buttons injected above the layer list */
+.layer-select-buttons {
+	display: flex;
+	gap: 8px;
+	margin-bottom: 8px;
+	padding-bottom: 8px;
+	border-bottom: 1px solid var(--route-border);
+}
+
+.layer-select-buttons button {
+	flex: 1 1 auto;
+	border: 1px solid var(--route-border);
+	background: var(--route-surface-muted);
+	color: var(--route-text);
+	border-radius: var(--route-radius-md);
+	padding: 6px 10px;
+	font-size: 0.8rem;
+	font-weight: 600;
+	font-family: var(--route-font);
+	cursor: pointer;
+}
+
+.layer-select-buttons button:hover {
+	background: var(--route-border);
+}
+
+/* ---------- Visible-stations control ---------- */
 .custom-div-icon {
 	width: max-content;
 	min-width: 80px;
 }
 
 .price-label {
-	background: white;
+	background: var(--route-surface);
 	border: 2px solid #666;
-	/* border-radius: 4px; */
-	/* padding: 2px 5px; */
 	font-weight: bold;
 	font-size: 12px;
 	text-align: center;
@@ -30,10 +106,6 @@ body {
 	margin: 1em auto;
 }
 
-/* .price-label > div {
-	overflow: hidden;
-} */
-
 .price-label>img.logo {
 	width: 100% !important;
 	max-height: 4em !important;
@@ -42,7 +114,6 @@ body {
 }
 
 .icon.price-label {
-
 	background: linear-gradient(135deg, #666 5px, white 0);
 }
 
@@ -50,7 +121,6 @@ body {
 	overflow-wrap: break-word;
 	max-width: 10em !important;
 	width: fit-content;
-	/* max-height: 4em !important; */
 	box-sizing: border-box;
 }
 
@@ -64,11 +134,9 @@ body {
 	background-color: lightgreen;
 }
 
-
 .gasoleo {
 	background-color: lightgoldenrodyellow;
 }
-
 
 .rotulo {
 	font-size: 1.2em;
@@ -78,11 +146,12 @@ body {
 	font-size: 12px;
 	padding: 0.5em 1em;
 	margin: 0.25em;
-	border-radius: 1em;
+	border-radius: var(--route-radius-pill);
 	border: none;
 	outline: none;
-	background: #dddddd;
+	background: var(--route-surface-muted);
 	display: inline-block;
+	font-family: var(--route-font);
 }
 
 .closed {
@@ -96,7 +165,7 @@ body {
 }
 
 .open {
-	background: #205f31;
+	background: var(--route-success);
 	color: #ffffff;
 }
 
@@ -105,47 +174,119 @@ body {
 	color: #000000;
 }
 
+/* Header button — same floating-round treatment as .route-fab */
 .stations-header {
-	font-weight: bold;
+	font-weight: 600;
 	cursor: pointer;
 	min-height: 44px;
 	min-width: 44px;
 	align-content: center;
 	text-align: center;
+	border-radius: var(--route-radius-pill);
+	background: var(--route-surface);
+	color: var(--route-text);
+	transition: background 0.15s ease, color 0.15s ease;
 }
 
+.stations-header:hover {
+	background: var(--route-accent);
+	color: #fff;
+}
+
+/* Panel card — same surface/border/shadow/radius as .route-panel */
 .custom-stations-list {
-	background-color: white;
+	background-color: var(--route-surface);
 	max-height: 60vh;
 	overflow-y: auto;
+	border-radius: var(--route-radius-lg);
+	box-shadow: var(--route-shadow);
+	border: 1px solid var(--route-border);
+	font-family: var(--route-font);
+	color: var(--route-text);
 }
 
 .custom-stations-list .content-wrapper {
-	padding: 8px;
+	padding: 12px;
 }
 
-.content-header{
-	font-weight: bold;
-	font-size: 1.5em;
-	margin-bottom: 0.8em;
+.content-header {
+	font-weight: 600;
+	font-size: 1.05rem;
+	margin-bottom: 8px;
+	color: var(--route-text);
 }
 
+/* Sort toggles restyled as pill tabs, matching .route-tab */
+.sort-controls {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+	font-size: 0.85rem;
+	color: var(--route-text-muted);
+	margin-bottom: 10px !important;
+	padding-bottom: 8px !important;
+	border-bottom: 1px solid var(--route-border) !important;
+}
+
+.sort-controls label {
+	border: 1px solid var(--route-border);
+	border-radius: var(--route-radius-pill);
+	padding: 4px 10px !important;
+	margin: 0 !important;
+	cursor: pointer;
+	font-size: 0.8rem !important;
+}
+
+.sort-controls input[type="radio"] {
+	accent-color: var(--route-accent);
+	margin-right: 4px;
+}
+
+.sort-controls label:has(input:checked) {
+	border-color: var(--route-accent);
+	background: var(--route-surface-muted);
+	font-weight: 600;
+	color: var(--route-text);
+}
+
+/* Station list rows, matching .route-waypoint-item */
+.stations-items {
+	font-size: 12px;
+}
+
+.station-item {
+	padding: 8px 4px;
+	border-bottom: 1px solid var(--route-border);
+	cursor: pointer;
+	border-radius: var(--route-radius-md);
+	transition: background 0.15s ease;
+}
+
+.station-item:hover {
+	background-color: var(--route-surface-muted);
+}
+
+.station-item:last-child {
+	border-bottom: none;
+}
 
 .google-maps {
-  display: inline-flex;
-  align-items: center; /* vertically align image and text */
-  gap: 1em; /* space between image and text */
-  background: #ebdaa4;
-  color: black;
-  font-weight: bold;
+	display: inline-flex;
+	align-items: center;
+	gap: 1em;
+	background: #ebdaa4;
+	color: black;
+	font-weight: bold;
 }
 
 .google-maps-logo {
-  height: 1.2em; /* match text height */
-  width: auto; /* keep aspect ratio */
+	height: 1.2em;
+	width: auto;
 }
 
 .google-maps-text {
-  font-size: 1em; /* ensures consistent scaling */
-  line-height: 1; /* prevents extra vertical spacing */
+	font-size: 1em;
+	line-height: 1;
 }
+

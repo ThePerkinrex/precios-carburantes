@@ -28,7 +28,6 @@ export function addVisibleStationsControl(map, clusterGroup, allMarkers) {
 				container,
 			);
 			contentWrapper.style.display = "none";
-			contentWrapper.style.marginTop = "10px";
 
 			const contentHeader = L.DomUtil.create(
 				"div",
@@ -43,15 +42,12 @@ export function addVisibleStationsControl(map, clusterGroup, allMarkers) {
 				"sort-controls",
 				contentWrapper,
 			);
-			sortControls.style.marginBottom = "10px";
-			sortControls.style.paddingBottom = "8px";
-			sortControls.style.borderBottom = "1px solid #eee";
 			sortControls.innerHTML = `
-				<i>Precios ordenados por:</i><br>
-                <label style="margin-right: 10px; cursor: pointer; font-size: 12px;">
+				<i>Precios ordenados por:</i>
+                <label>
                     <input type="radio" name="sortPrice" value="gasolina_95" checked> Gasolina 95
                 </label>
-                <label style="cursor: pointer; font-size: 12px;">
+                <label>
                     <input type="radio" name="sortPrice" value="gasoleo_a"> Gasóleo A
                 </label>
             `;
@@ -140,9 +136,6 @@ export function addVisibleStationsControl(map, clusterGroup, allMarkers) {
 					"station-item",
 					listContainer,
 				);
-				item.style.padding = "6px 0";
-				item.style.borderBottom = "1px solid #eee";
-				item.style.cursor = "pointer";
 
 				let pricesHtml = "";
 				// Highlight the currently sorted price visually
@@ -162,11 +155,6 @@ export function addVisibleStationsControl(map, clusterGroup, allMarkers) {
 
 				item.innerHTML = `<strong>${m.eess.rotulo}</strong><br>${pricesHtml}`;
 
-				item.onmouseenter = () =>
-					(item.style.backgroundColor = "#f4f4f4");
-				item.onmouseleave = () =>
-					(item.style.backgroundColor = "transparent");
-
 				// Handle click: Zoom to cluster if necessary, then open popup
 				L.DomEvent.on(item, "click", () => {
 					clusterGroup.zoomToShowLayer(m, () => {
@@ -179,3 +167,4 @@ export function addVisibleStationsControl(map, clusterGroup, allMarkers) {
 
 	new VisibleStationsControl().addTo(map);
 }
+
