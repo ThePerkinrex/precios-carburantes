@@ -46,6 +46,7 @@ impl PointDistance for IndexedSegment {
 
 #[derive(Serialize)]
 struct PositionedStation {
+	#[serde(flatten)]
     station: EstacionPrecio,
     distance_along_route: f64,
     duration: f64,

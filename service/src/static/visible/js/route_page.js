@@ -1,4 +1,4 @@
-import { getPricesOnRoute, getRoute } from "./api.js";
+import { getPricesOnRoute, getRoute, getUserState } from "./api.js";
 import {
 	ROUTE_COLORS,
 	formatDistance,
@@ -6,6 +6,8 @@ import {
 	coordToLatLng,
 	waypointDivIcon,
 } from "./route.js";
+import { createStationsLayer } from "./stations.js";
+import { getLogos } from "./logos.js";
 
 async function load() {
 	const url = new URL(location.href);
@@ -19,7 +21,13 @@ async function load() {
 		return;
 	}
 
-	let data = getRoute(hash, route_idx);
+	let route_data = getRoute(hash, route_idx);
+	let price_data = getPricesOnRoute(hash, route_idx, {
+		max_distance: 2000.0,
+		order_by: "DistanceAlongRoute",
+	});
+	let logos = getLogos();
+	let state = getUserState();
 
 	const map = L.map("map").setView([40.4165, -3.70256], 11);
 
@@ -29,11 +37,11 @@ async function load() {
 			'&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>',
 	}).addTo(map);
 
-	data = await data;
+	route_data = await route_data;
 
-	console.log(data);
+	console.log(route_data);
 
-	const { waypoints, route } = data;
+	const { waypoints, route } = route_data;
 
 	// Route line, colored the same way route.js colors its alternatives
 	// (keyed off this route's index so it's consistent across views).
@@ -74,7 +82,23 @@ async function load() {
 	};
 	info.addTo(map);
 
-	console.log(await getPricesOnRoute(hash, route_idx, {max_distance: 2000.0, order_by: "DistanceAlongRoute"}))
+	price_data = await price_data;
+	logos = await logos;
+	state = await state;
+
+	// Everything about rendering the stations themselves (markers, popups,
+	// clustering, and the brand layer control) lives in stations.js now.
+	// `data` is the full list of stations to render — filter it before
+	// calling this if you only want a subset shown.
+	const { markers, allMarkers } = createStationsLayer(
+		map,
+		price_data,
+		logos,
+		{
+			filter: state.filter,
+			// buildPopupContent: myCustomPopupBuilder, // override to customize popup contents
+		},
+	);
 }
 
 load();

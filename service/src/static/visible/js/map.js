@@ -1,8 +1,8 @@
-import { getStatus, formatOpenCloseDate } from "./schedules.js";
 import { addVisibleStationsControl } from "./visible_stations.js";
-import { getLatestPrices, getUserState, updateFilter } from "./api.js";
+import { getLatestPrices, getUserState } from "./api.js";
 import { getLogos } from "./logos.js";
 import { addRouteControl } from "./route.js";
+import { createStationsLayer } from "./stations.js";
 
 let marker = undefined;
 
@@ -56,72 +56,6 @@ function onLocationError(e) {
 	console.error(e.message);
 }
 
-function addSelectAllButtons(layerControl, overlays, map) {
-	// Get the container where Leaflet lists the overlays
-	const container = layerControl.getContainer();
-	const form = container.querySelector("section.leaflet-control-layers-list");
-
-	// Create a wrapper for our new buttons
-	const buttonWrapper = document.createElement("div");
-	buttonWrapper.className = "layer-select-buttons"; // Good for custom CSS styling if needed
-	buttonWrapper.innerHTML = `
-        <button class="selectAll">All</button>
-        <button class="unselectAll">None</button>
-    `;
-
-	// IMPORTANT: Prevent clicks from bleeding through to the map underneath
-	L.DomEvent.disableClickPropagation(buttonWrapper);
-
-	form.prepend(buttonWrapper);
-
-	// --- GHOST CLICK PREVENTION ---
-	let ignoreClicks = false;
-
-	// Listen for mobile touches on the main control container
-	container.addEventListener(
-		"touchstart",
-		() => {
-			// If the control isn't expanded yet, the user is tapping to open it.
-			if (
-				!container.classList.contains("leaflet-control-layers-expanded")
-			) {
-				ignoreClicks = true; // Lock the buttons
-				setTimeout(() => {
-					ignoreClicks = false;
-				}, 400); // Unlock after 400ms
-			}
-		},
-		{ passive: true },
-	);
-	// ------------------------------
-
-	// Add event listeners (using L.DomEvent to safely handle Leaflet event propagation)
-	const selectAllBtn = buttonWrapper.querySelector(".selectAll");
-	L.DomEvent.on(selectAllBtn, "click", (ev) => {
-		L.DomEvent.stop(ev); // Stops the event from bubbling
-		if (ignoreClicks) return; // Abort if we are in the cooldown window
-
-		console.log("All", container.checkVisibility(), ev);
-		for (let overlay of overlays) map.addLayer(overlay);
-	});
-
-	const unselectAllBtn = buttonWrapper.querySelector(".unselectAll");
-	L.DomEvent.on(unselectAllBtn, "click", (ev) => {
-		L.DomEvent.stop(ev);
-		if (ignoreClicks) return;
-
-		console.log(
-			"None",
-			container.checkVisibility(),
-			container.classList.contains("leaflet-control-layers-expanded"),
-			ev,
-		);
-		for (let overlay of overlays) {
-			if (map.hasLayer(overlay)) map.removeLayer(overlay);
-		}
-	});
-}
-
 async function load() {
 	let data = getLatestPrices();
 	let logos = getLogos();
@@ -149,223 +83,23 @@ async function load() {
 	map.locate({ setView: true, maxZoom: 12, maximumAge: 5000 });
 	//map.locate({watch: true});
 
-	// Capa para agrupar los marcadores
-	const markers = L.markerClusterGroup(),
-		control = L.control.layers(null, null, { collapsed: true });
-	map.addLayer(markers);
-
 	data = await data;
 	logos = await logos;
 	lastLoadTime = Date.now();
-
-	let subgroups = Object.fromEntries(Object.keys(logos).map((k) => [k, []]));
-	subgroups["other"] = [];
-	// console.log(data);
-	const logos_sorted = Object.keys(logos).sort((a, b) => b.length - a.length);
-	let i = 0;
-	const allMarkers = []; // Array to keep track of all markers
-	for (let eess of data) {
-		let logo = `<div class="logo"><b>${eess.rotulo}</b></div>`;
-		let subgroup = subgroups["other"];
-		const lower_eess = eess.rotulo.toLowerCase();
-		for (let name of logos_sorted) {
-			if (
-				lower_eess.includes(name) ||
-				("alternatives" in logos[name] &&
-					logos[name].alternatives.some((x) =>
-						lower_eess.includes(x),
-					))
-			) {
-				logo = `<img class="logo" src="${logos[name].image}"/>`;
-				subgroup = subgroups[name];
-				break;
-			}
-		}
-		// i++;
-		// if(i > 10) break;
-
-		let gasolina_short =
-			eess.gasolina_95 != null
-				? `<div class="gasolina">${eess.gasolina_95}€</div>`
-				: "";
-		let gasolina_long =
-			eess.gasolina_95 != null
-				? `<div class="gasolina">Gasolina 95: <b>${eess.gasolina_95}€</b></div>`
-				: "";
-		let gasoleo_short =
-			eess.gasoleo_a != null
-				? `<div class="gasoleo">${eess.gasoleo_a}€</div>`
-				: "";
-		let gasoleo_long =
-			eess.gasoleo_a != null
-				? `<div class="gasoleo">Gasoleo A: <b>${eess.gasoleo_a}€</b></div>`
-				: "";
-
-		// // console.log(eess);
-		// Crear un icono que muestre el precio directamente
-		const icon = L.divIcon({
-			className: "custom-div-icon",
-			html: `	<div class="price-label icon">
-						${logo}
-						${gasoleo_short}
-						${gasolina_short}
-					</div>`,
-			//iconSize: [60, 40]
-		});
-
-		let status = getStatus(eess.horario, new Date());
-
-		let pill = "";
-		if (status.status == "open") {
-			pill = `<div class="pill open">Abierto; Cierre ${formatOpenCloseDate(status.nextClose)}</div>`;
-		} else if (status.status == "opensSoon") {
-			pill = `<div class="pill open soon">Abre pronto; Apertura ${formatOpenCloseDate(status.nextOpen)}</div>`;
-		} else if (status.status == "close") {
-			pill = `<div class="pill close">Cerrado; Apertura ${formatOpenCloseDate(status.nextOpen)}</div>`;
-		} else if (status.status == "closesSoon") {
-			pill = `<div class="pill close soon">Cierra pronto; Cierre ${formatOpenCloseDate(status.nextClose)}</div>`;
-		}
-
-		// https://www.google.com/maps/search/?api=1&query=47.5951518%2C-122.3316393
-		const google_maps_url_params = new URLSearchParams({
-			api: "1",
-			query: `${eess.latitud},${eess.longitud}`,
-		});
-		const google_maps_url = `https://www.google.com/maps/search/?${google_maps_url_params}`;
-		// https://waze.com/ul?ll=<lat>,<lng>
-		const waze_url_params = new URLSearchParams({
-			ll: `${eess.latitud},${eess.longitud}`,
-		});
-		const waze_url = `https://waze.com/ul?${waze_url_params}`;
-		
-		// https://maps.apple.com/?daddr=<lat>,<lng>
-		const apple_maps_url_params = new URLSearchParams({
-			daddr: `${eess.latitud},${eess.longitud}`,
-		});
-		const apple_maps_url = `https://maps.apple.com/?${apple_maps_url_params}`;
-		// const directions_params = new URLSearchParams({
-		// 	api: "1",
-		// 	destination: `${eess.latitud},${eess.longitud}`,
-		// });
-
-		// const directions = `https://www.google.com/maps/dir/?${directions_params}`;
-
-		// 					<a href="${directions}" target="_blank" rel="noopener noreferrer"><div class="google-maps pill"><img src="/files/images/google_maps.svg" class="google-maps-logo"><span class="google-maps-text">Cómo llegar</span></div></a>
-
-		let location_pills = `
-		<a href="${google_maps_url}" target="_blank" rel="noopener noreferrer"><div class="google-maps map-link pill"><img src="/files/images/google_maps.svg" class="map-logo"><span class="map-text">Google Maps</span></div></a>
-		<a href="${waze_url}" target="_blank" rel="noopener noreferrer"><div class="waze map-link pill"><img src="/files/images/waze.svg" class="map-logo"><span class="map-text">Waze</span></div></a>
-		<a href="${apple_maps_url}" target="_blank" rel="noopener noreferrer"><div class="apple-maps map-link pill"><img src="/files/images/apple_maps.png" class="map-logo"><span class="map-text">Apple Maps</span></div></a>
-		`;
-
-
-
-		const marker = L.marker([eess.latitud, eess.longitud], {
-			icon: icon,
-		}).bindPopup(() => {
-			return `
-			<div class="gasolinera" id="gasolinera-${eess.id}">
-				<div class="rotulo"><b>${eess.rotulo}</b></div>
-				<div class="direccion">
-					${eess.direccion}, margen ${eess.margen}<br>
-					${eess.localidad}, ${eess.municipio} ${eess.cp}<br>
-					<i>${eess.provincia}</i><br>
-					Horario: ${eess.horario}<br>
-					${pill}<br>
-					${location_pills}
-				</div>
-
-				<div class="price-label">
-					
-					${gasoleo_long}
-					${gasolina_long}
-				</div>
-				<canvas class="chart"></canvas>
-			</div>`;
-		});
-		marker.on("popupopen", async (ev) => {
-			const from = new Date(new Date().setDate(new Date().getDate() - 7));
-			const history = await fetch(
-				`/api/${eess.id}/history?` +
-					new URLSearchParams({
-						from: from.toISOString(),
-					}).toString(),
-			).then((x) => x.json());
-			const popup = document.getElementById(`gasolinera-${eess.id}`);
-			const chart = popup.getElementsByClassName("chart")[0];
-
-			// console.log(history, popup, chart);
-			new Chart(chart, {
-				type: "line",
-				data: {
-					labels: history.map((x) => x.fecha),
-					datasets: [
-						{
-							label: "Gasolina 95",
-							data: history.map((x) => x.gasolina_95),
-							fill: false,
-							borderColor: "green",
-							tension: 0.1,
-						},
-						{
-							label: "Gasoleo A",
-							data: history.map((x) => x.gasoleo_a),
-							fill: false,
-							borderColor: "black",
-							tension: 0.1,
-						},
-					],
-				},
-			});
-		});
-
-		// ADD THESE TWO LINES:
-		marker.eess = eess; // Store the raw data for sorting and displaying
-		allMarkers.push(marker);
-
-		// markers.addLayer(marker);
-		subgroup.push(marker);
-	}
-	subgroups = Object.entries(subgroups)
-		.map(([name, layers]) => [
-			name,
-			L.featureGroup.subGroup(markers, layers),
-			layers.length,
-		])
-		.toSorted(([name1, stations1, len1], [name2, stations2, len2]) =>
-			name1 == "other" ? 1 : name2 == "other" ? -1 : len2 - len1,
-		);
-
 	state = await state;
-	console.log(subgroups, state);
-	for (let [name, subgroup] of subgroups) {
-		control.addOverlay(
-			subgroup,
-			name == "other" ? "Otras" : logos[name].text,
-		);
-		if (state.filter.has(name)) subgroup.addTo(map);
-		subgroup.on("add", () => {
-			console.log("Add " + name);
-			state.filter.add(name);
-			updateFilter(state.filter);
-		});
-		subgroup.on("remove", () => {
-			console.log("Remove " + name);
-			state.filter.delete(name);
-			updateFilter(state.filter);
-		});
-	}
-	control.addTo(map);
-	addSelectAllButtons(
-		control,
-		subgroups.map((x) => x[1]),
-		map,
-	);
+
+	// Everything about rendering the stations themselves (markers, popups,
+	// clustering, and the brand layer control) lives in stations.js now.
+	// `data` is the full list of stations to render — filter it before
+	// calling this if you only want a subset shown.
+	const { markers, allMarkers } = createStationsLayer(map, data, logos, {
+		filter: state.filter,
+		// buildPopupContent: myCustomPopupBuilder, // override to customize popup contents
+	});
 
 	addVisibleStationsControl(map, markers, allMarkers);
 	addRouteControl(map);
-
-	// console.log()
 }
 
 load();
+

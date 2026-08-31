@@ -1,0 +1,186 @@
+/* Shared design tokens — same values as route.css/map.css so every control
+   reads from one palette. Falling back to literal values means this file
+   doesn't depend on load order. */
+:root {
+	--route-accent: #2563eb;
+	--route-surface: #ffffff;
+	--route-surface-muted: #f3f4f6;
+	--route-border: #e5e7eb;
+	--route-text: #1f2937;
+	--route-text-muted: #6b7280;
+	--route-danger: #dc2626;
+	--route-success: #16a34a;
+	--route-radius-lg: 16px;
+	--route-radius-md: 10px;
+	--route-radius-pill: 999px;
+	--route-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+	--route-font: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* ---------- Leaflet layer control ("Otras", brand overlays) ---------- */
+.leaflet-control-layers {
+	border-radius: var(--route-radius-lg) !important;
+	box-shadow: var(--route-shadow) !important;
+	border: 1px solid var(--route-border) !important;
+	font-family: var(--route-font);
+	color: var(--route-text);
+	background: var(--route-surface) !important;
+}
+
+.leaflet-control-layers-toggle {
+	width: 40px !important;
+	height: 40px !important;
+	border-radius: var(--route-radius-pill) !important;
+}
+
+.leaflet-control-layers-list {
+	padding: 8px 10px;
+}
+
+.leaflet-control-layers label {
+	font-size: 0.85rem;
+	padding: 3px 0;
+}
+
+.leaflet-control-layers-separator {
+	border-top: 1px solid var(--route-border) !important;
+	margin: 8px -10px !important;
+}
+
+/* All / None buttons injected above the layer list */
+.layer-select-buttons {
+	display: flex;
+	gap: 8px;
+	margin-bottom: 8px;
+	padding-bottom: 8px;
+	border-bottom: 1px solid var(--route-border);
+}
+
+.layer-select-buttons button {
+	flex: 1 1 auto;
+	border: 1px solid var(--route-border);
+	background: var(--route-surface-muted);
+	color: var(--route-text);
+	border-radius: var(--route-radius-md);
+	padding: 6px 10px;
+	font-size: 0.8rem;
+	font-weight: 600;
+	font-family: var(--route-font);
+	cursor: pointer;
+}
+
+.layer-select-buttons button:hover {
+	background: var(--route-border);
+}
+
+/* ---------- Station marker icon ---------- */
+.custom-div-icon {
+	width: max-content;
+	min-width: 80px;
+}
+
+.price-label {
+	background: var(--route-surface);
+	border: 2px solid #666;
+	font-weight: bold;
+	font-size: 12px;
+	text-align: center;
+	width: fit-content;
+}
+
+.gasolinera>.price-label {
+	margin: 1em auto;
+}
+
+.price-label>img.logo {
+	width: 100% !important;
+	max-height: 4em !important;
+	padding: 5px;
+	box-sizing: border-box;
+}
+
+.icon.price-label {
+	background: linear-gradient(135deg, #666 5px, white 0);
+}
+
+.logo {
+	overflow-wrap: break-word;
+	max-width: 10em !important;
+	width: fit-content;
+	box-sizing: border-box;
+}
+
+.gasolina,
+.gasoleo,
+.logo {
+	padding: 2px 5px;
+}
+
+.gasolina {
+	background-color: lightgreen;
+}
+
+.gasoleo {
+	background-color: lightgoldenrodyellow;
+}
+
+/* ---------- Station popup ---------- */
+.rotulo {
+	font-size: 1.2em;
+}
+
+.pill {
+	font-size: 12px;
+	padding: 0.5em 1em;
+	margin: 0.25em;
+	border-radius: var(--route-radius-pill);
+	border: none;
+	outline: none;
+	background: var(--route-surface-muted);
+	display: inline-block;
+	font-family: var(--route-font);
+}
+
+.closed {
+	background: #5f2020;
+	color: #ffffff;
+}
+
+.closed.soon {
+	background: #e1600f;
+	color: #ffffff;
+}
+
+.open {
+	background: var(--route-success);
+	color: #ffffff;
+}
+
+.open.soon {
+	background: #e9cc6d;
+	color: #000000;
+}
+
+.google-maps.map-link {
+	background: #ebdaa4;
+	color: black;
+}
+
+.map-link {
+	display: inline-flex;
+	align-items: center;
+	gap: 1em;
+	background: #ebdaa4;
+	color: black;
+	font-weight: bold;
+}
+
+.map-logo {
+	height: 1.2em;
+	width: auto;
+}
+
+.map-text {
+	font-size: 1em;
+	line-height: 1;
+}
