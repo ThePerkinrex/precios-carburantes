@@ -59,3 +59,9 @@ export async function getRoutes(hash) {
 export async function getRoute(hash, idx) {
 	return await fetch(`${API_LOCATION}/route/${hash}/${idx}`).then((x) => x.json());
 }
+
+export async function getPricesOnRoute(hash, idx, query = {}) {
+	let params = new URLSearchParams(query)
+	return await fetch(`${API_LOCATION}/route/${hash}/${idx}/prices?${params}`).then((x) => x.json());
+}
+

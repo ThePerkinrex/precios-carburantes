@@ -1,20 +1,22 @@
 use axum::{
     Json, Router,
-    extract::{Path, State},
-    http::HeaderMap,
-    response::Redirect,
+    extract::{Path, Query, State},
     routing::{get, post},
 };
 use bytemuck::{Pod, Zeroable};
-use geo_types::LineString;
+use geo::{Closest, ClosestPoint, Distance, Haversine, HaversineDistance, Line, Point};
+use geo_types::{Coord, LineString};
 use polyline::errors::PolylineError;
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use sha3::{Digest, Sha3_256};
 use thiserror::Error;
-use tracing::info;
 
-use crate::{DbPool, error::AppError};
+use crate::{
+    DbPool,
+    api::{EstacionPrecio, get_latest_station_data},
+    error::AppError,
+};
 
 #[derive(Debug, Error)]
 pub enum RouteError {
@@ -268,9 +270,142 @@ async fn get_route(
     }))
 }
 
+#[derive(Serialize)]
+struct PositionedStation {
+    station: EstacionPrecio,
+    distance_along_route: f64,
+    duration: f64,
+    distance_from_route: f64,
+}
+
+#[derive(Deserialize, Default)]
+enum RoutePricesQueryOrderBy {
+    DistanceToRoute,
+    DistanceAlongRoute,
+    #[default]
+    None,
+}
+
+#[derive(Deserialize)]
+struct RoutePricesQuery {
+    max_distance: Option<f64>,
+    #[serde(default)]
+    order_by: RoutePricesQueryOrderBy,
+}
+
+/// Finds the closest point on segment a->b to `p`, and the fraction `t` in [0,1]
+/// along a->b where that closest point sits.
+fn closest_point_on_segment(p: Point<f64>, a: Coord<f64>, b: Coord<f64>) -> (Point<f64>, f64) {
+    let line = Line::new(a, b);
+
+    let closest = match line.closest_point(&p) {
+        Closest::Intersection(pt) | Closest::SinglePoint(pt) => pt,
+        Closest::Indeterminate => Point::from(a),
+    };
+
+    let ab = (b.x - a.x, b.y - a.y);
+    let ac = (closest.x() - a.x, closest.y() - a.y);
+    let len2 = ab.1.mul_add(ab.1, ab.0 * ab.0);
+
+    let t = if len2 > 0.0 {
+        (ac.1.mul_add(ab.1, ac.0 * ab.0) / len2).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+
+    (closest, t)
+}
+async fn get_prices_on_route(
+    State(pool): State<DbPool>,
+    Path((hash, route_idx)): Path<(String, usize)>,
+    Query(query): Query<RoutePricesQuery>,
+) -> Result<Json<Vec<PositionedStation>>, AppError> {
+    let stations = get_latest_station_data(pool.clone()).await?;
+    let Json(route) = get_route(State(pool), Path((hash, route_idx))).await?;
+
+    let points = &route.route.geometry.0; // Vec<Coord<f64>>, (lon, lat)
+
+    if points.len() < 2 {
+        return Ok(Json(Vec::new()));
+    }
+
+    let mut edge_distance = Vec::with_capacity(points.len() - 1);
+    let mut edge_duration = Vec::with_capacity(points.len() - 1);
+    for leg in &route.route.legs {
+        edge_distance.extend_from_slice(&leg.annotation.distance);
+        edge_duration.extend_from_slice(&leg.annotation.duration);
+    }
+
+    if edge_distance.len() != points.len() - 1 {
+        tracing::warn!(
+            "annotation edge count ({}) != geometry edge count ({})",
+            edge_distance.len(),
+            points.len() - 1
+        );
+    }
+
+    let mut cum_dist = vec![0.0; points.len()];
+    let mut cum_dur = vec![0.0; points.len()];
+    for i in 0..edge_distance.len().min(points.len() - 1) {
+        cum_dist[i + 1] = cum_dist[i] + edge_distance[i];
+        cum_dur[i + 1] = cum_dur[i] + edge_duration[i];
+    }
+
+    let mut res: Vec<PositionedStation> = stations
+        .into_iter()
+        .filter_map(|station| {
+            let p = Point::new(station.longitud, station.latitud);
+
+            let mut best: Option<(f64, usize, f64)> = None; // (dist_from_route, seg_idx, t)
+            for i in 0..points.len() - 1 {
+                let (closest, t) = closest_point_on_segment(p, points[i], points[i + 1]);
+
+                let d = Haversine.distance(p, closest); // p.haversine_distance(&closest);
+                if best.is_none_or(|(bd, ..)| d < bd) {
+                    best = Some((d, i, t));
+                }
+            }
+            let (distance_from_route, seg_idx, t) = best?;
+
+            if let Some(max_d) = query.max_distance
+                && distance_from_route > max_d
+            {
+                return None;
+            }
+
+            let edge_d = edge_distance.get(seg_idx).copied().unwrap_or(0.0);
+            let edge_t = edge_duration.get(seg_idx).copied().unwrap_or(0.0);
+
+            Some(PositionedStation {
+                distance_along_route: t.mul_add(edge_d, cum_dist[seg_idx]),
+                duration: t.mul_add(edge_t, cum_dur[seg_idx]),
+                distance_from_route,
+                station,
+            })
+        })
+        .collect();
+
+    match query.order_by {
+        RoutePricesQueryOrderBy::DistanceToRoute => res.sort_by(|a, b| {
+            a.distance_from_route
+                .partial_cmp(&b.distance_from_route)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        }),
+        RoutePricesQueryOrderBy::DistanceAlongRoute => res.sort_by(|a, b| {
+            a.distance_along_route
+                .partial_cmp(&b.distance_along_route)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        }),
+        RoutePricesQueryOrderBy::None => {}
+    }
+
+    Ok(Json(res))
+}
+
 pub fn get_router() -> Router<DbPool> {
     Router::new()
         .route("/", post(create_route))
         .route("/{hash}", get(get_routes))
         .route("/{hash}/{route_idx}", get(get_route))
+        .route("/{hash}/{route_idx}/prices", get(get_prices_on_route))
 }

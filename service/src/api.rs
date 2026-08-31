@@ -32,8 +32,8 @@ struct EstacionPrecio {
     gasolina_95: Option<f64>,
 }
 
-async fn latest_prices(State(state): State<DbPool>) -> Result<Json<Vec<EstacionPrecio>>, AppError> {
-    let conn = state.get().unwrap();
+async fn get_latest_station_data(pool: DbPool) -> Result<Vec<EstacionPrecio>, AppError> {
+    let conn = pool.get().unwrap();
 
     let mut stmt = conn.prepare(
         r#"
@@ -85,7 +85,11 @@ async fn latest_prices(State(state): State<DbPool>) -> Result<Json<Vec<EstacionP
         estaciones.push(row?);
     }
 
-    Ok(Json(estaciones))
+    Ok(estaciones)
+}
+
+async fn latest_prices(State(pool): State<DbPool>) -> Result<Json<Vec<EstacionPrecio>>, AppError> {
+    get_latest_station_data(pool).await.map(Json)
 }
 
 #[derive(Serialize)]

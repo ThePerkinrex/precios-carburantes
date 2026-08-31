@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-axum = "0.8.8"
+axum = { version = "0.8.8", features = ["query"] }
 serde = { version = "1.0.228", features = ["derive"] }
 tokio = { version = "1.50.0", features = ["rt-multi-thread", "macros", "fs"] }
 tracing = "0.1.44"
@@ -27,6 +27,7 @@ bytemuck = { version = "1.25.2", features = ["derive"] }
 axum-macros = "0.5.1"
 dotenvy = "0.15.7"
 form_urlencoded = "1.2.2"
+geo = "0.33.1"
 
 [features]
 include-static = ["dep:include_dir"]

@@ -1,11 +1,10 @@
 use std::path::Path;
 
 use axum::{
-    body::Body,
     http::{StatusCode, header},
     response::{IntoResponse, Response},
 };
-use tracing::{debug, warn};
+use tracing::debug;
 
 use crate::error::AppError;
 

@@ -1,4 +1,4 @@
-import { getRoute } from "./api.js";
+import { getPricesOnRoute, getRoute } from "./api.js";
 import {
 	ROUTE_COLORS,
 	formatDistance,
@@ -73,6 +73,8 @@ async function load() {
 		return div;
 	};
 	info.addTo(map);
+
+	console.log(await getPricesOnRoute(hash, route_idx, {max_distance: 2000.0, order_by: "DistanceAlongRoute"}))
 }
 
 load();
