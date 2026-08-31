@@ -1,0 +1,172 @@
+/* Shared design tokens — same values as route.css/map.css/stations.css so
+   every control reads from one palette. Falling back to literal values
+   means this file doesn't depend on load order. */
+:root {
+	--route-accent: #2563eb;
+	--route-surface: #ffffff;
+	--route-surface-muted: #f3f4f6;
+	--route-border: #e5e7eb;
+	--route-text: #1f2937;
+	--route-text-muted: #6b7280;
+	--route-danger: #dc2626;
+	--route-success: #16a34a;
+	--route-radius-lg: 16px;
+	--route-radius-md: 10px;
+	--route-radius-pill: 999px;
+	--route-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+	--route-font: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.route-options {
+	font-family: var(--route-font);
+	color: var(--route-text);
+}
+
+/* Round toggle button, same treatment as .route-fab / .stations-header */
+.route-options-fab {
+	min-height: 44px;
+	min-width: 44px;
+	border: none;
+	border-radius: var(--route-radius-pill);
+	background: var(--route-surface);
+	box-shadow: var(--route-shadow);
+	font-size: 1.2rem;
+	line-height: 1;
+	cursor: pointer;
+	transition: background 0.15s ease, color 0.15s ease;
+}
+
+.route-options-fab:hover {
+	background: var(--route-accent);
+}
+
+/* Panel card — same surface/border/shadow/radius as .route-panel / .custom-stations-list */
+.route-options-panel {
+	margin-top: 8px;
+	width: 240px;
+	max-height: 70vh;
+	overflow-y: auto;
+	background-color: var(--route-surface);
+	border-radius: var(--route-radius-lg);
+	box-shadow: var(--route-shadow);
+	border: 1px solid var(--route-border);
+}
+
+.route-options-content {
+	padding: 12px;
+}
+
+.route-options-section-title {
+	font-weight: 600;
+	font-size: 0.95rem;
+	color: var(--route-text);
+	margin: 12px 0 6px;
+}
+
+.route-options-section-title:first-child {
+	margin-top: 0;
+}
+
+.route-options-distance {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.route-options-distance-slider {
+	flex: 1 1 auto;
+	accent-color: var(--route-accent);
+}
+
+.route-options-distance-value {
+	flex: 0 0 auto;
+	font-size: 0.8rem;
+	font-weight: 600;
+	color: var(--route-text-muted);
+	min-width: 3.5em;
+	text-align: right;
+}
+
+.route-options-fuel {
+	display: flex;
+	gap: 12px;
+	font-size: 0.85rem;
+	margin-bottom: 6px;
+}
+
+.route-options-fuel label {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	cursor: pointer;
+}
+
+.route-options-fuel input[type="radio"] {
+	accent-color: var(--route-accent);
+}
+
+.route-options-field {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	font-size: 0.8rem;
+	color: var(--route-text-muted);
+	margin-bottom: 8px;
+}
+
+.route-options-field input[type="number"] {
+	font-family: var(--route-font);
+	font-size: 0.85rem;
+	color: var(--route-text);
+	border: 1px solid var(--route-border);
+	border-radius: var(--route-radius-md);
+	padding: 6px 8px;
+	width: 100%;
+	box-sizing: border-box;
+}
+
+.route-options-field input[type="number"]:focus {
+	outline: none;
+	border-color: var(--route-accent);
+}
+
+.route-options-stop-range {
+	display: flex;
+	gap: 8px;
+}
+
+.route-options-stop-range .route-options-field {
+	flex: 1 1 0;
+}
+
+
+/* Dynamic range indicator text */
+.route-options-range-info {
+	font-size: 0.75rem;
+	color: var(--route-text-muted);
+	opacity: 0.8;
+	margin-top: 2px;
+}
+
+/* Save button styling */
+.route-options-actions {
+	margin-top: 16px;
+}
+
+.route-options-save-btn {
+	width: 100%;
+	padding: 8px 12px;
+	background-color: var(--route-accent);
+	color: #ffffff;
+	border: none;
+	border-radius: var(--route-radius-md);
+	font-family: var(--route-font);
+	font-size: 0.85rem;
+	font-weight: 600;
+	cursor: pointer;
+	transition: background-color 0.15s ease;
+}
+
+.route-options-save-btn:hover {
+	opacity: 0.9;
+}

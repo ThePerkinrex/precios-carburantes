@@ -7,6 +7,7 @@ import {
 	waypointDivIcon,
 } from "./route.js";
 import { createStationsLayer } from "./stations.js";
+import { addRouteOptionsControl } from "./route_options.js";
 import { getLogos } from "./logos.js";
 
 async function load() {
@@ -22,10 +23,6 @@ async function load() {
 	}
 
 	let route_data = getRoute(hash, route_idx);
-	let price_data = getPricesOnRoute(hash, route_idx, {
-		max_distance: 2000.0,
-		order_by: "DistanceAlongRoute",
-	});
 	let logos = getLogos();
 	let state = getUserState();
 
@@ -82,23 +79,52 @@ async function load() {
 	};
 	info.addTo(map);
 
-	price_data = await price_data;
 	logos = await logos;
 	state = await state;
 
-	// Everything about rendering the stations themselves (markers, popups,
-	// clustering, and the brand layer control) lives in stations.js now.
-	// `data` is the full list of stations to render — filter it before
-	// calling this if you only want a subset shown.
-	const { markers, allMarkers } = createStationsLayer(
-		map,
-		price_data,
-		logos,
-		{
+	// Currently-rendered station layer, so we can tear it down and rebuild
+	// it whenever the "distance from route" setting changes.
+	let stationsLayer = null;
+	// Bumped on every reload so a slow, superseded fetch can't clobber a
+	// newer one (e.g. if the user drags the distance slider twice quickly).
+	let requestToken = 0;
+
+	// Car profile from the options control; kept around for whatever
+	// stop-suggestion logic ends up using it.
+	let carSettings = null;
+
+	async function reloadStations(maxDistance) {
+		const token = ++requestToken;
+		const price_data = await getPricesOnRoute(hash, route_idx, {
+			max_distance: maxDistance,
+			order_by: "DistanceAlongRoute",
+		});
+		if (token !== requestToken) return; // a newer request already landed
+
+		if (stationsLayer) {
+			map.removeLayer(stationsLayer.markers);
+			map.removeControl(stationsLayer.control);
+		}
+
+		// Everything about rendering the stations themselves (markers, popups,
+		// clustering, and the brand layer control) lives in stations.js.
+		stationsLayer = createStationsLayer(map, price_data, logos, {
 			filter: state.filter,
 			// buildPopupContent: myCustomPopupBuilder, // override to customize popup contents
+		});
+	}
+
+	addRouteOptionsControl(map, {
+		position: "topleft",
+		initialDistance: 2000,
+		onDistanceChange: (distance) => {
+			reloadStations(distance);
 		},
-	);
+		onCarChange: (car) => {
+			carSettings = car;
+		},
+	});
 }
 
 load();
+
