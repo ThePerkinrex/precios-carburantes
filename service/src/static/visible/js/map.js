@@ -9,6 +9,8 @@ let marker = undefined;
 const MAX_DATA_AGE_MS = 3 * 60 * 60 * 1000; // 3 hours
 let lastLoadTime = Date.now();
 
+const isAndroid = /Android/i.test(navigator.userAgent);
+
 function reloadIfStale() {
 	const age = Date.now() - lastLoadTime;
 	if (age > MAX_DATA_AGE_MS) {
@@ -225,17 +227,38 @@ async function load() {
 		}
 
 		// https://www.google.com/maps/search/?api=1&query=47.5951518%2C-122.3316393
-		const maps_url_params = new URLSearchParams({
+		const google_maps_url_params = new URLSearchParams({
 			api: "1",
 			query: `${eess.latitud},${eess.longitud}`,
 		});
-		const maps_url = `https://www.google.com/maps/search/?${maps_url_params}`;
-		const directions_params = new URLSearchParams({
-			api: "1",
-			destination: `${eess.latitud},${eess.longitud}`,
+		const google_maps_url = `https://www.google.com/maps/search/?${google_maps_url_params}`;
+		// https://waze.com/ul?ll=<lat>,<lng>
+		const waze_url_params = new URLSearchParams({
+			ll: `${eess.latitud},${eess.longitud}`,
 		});
+		const waze_url = `https://waze.com/ul?${waze_url_params}`;
+		
+		// https://maps.apple.com/?daddr=<lat>,<lng>
+		const apple_maps_url_params = new URLSearchParams({
+			daddr: `${eess.latitud},${eess.longitud}`,
+		});
+		const apple_maps_url = `https://maps.apple.com/?${apple_maps_url_params}`;
+		// const directions_params = new URLSearchParams({
+		// 	api: "1",
+		// 	destination: `${eess.latitud},${eess.longitud}`,
+		// });
 
-		const directions = `https://www.google.com/maps/dir/?${directions_params}`;
+		// const directions = `https://www.google.com/maps/dir/?${directions_params}`;
+
+		// 					<a href="${directions}" target="_blank" rel="noopener noreferrer"><div class="google-maps pill"><img src="/files/images/google_maps.svg" class="google-maps-logo"><span class="google-maps-text">Cómo llegar</span></div></a>
+
+		let location_pills = `
+		<a href="${google_maps_url}" target="_blank" rel="noopener noreferrer"><div class="google-maps map-link pill"><img src="/files/images/google_maps.svg" class="map-logo"><span class="map-text">Google Maps</span></div></a>
+		<a href="${waze_url}" target="_blank" rel="noopener noreferrer"><div class="waze map-link pill"><img src="/files/images/waze.svg" class="map-logo"><span class="map-text">Waze</span></div></a>
+		<a href="${apple_maps_url}" target="_blank" rel="noopener noreferrer"><div class="apple-maps map-link pill"><img src="/files/images/apple_maps.png" class="map-logo"><span class="map-text">Apple Maps</span></div></a>
+		`;
+
+
 
 		const marker = L.marker([eess.latitud, eess.longitud], {
 			icon: icon,
@@ -249,8 +272,7 @@ async function load() {
 					<i>${eess.provincia}</i><br>
 					Horario: ${eess.horario}<br>
 					${pill}<br>
-					<a href="${maps_url}" target="_blank" rel="noopener noreferrer"><div class="google-maps pill"><img src="/files/images/google_maps.svg" class="google-maps-logo"><span class="google-maps-text">Dónde está</span></div></a>
-					<a href="${directions}" target="_blank" rel="noopener noreferrer"><div class="google-maps pill"><img src="/files/images/google_maps.svg" class="google-maps-logo"><span class="google-maps-text">Cómo llegar</span></div></a>
+					${location_pills}
 				</div>
 
 				<div class="price-label">

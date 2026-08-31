@@ -271,7 +271,12 @@ body {
 	border-bottom: none;
 }
 
-.google-maps {
+.google-maps.map-link {
+	background: #ebdaa4;
+	color: black;
+}
+
+.map-link {
 	display: inline-flex;
 	align-items: center;
 	gap: 1em;
@@ -280,12 +285,12 @@ body {
 	font-weight: bold;
 }
 
-.google-maps-logo {
+.map-logo {
 	height: 1.2em;
 	width: auto;
 }
 
-.google-maps-text {
+.map-text {
 	font-size: 1em;
 	line-height: 1;
 }
