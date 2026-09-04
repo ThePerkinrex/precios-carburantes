@@ -121,11 +121,14 @@ async function drawHistoryChart(eess) {
 	});
 }
 
-// ---------------------------------------------------------------------------
-// Marker icon (the little price-tag icon shown on the map, not the popup)
-// ---------------------------------------------------------------------------
+export function sortLogos(logos) {
+	return Object.keys(logos).sort((a, b) => b.length - a.length);
+}
 
-function buildMarkerIcon(eess, logos, logos_sorted) {
+export function getLogoKey(eess, logos, logos_sorted = undefined) {
+	if (logos_sorted === undefined) {
+		logos_sorted = sortLogos(logos);
+	}
 	let logo = `<div class="logo"><b>${eess.rotulo}</b></div>`;
 	let logoKey = "other";
 	const lower_eess = eess.rotulo.toLowerCase();
@@ -140,6 +143,18 @@ function buildMarkerIcon(eess, logos, logos_sorted) {
 			break;
 		}
 	}
+	return {
+		logo,
+		logoKey
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Marker icon (the little price-tag icon shown on the map, not the popup)
+// ---------------------------------------------------------------------------
+
+function buildMarkerIcon(eess, logos, logos_sorted) {
+	let {logo, logoKey} = getLogoKey(eess, logos, logos_sorted);
 
 	let gasolina_short =
 		eess.gasolina_95 != null
@@ -244,6 +259,7 @@ export function createStationsLayer(
 		filter = new Set([...Object.keys(logos), "other"]),
 		buildPopupContent = buildDefaultPopupContent,
 		onFilterChange = updateFilter,
+		blacklist = null
 	} = {},
 ) {
 	const markers = L.markerClusterGroup();
@@ -253,7 +269,7 @@ export function createStationsLayer(
 	let subgroupLayers = Object.fromEntries(Object.keys(logos).map((k) => [k, []]));
 	subgroupLayers["other"] = [];
 
-	const logos_sorted = Object.keys(logos).sort((a, b) => b.length - a.length);
+	const logos_sorted = sortLogos(logos);
 	const allMarkers = [];
 
 	for (let eess of stations) {
