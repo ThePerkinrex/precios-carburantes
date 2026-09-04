@@ -28,17 +28,14 @@
 	padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
 	font-family: var(--route-font);
 	color: var(--route-text);
-	/* Smooth transition for both opening and closing/minimizing states */
 	transition: max-height 0.25s ease-in-out, opacity 0.2s ease-in-out, padding 0.25s ease-in-out, box-shadow 0.25s ease-in-out;
 }
 
-/* Minimized state: smooth collapse downwards to header bar height */
 .trip-alternatives-panel.minimized {
 	max-height: 48px;
 	overflow: hidden;
 }
 
-/* Keep internal content hidden when fully collapsed to avoid layout jumps */
 .trip-alternatives-panel.minimized .trip-plans-list {
 	opacity: 0;
 	pointer-events: none;
@@ -79,7 +76,6 @@
 	transition: transform 0.25s ease-in-out;
 }
 
-/* Arrow flips smoothly during minimization/expansion */
 .trip-alternatives-panel.minimized .trip-panel-toggle {
 	transform: rotate(180deg);
 }
@@ -116,6 +112,22 @@
 	padding: 6px 8px;
 	border-radius: 6px;
 	border: 1px solid var(--route-border);
+	transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+
+/* Hover and active states for clickable gas station stops */
+.trip-stop-item.clickable {
+	cursor: pointer;
+}
+
+.trip-stop-item.clickable:hover {
+	background-color: #e0e7ff;
+	border-color: var(--route-accent);
+}
+
+.trip-stop-item.clickable:active {
+	background-color: #c7d2fe;
+	transform: scale(0.99);
 }
 
 .trip-stop-station {

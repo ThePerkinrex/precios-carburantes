@@ -121,7 +121,26 @@ async function load() {
 		reloadStops();
 	});
 
-	const alternativesPanel = createTripAlternativesPanel();
+	const alternativesPanel = createTripAlternativesPanel({
+		onStationClick: (station) => {
+			if (!stationsLayer || !stationsLayer.markersById) return;
+
+			const marker = stationsLayer.markersById.get(station.id);
+			if (marker) {
+				// Zoom and pan to the station marker
+				map.setView([station.latitud, station.longitud], 15);
+
+				// If using Leaflet MarkerCluster, ensure the cluster is unspidered before opening popup
+				if (stationsLayer.markers && typeof stationsLayer.markers.zoomToShowLayer === "function") {
+					stationsLayer.markers.zoomToShowLayer(marker, () => {
+						marker.openPopup();
+					});
+				} else {
+					marker.openPopup();
+				}
+			}
+		},
+	});
 
 	async function reloadStations(maxDistance) {
 		const token = ++requestToken;
