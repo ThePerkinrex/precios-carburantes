@@ -1,0 +1,170 @@
+:root {
+	--route-accent: #2563eb;
+	--route-surface: #ffffff;
+	--route-surface-muted: #f3f4f6;
+	--route-border: #e5e7eb;
+	--route-text: #1f2937;
+	--route-text-muted: #6b7280;
+	--route-danger: #dc2626;
+	--route-success: #16a34a;
+	--route-radius-lg: 16px;
+	--route-radius-md: 10px;
+	--route-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+	--route-font: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.trip-alternatives-panel {
+	position: fixed;
+	right: 0;
+	left: 0;
+	bottom: 0;
+	z-index: 1000;
+	max-height: 50vh;
+	display: flex;
+	flex-direction: column;
+	background: var(--route-surface);
+	border-radius: var(--route-radius-lg) var(--route-radius-lg) 0 0;
+	box-shadow: 0 -2px 16px rgba(0, 0, 0, 0.2);
+	padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+	font-family: var(--route-font);
+	color: var(--route-text);
+	/* Smooth transition for both opening and closing/minimizing states */
+	transition: max-height 0.25s ease-in-out, opacity 0.2s ease-in-out, padding 0.25s ease-in-out, box-shadow 0.25s ease-in-out;
+}
+
+/* Minimized state: smooth collapse downwards to header bar height */
+.trip-alternatives-panel.minimized {
+	max-height: 48px;
+	overflow: hidden;
+}
+
+/* Keep internal content hidden when fully collapsed to avoid layout jumps */
+.trip-alternatives-panel.minimized .trip-plans-list {
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 0.15s ease-in-out;
+}
+
+.trip-plans-list {
+	opacity: 1;
+	transition: opacity 0.2s ease-in-out 0.05s;
+	overflow-y: auto;
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	padding-top: 8px;
+	padding-right: 4px;
+}
+
+.trip-panel-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	font-weight: 600;
+	font-size: 1.05rem;
+	padding-bottom: 6px;
+	border-bottom: 1px solid var(--route-border);
+	cursor: pointer;
+	user-select: none;
+}
+
+.trip-panel-toggle {
+	border: none;
+	background: transparent;
+	font-size: 1rem;
+	line-height: 1;
+	color: var(--route-text-muted);
+	cursor: pointer;
+	padding: 4px 8px;
+	transition: transform 0.25s ease-in-out;
+}
+
+/* Arrow flips smoothly during minimization/expansion */
+.trip-alternatives-panel.minimized .trip-panel-toggle {
+	transform: rotate(180deg);
+}
+
+.trip-plan-card {
+	border: 1px solid var(--route-border);
+	border-radius: var(--route-radius-md);
+	padding: 10px 12px;
+	background: var(--route-surface-muted);
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.trip-plan-title {
+	font-weight: 700;
+	font-size: 0.95rem;
+	color: var(--route-accent);
+}
+
+.trip-plan-stops {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.trip-stop-item {
+	font-size: 0.85rem;
+	color: var(--route-text);
+	background: var(--route-surface);
+	padding: 6px 8px;
+	border-radius: 6px;
+	border: 1px solid var(--route-border);
+}
+
+.trip-stop-station {
+	font-weight: 600;
+}
+
+.trip-stop-details {
+	font-size: 0.8rem;
+	color: var(--route-text-muted);
+	margin-top: 2px;
+}
+
+.trip-plan-summary {
+	font-size: 0.85rem;
+	font-weight: 600;
+	border-top: 1px dashed var(--route-border);
+	padding-top: 6px;
+	margin-top: 2px;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.trip-plan-total {
+	color: var(--route-success);
+}
+
+.trip-empty-msg {
+	font-size: 0.9rem;
+	color: var(--route-text-muted);
+	padding: 12px 0;
+	text-align: center;
+}
+
+/* Desktop layout */
+@media (min-width: 640px) {
+	.trip-alternatives-panel {
+		left: auto;
+		right: 16px;
+		bottom: 20px;
+		top: auto;
+		width: 320px;
+		max-height: calc(100vh - 100px);
+		border-radius: var(--route-radius-lg);
+		box-shadow: var(--route-shadow);
+		border: 1px solid var(--route-border);
+	}
+
+	.trip-alternatives-panel.minimized {
+		max-height: 48px;
+	}
+}

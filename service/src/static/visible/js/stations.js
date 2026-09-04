@@ -368,7 +368,7 @@ export class StationBlacklist {
  *        called whenever a station is added to/removed from the blacklist via
  *        the popup button. No-op by default; use it to persist the blacklist.
  *
- * @returns {{markers: L.MarkerClusterGroup, control: L.Control.Layers, subgroups: Array, allMarkers: L.Marker[]}}
+ * @returns {{markers: L.MarkerClusterGroup, control: L.Control.Layers, subgroups: Array, allMarkers: L.Marker[], markersById: Map<number, L.Marker>}}
  */
 export function createStationsLayer(
 	map,
@@ -391,6 +391,7 @@ export function createStationsLayer(
 
 	const logos_sorted = sortLogos(logos);
 	const allMarkers = [];
+	const markersById = new Map();
 
 	for (let eess of stations) {
 		const { icon, logoKey } = buildMarkerIcon(eess, logos, logos_sorted, blacklist);
@@ -406,6 +407,7 @@ export function createStationsLayer(
 		marker.eess = eess; // keep raw data around for sorting/displaying elsewhere
 		allMarkers.push(marker);
 		subgroupLayers[logoKey].push(marker);
+		markersById.set(eess.id, marker)
 	}
 
 	const subgroups = Object.entries(subgroupLayers)
@@ -433,6 +435,6 @@ export function createStationsLayer(
 	control.addTo(map);
 	addSelectAllButtons(control, subgroups.map((x) => x[1]), map);
 
-	return { markers, control, subgroups, allMarkers };
+	return { markers, control, subgroups, allMarkers, markersById };
 }
 

@@ -20,6 +20,7 @@ import {
 import { addRouteOptionsControl } from "./route_options.js";
 import { getLogos } from "./logos.js";
 import { mapFilterToArray } from "./filter.js";
+import { createTripAlternativesPanel } from "./trip_alternatives.js";
 
 // Radius (in meters, measured along the route from the destination) used to
 // estimate the fuel price at arrival: we average the price of every
@@ -119,6 +120,8 @@ async function load() {
 	blacklist.on("change", (station, x) => {
 		reloadStops();
 	});
+
+	const alternativesPanel = createTripAlternativesPanel();
 
 	async function reloadStations(maxDistance) {
 		const token = ++requestToken;
@@ -229,7 +232,10 @@ async function load() {
 			totalDistanceM,
 			priceOf,
 		);
-		console.log("Estimated destination price per liter:", destPricePerLiter);
+		console.log(
+			"Estimated destination price per liter:",
+			destPricePerLiter,
+		);
 
 		const nodes = [
 			{ pos: 0, station: null, isStart: true },
@@ -296,8 +302,7 @@ async function load() {
 					// This is what lets a cheap destination favor arriving low
 					// (skip a stop) and an expensive one favor arriving full.
 					stationCost =
-						Math.max(0, tankSize - arrivalFuel) *
-						destPricePerLiter;
+						Math.max(0, tankSize - arrivalFuel) * destPricePerLiter;
 				}
 
 				// Fan out every candidate at i into a new candidate at j.
@@ -383,38 +388,41 @@ async function load() {
 	function renderStopsResult(plans) {
 		if (!plans.length) {
 			console.log("Sin paradas necesarias o sin plan factible.");
-			return;
-		}
-		plans.forEach((plan, planIdx) => {
-			// totalCost (used by the DP for ranking) bundles on-route fuel with
-			// the estimated destination top-up; split it back out here so the
-			// two are printed separately.
-			const onTripCost = plan.totalCost - plan.destRefillCost;
+		} else {
+			plans.forEach((plan, planIdx) => {
+				// totalCost (used by the DP for ranking) bundles on-route fuel with
+				// the estimated destination top-up; split it back out here so the
+				// two are printed separately.
+				const onTripCost = plan.totalCost - plan.destRefillCost;
 
-			console.log(
-				`--- Opción ${planIdx + 1}: ${plan.totalStops} parada(s) ---`,
-			);
-			plan.stops.forEach((s, i) => {
-				const km = (s.station.distance_along_route / 1000).toFixed(1);
 				console.log(
-					`  ${i + 1}. ${s.station.rotulo} (${s.station.municipio}) — km ${km} — ` +
-						`llega con ${s.arrivalFuel.toFixed(1)} L, reposta ${s.litersBought.toFixed(1)} L ` +
-						`a ${s.pricePerLiter} €/L = ${s.cost.toFixed(2)} €`,
+					`--- Opción ${planIdx + 1}: ${plan.totalStops} parada(s) ---`,
+				);
+				plan.stops.forEach((s, i) => {
+					const km = (s.station.distance_along_route / 1000).toFixed(
+						1,
+					);
+					console.log(
+						`  ${i + 1}. ${s.station.rotulo} (${s.station.municipio}) — km ${km} — ` +
+							`llega con ${s.arrivalFuel.toFixed(1)} L, reposta ${s.litersBought.toFixed(1)} L ` +
+							`a ${s.pricePerLiter} €/L = ${s.cost.toFixed(2)} €`,
+					);
+				});
+				console.log(`  Coste en ruta: ${onTripCost.toFixed(2)} €`);
+				console.log(
+					`  Llegada al destino con ${plan.finalArrivalFuel.toFixed(1)} L restantes` +
+						(plan.destPricePerLiter != null
+							? ` — repostar al llegar (${plan.destRefillLiters.toFixed(1)} L a ${plan.destPricePerLiter.toFixed(3)} €/L): ${plan.destRefillCost.toFixed(2)} €`
+							: " — sin precio estimado de destino"),
+				);
+				console.log(
+					`  Coste total estimado (ruta + destino): ${plan.totalCost.toFixed(2)} €`,
 				);
 			});
-			console.log(
-				`  Coste en ruta: ${onTripCost.toFixed(2)} €`,
-			);
-			console.log(
-				`  Llegada al destino con ${plan.finalArrivalFuel.toFixed(1)} L restantes` +
-					(plan.destPricePerLiter != null
-						? ` — repostar al llegar (${plan.destRefillLiters.toFixed(1)} L a ${plan.destPricePerLiter.toFixed(3)} €/L): ${plan.destRefillCost.toFixed(2)} €`
-						: " — sin precio estimado de destino"),
-			);
-			console.log(
-				`  Coste total estimado (ruta + destino): ${plan.totalCost.toFixed(2)} €`,
-			);
-		});
+		}
+
+		// Render plans in the UI panel
+		alternativesPanel.update(plans);
 	}
 
 	addRouteOptionsControl(map, {
