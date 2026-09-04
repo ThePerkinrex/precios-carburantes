@@ -21,6 +21,12 @@ import { addRouteOptionsControl } from "./route_options.js";
 import { getLogos } from "./logos.js";
 import { mapFilterToArray } from "./filter.js";
 
+// Radius (in meters, measured along the route from the destination) used to
+// estimate the fuel price at arrival: we average the price of every
+// (filtered) station within this range of the final waypoint. If none are
+// found, we fall back to the single closest station to the destination.
+const DEST_PRICE_RADIUS_M = 10000;
+
 async function load() {
 	const url = new URL(location.href);
 	const path = url.pathname.split("/");
@@ -141,7 +147,42 @@ async function load() {
 		});
 	}
 
-	async function reloadStops(k = 3) {
+	// Estimates what it would cost to fill up right at the destination, so
+	// the trip planner can weigh "buy fuel along the way" against "top up
+	// when I get there". Averages the price of every station within
+	// DEST_PRICE_RADIUS_M (measured along the route from the destination);
+	// if there's nothing that close, falls back to the closest priced
+	// station to the destination. Returns null if no station has a usable
+	// price at all.
+	function estimateDestinationPrice(stations, totalDistanceM, priceOf) {
+		const priced = [];
+		for (const s of stations) {
+			const price = priceOf(s);
+			if (price == null) continue;
+			priced.push({
+				price,
+				distToDest: totalDistanceM - s.distance_along_route,
+			});
+		}
+		if (!priced.length) return null;
+
+		const nearby = priced.filter(
+			({ distToDest }) => distToDest <= DEST_PRICE_RADIUS_M,
+		);
+		if (nearby.length) {
+			const sum = nearby.reduce((acc, { price }) => acc + price, 0);
+			return sum / nearby.length;
+		}
+
+		// Nothing within range: fall back to the single closest station.
+		let closest = priced[0];
+		for (const cand of priced) {
+			if (cand.distToDest < closest.distToDest) closest = cand;
+		}
+		return closest.price;
+	}
+
+	async function reloadStops(k = 5) {
 		if (!carSettings || !price_data.length) {
 			renderStopsResult([]);
 			return;
@@ -177,6 +218,19 @@ async function load() {
 			.sort((a, b) => a.distance_along_route - b.distance_along_route);
 		console.log(stations);
 
+		const priceOf = (station) =>
+			fuel === "gasolina" ? station.gasolina_95 : station.gasoleo_a;
+
+		// What it would cost to fill the remaining tank once we arrive, based
+		// on the (filtered) stations near the destination. null means we have
+		// no basis for an estimate, in which case arrival cost is ignored.
+		const destPricePerLiter = estimateDestinationPrice(
+			stations,
+			totalDistanceM,
+			priceOf,
+		);
+		console.log("Estimated destination price per liter:", destPricePerLiter);
+
 		const nodes = [
 			{ pos: 0, station: null, isStart: true },
 			...stations.map((s) => ({
@@ -188,8 +242,6 @@ async function load() {
 		const endIdx = nodes.length - 1;
 
 		const departFuel = (i) => (nodes[i].isStart ? initialFuel : tankSize);
-		const priceOf = (station) =>
-			fuel === "gasolina" ? station.gasolina_95 : station.gasoleo_a;
 
 		// dp[j] is now an ARRAY of up to k candidates, sorted by (stops, cost).
 		// Each candidate: { stops, cost, prev, prevCandIdx, fuelOnArrival, pathKey }
@@ -238,6 +290,14 @@ async function load() {
 					if (pricePerLiter == null) continue;
 					stationCost =
 						Math.max(0, tankSize - arrivalFuel) * pricePerLiter;
+				} else if (destPricePerLiter != null) {
+					// Arriving with a less-than-full tank isn't free: charge the
+					// estimated cost of topping it back up at the destination.
+					// This is what lets a cheap destination favor arriving low
+					// (skip a stop) and an expensive one favor arriving full.
+					stationCost =
+						Math.max(0, tankSize - arrivalFuel) *
+						destPricePerLiter;
 				}
 
 				// Fan out every candidate at i into a new candidate at j.
@@ -295,11 +355,25 @@ async function load() {
 					};
 				});
 
+			// Broken out separately from totalCost (which already includes it)
+			// purely so the UI can show "X on the road + Y to top up on arrival".
+			const destRefillLiters = Math.max(
+				0,
+				tankSize - finalCand.fuelOnArrival,
+			);
+			const destRefillCost =
+				destPricePerLiter != null
+					? destRefillLiters * destPricePerLiter
+					: 0;
+
 			return {
 				stops,
 				totalCost: finalCand.cost,
 				totalStops: finalCand.stops,
 				finalArrivalFuel: finalCand.fuelOnArrival, // fuel left in tank at destination
+				destPricePerLiter,
+				destRefillLiters,
+				destRefillCost,
 			};
 		});
 
@@ -312,8 +386,13 @@ async function load() {
 			return;
 		}
 		plans.forEach((plan, planIdx) => {
+			// totalCost (used by the DP for ranking) bundles on-route fuel with
+			// the estimated destination top-up; split it back out here so the
+			// two are printed separately.
+			const onTripCost = plan.totalCost - plan.destRefillCost;
+
 			console.log(
-				`--- Opción ${planIdx + 1}: ${plan.totalStops} parada(s), coste total: ${plan.totalCost.toFixed(2)} € ---`,
+				`--- Opción ${planIdx + 1}: ${plan.totalStops} parada(s) ---`,
 			);
 			plan.stops.forEach((s, i) => {
 				const km = (s.station.distance_along_route / 1000).toFixed(1);
@@ -324,7 +403,16 @@ async function load() {
 				);
 			});
 			console.log(
-				`  Llegada al destino con ${plan.finalArrivalFuel.toFixed(1)} L restantes`,
+				`  Coste en ruta: ${onTripCost.toFixed(2)} €`,
+			);
+			console.log(
+				`  Llegada al destino con ${plan.finalArrivalFuel.toFixed(1)} L restantes` +
+					(plan.destPricePerLiter != null
+						? ` — repostar al llegar (${plan.destRefillLiters.toFixed(1)} L a ${plan.destPricePerLiter.toFixed(3)} €/L): ${plan.destRefillCost.toFixed(2)} €`
+						: " — sin precio estimado de destino"),
+			);
+			console.log(
+				`  Coste total estimado (ruta + destino): ${plan.totalCost.toFixed(2)} €`,
 			);
 		});
 	}
