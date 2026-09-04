@@ -184,3 +184,36 @@
 	font-size: 1em;
 	line-height: 1;
 }
+
+/* ---------- Blacklist ---------- */
+.blacklist-toggle {
+	cursor: pointer;
+	font-weight: bold;
+	line-height: 1;
+}
+
+.blacklist-toggle.blacklist {
+	background: var(--route-danger);
+	color: #ffffff;
+}
+
+.blacklist-toggle.unblacklist {
+	background: var(--route-success);
+	color: #ffffff;
+}
+
+.blacklist-toggle:hover {
+	filter: brightness(0.9);
+}
+
+/* Grayed-out marker icon on the map */
+.price-label.icon.blacklisted {
+	opacity: 0.45;
+	filter: grayscale(1);
+}
+
+/* Grayed-out popup */
+.gasolinera.blacklisted {
+	opacity: 0.55;
+	filter: grayscale(1);
+}

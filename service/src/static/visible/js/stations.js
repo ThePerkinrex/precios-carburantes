@@ -11,6 +11,19 @@ function formatPrice(price) {
 // ---------------------------------------------------------------------------
 
 /**
+ * Renders the X / tick button shown in a station popup so the user can add
+ * or remove that station from the blacklist. Returns "" when no blacklist
+ * is in use (feature is fully optional).
+ */
+function buildBlacklistToggle(eess, blacklist) {
+	if (!blacklist) return "";
+	const blacklisted = blacklist.has(eess.id);
+	return blacklisted
+		? `<button type="button" class="blacklist-toggle pill unblacklist" title="Quitar de la lista negra">&#10003;</button>`
+		: `<button type="button" class="blacklist-toggle pill blacklist" title="Añadir a la lista negra">&#10005;</button>`;
+}
+
+/**
  * Default popup body for a gas station marker. Exported so callers can
  * reuse/wrap it (e.g. call this and append extra sections) instead of
  * rewriting everything from scratch.
@@ -18,7 +31,10 @@ function formatPrice(price) {
  * @param {object} eess station record, same shape as returned by /api/prices
  * @returns {string} HTML for the popup contents
  */
-export function buildDefaultPopupContent(eess) {
+export function buildDefaultPopupContent(eess, blacklist = null) {
+	const blacklisted = blacklist ? blacklist.has(eess.id) : false;
+	const blacklistToggle = buildBlacklistToggle(eess, blacklist);
+
 	let gasolina_long =
 		eess.gasolina_95 != null
 			? `<div class="gasolina">Gasolina 95: <b>${formatPrice(eess.gasolina_95)}€</b></div>`
@@ -61,14 +77,14 @@ export function buildDefaultPopupContent(eess) {
 	`;
 
 	return `
-	<div class="gasolinera" id="gasolinera-${eess.id}">
+	<div class="gasolinera${blacklisted ? " blacklisted" : ""}" id="gasolinera-${eess.id}">
 		<div class="rotulo"><b>${eess.rotulo}</b></div>
 		<div class="direccion">
 			${eess.direccion}, margen ${eess.margen}<br>
 			${eess.localidad}, ${eess.municipio} ${eess.cp}<br>
 			<i>${eess.provincia}</i><br>
 			Horario: ${eess.horario}<br>
-			${pill}<br>
+			${pill}${blacklistToggle}<br>
 			${location_pills}
 		</div>
 
@@ -121,6 +137,49 @@ async function drawHistoryChart(eess) {
 	});
 }
 
+/**
+ * Wires up the X/tick button rendered by buildBlacklistToggle inside a
+ * currently-open popup. No-ops if there's no blacklist in use, or if the
+ * popup doesn't contain a .blacklist-toggle button (so custom popup
+ * builders are free to drop the feature). Updates the popup's gray-out
+ * styling and the marker's map icon in place, so the popup doesn't need to
+ * be closed/reopened.
+ */
+function attachBlacklistToggle(eess, blacklist, marker, logos, logos_sorted, onBlacklistChange) {
+	if (!blacklist) return;
+
+	const container = document.getElementById(`gasolinera-${eess.id}`);
+	const btn = container?.querySelector(".blacklist-toggle");
+	if (!container || !btn) return;
+
+	L.DomEvent.on(btn, "click", (ev) => {
+		L.DomEvent.stop(ev);
+
+		const wasBlacklisted = blacklist.has(eess.id);
+		if (wasBlacklisted) {
+			blacklist.delete(eess.id);
+		} else {
+			blacklist.add(eess.id);
+		}
+		const isBlacklisted = !wasBlacklisted;
+
+		// Gray out (or restore) the popup itself.
+		container.classList.toggle("blacklisted", isBlacklisted);
+
+		// Flip the button between X (add) and tick (remove).
+		btn.classList.toggle("blacklist", !isBlacklisted);
+		btn.classList.toggle("unblacklist", isBlacklisted);
+		btn.innerHTML = isBlacklisted ? "&#10003;" : "&#10005;";
+		btn.title = isBlacklisted ? "Quitar de la lista negra" : "Añadir a la lista negra";
+
+		// Gray out (or restore) the marker icon shown on the map.
+		const { icon } = buildMarkerIcon(eess, logos, logos_sorted, blacklist);
+		marker.setIcon(icon);
+
+		onBlacklistChange?.(eess, isBlacklisted, blacklist);
+	});
+}
+
 export function sortLogos(logos) {
 	return Object.keys(logos).sort((a, b) => b.length - a.length);
 }
@@ -153,7 +212,7 @@ export function getLogoKey(eess, logos, logos_sorted = undefined) {
 // Marker icon (the little price-tag icon shown on the map, not the popup)
 // ---------------------------------------------------------------------------
 
-function buildMarkerIcon(eess, logos, logos_sorted) {
+function buildMarkerIcon(eess, logos, logos_sorted, blacklist = null) {
 	let {logo, logoKey} = getLogoKey(eess, logos, logos_sorted);
 
 	let gasolina_short =
@@ -165,9 +224,11 @@ function buildMarkerIcon(eess, logos, logos_sorted) {
 			? `<div class="gasoleo">${formatPrice(eess.gasoleo_a)}€</div>`
 			: "";
 
+	const blacklisted = blacklist ? blacklist.has(eess.id) : false;
+
 	const icon = L.divIcon({
 		className: "custom-div-icon",
-		html: `	<div class="price-label icon">
+		html: `	<div class="price-label icon${blacklisted ? " blacklisted" : ""}">
 					${logo}
 					${gasoleo_short}
 					${gasolina_short}
@@ -228,6 +289,56 @@ function addSelectAllButtons(layerControl, overlays, map) {
 	});
 }
 
+export class StationBlacklist {
+	constructor(blacklist = []) {
+		this.blacklist = new Set(blacklist);
+		this.event_listeners = {
+			change: new Set(),
+			add: new Set(),
+			delete: new Set(),
+		};
+	}
+
+	on(event, handler) {
+		if (event in this.event_listeners) {
+			this.event_listeners[event].add(handler);
+		}else{
+			throw new Error(event + " is not a valid event");
+		}
+	}
+
+	off(event, handler) {
+		if (event in this.event_listeners) {
+			this.event_listeners[event].delete(handler);
+		}else{
+			throw new Error(event + " is not a valid event");
+		}
+	}
+
+	#handle(event, ...args) {
+		for(const listeners of this.event_listeners[event]) {
+			listeners(...args)
+		}
+	}
+
+	add(station) {
+		this.blacklist.add(station)
+		this.#handle('add', station)
+		this.#handle('change', station, 'add')
+	}
+
+	delete(station) {
+		const res = this.blacklist.delete(station)
+		this.#handle('delete', station)
+		this.#handle('change', station, 'delete')
+		return res;
+	}
+
+	has(station) {
+		return this.blacklist.has(station)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Public entry point
 // ---------------------------------------------------------------------------
@@ -248,6 +359,14 @@ function addSelectAllButtons(layerControl, overlays, map) {
  * @param {(filter: Set<string>) => any} [options.onFilterChange]
  *        called with the updated brand-filter Set whenever the user toggles an
  *        overlay on/off. Defaults to persisting it via api.js's updateFilter.
+ * @param {StationBlacklist} [options.blacklist]
+ *        if provided (an instance of StationBlacklist), every station popup gets
+ *        an X/tick button to add/remove that station from the blacklist, and
+ *        blacklisted stations (both their map icon and their popup) render
+ *        grayed out. Left as null, the feature is fully disabled.
+ * @param {(eess: object, blacklisted: boolean, blacklist: StationBlacklist) => any} [options.onBlacklistChange]
+ *        called whenever a station is added to/removed from the blacklist via
+ *        the popup button. No-op by default; use it to persist the blacklist.
  *
  * @returns {{markers: L.MarkerClusterGroup, control: L.Control.Layers, subgroups: Array, allMarkers: L.Marker[]}}
  */
@@ -259,7 +378,8 @@ export function createStationsLayer(
 		filter = new Set([...Object.keys(logos), "other"]),
 		buildPopupContent = buildDefaultPopupContent,
 		onFilterChange = updateFilter,
-		blacklist = null
+		blacklist = null,
+		onBlacklistChange = null,
 	} = {},
 ) {
 	const markers = L.markerClusterGroup();
@@ -273,12 +393,15 @@ export function createStationsLayer(
 	const allMarkers = [];
 
 	for (let eess of stations) {
-		const { icon, logoKey } = buildMarkerIcon(eess, logos, logos_sorted);
+		const { icon, logoKey } = buildMarkerIcon(eess, logos, logos_sorted, blacklist);
 
 		const marker = L.marker([eess.latitud, eess.longitud], { icon }).bindPopup(
-			() => buildPopupContent(eess),
+			() => buildPopupContent(eess, blacklist),
 		);
-		marker.on("popupopen", () => drawHistoryChart(eess));
+		marker.on("popupopen", () => {
+			drawHistoryChart(eess);
+			attachBlacklistToggle(eess, blacklist, marker, logos, logos_sorted, onBlacklistChange);
+		});
 
 		marker.eess = eess; // keep raw data around for sorting/displaying elsewhere
 		allMarkers.push(marker);

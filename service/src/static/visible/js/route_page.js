@@ -11,7 +11,12 @@ import {
 	coordToLatLng,
 	waypointDivIcon,
 } from "./route.js";
-import { createStationsLayer, getLogoKey, sortLogos } from "./stations.js";
+import {
+	createStationsLayer,
+	getLogoKey,
+	sortLogos,
+	StationBlacklist,
+} from "./stations.js";
 import { addRouteOptionsControl } from "./route_options.js";
 import { getLogos } from "./logos.js";
 import { mapFilterToArray } from "./filter.js";
@@ -103,6 +108,11 @@ async function load() {
 	let price_data = [];
 
 	let station_filter = state.filter;
+	const blacklist = new StationBlacklist(); // TODO base blacklist for the trip
+
+	blacklist.on("change", (station, x) => {
+		reloadStops();
+	});
 
 	async function reloadStations(maxDistance) {
 		const token = ++requestToken;
@@ -126,6 +136,7 @@ async function load() {
 				updateFilter(filter);
 				reloadStops();
 			},
+			blacklist,
 			// buildPopupContent: myCustomPopupBuilder, // override to customize popup contents
 		});
 	}
@@ -148,7 +159,7 @@ async function load() {
 		// this, the DP is free to minimize purchased liters by coasting in on a
 		// near-empty tank after one early cheap fill, which isn't realistic.
 		const MIN_ARRIVAL_FRACTION = 3 / 5;
-		const minFinalFuel = 0;//tankSize * MIN_ARRIVAL_FRACTION;
+		const minFinalFuel = 0; //tankSize * MIN_ARRIVAL_FRACTION;
 
 		const litersPerMeter = consumption / 100.0 / 1000.0;
 		const totalDistanceM = route.distance; // meters
@@ -157,12 +168,14 @@ async function load() {
 		const stations = [...price_data]
 			.filter(
 				(s) =>
-					Number.isFinite(s.distance_along_route) &&
 					station_filter.has(
 						getLogoKey(s, logos, logos_sorted).logoKey,
-					),
+					) &&
+					!blacklist.has(s.id) &&
+					Number.isFinite(s.distance_along_route),
 			)
 			.sort((a, b) => a.distance_along_route - b.distance_along_route);
+		console.log(stations);
 
 		const nodes = [
 			{ pos: 0, station: null, isStart: true },
