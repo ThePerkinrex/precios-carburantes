@@ -30,6 +30,7 @@ form_urlencoded = "1.2.2"
 geo = "0.33.1"
 rayon = "1.12.0"
 rstar = "0.13.0"
+rcgen = "0.14.10"
 
 [features]
 include-static = ["dep:include_dir"]

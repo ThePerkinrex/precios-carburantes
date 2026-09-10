@@ -26,6 +26,7 @@ mod auth;
 mod config;
 mod error;
 mod files;
+mod certs;
 
 // fn wants_html(headers: &HeaderMap) -> bool {
 //     debug!("WANTS HTML. Accept: {:?}", headers.get(header::ACCEPT));

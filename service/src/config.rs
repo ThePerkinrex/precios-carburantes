@@ -1,4 +1,4 @@
-use std::{borrow::Cow, net::SocketAddr};
+use std::{borrow::Cow, net::SocketAddr, path::PathBuf};
 
 use serde::Deserialize;
 
@@ -25,8 +25,32 @@ pub struct DevConfig {
     pub roles: Vec<String>,
 }
 
+fn ca_default() -> PathBuf {
+    PathBuf::from("certs/CA")
+}
+
+fn user_certs_default() -> PathBuf {
+    PathBuf::from("certs/users")
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct PemConfig {
+    #[serde(default = "ca_default")]
+    pub ca: PathBuf,
+    #[serde(default = "user_certs_default")]
+    pub user_certs: PathBuf
+}
+
+impl Default for PemConfig {
+    fn default() -> Self {
+        Self { ca: ca_default(), user_certs: user_certs_default() }
+    }
+}
+
 #[derive(Debug, Deserialize, Clone)]
 pub struct Config {
     pub addr: SocketAddrs,
     pub dev: Option<DevConfig>,
+    #[serde(default)]
+    pub pem: PemConfig
 }
