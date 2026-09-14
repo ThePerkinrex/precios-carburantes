@@ -33,17 +33,20 @@ fn user_certs_default() -> PathBuf {
     PathBuf::from("certs/users")
 }
 
+
 #[derive(Debug, Deserialize, Clone)]
 pub struct CertConfig {
     #[serde(default = "ca_default")]
     pub ca: PathBuf,
     #[serde(default = "user_certs_default")]
-    pub user_certs: PathBuf
+    pub user_certs: PathBuf,
+    #[serde(default)]
+    pub reload_nginx: bool
 }
 
 impl Default for CertConfig {
     fn default() -> Self {
-        Self { ca: ca_default(), user_certs: user_certs_default() }
+        Self { ca: ca_default(), user_certs: user_certs_default(), reload_nginx: Default::default() }
     }
 }
 
