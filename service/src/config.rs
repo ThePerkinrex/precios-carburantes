@@ -34,14 +34,14 @@ fn user_certs_default() -> PathBuf {
 }
 
 #[derive(Debug, Deserialize, Clone)]
-pub struct PemConfig {
+pub struct CertConfig {
     #[serde(default = "ca_default")]
     pub ca: PathBuf,
     #[serde(default = "user_certs_default")]
     pub user_certs: PathBuf
 }
 
-impl Default for PemConfig {
+impl Default for CertConfig {
     fn default() -> Self {
         Self { ca: ca_default(), user_certs: user_certs_default() }
     }
@@ -52,5 +52,5 @@ pub struct Config {
     pub addr: SocketAddrs,
     pub dev: Option<DevConfig>,
     #[serde(default)]
-    pub pem: PemConfig
+    pub certs: CertConfig
 }
