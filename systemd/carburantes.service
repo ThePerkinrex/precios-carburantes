@@ -1,12 +1,12 @@
 [Unit]
 Description=Servicio web de carburantes
-ConditionPathExists=$FILE_DEST/bin/service
+ConditionPathExists=/mnt/usb/carburantes/current/bin/service
 
 [Service]
 Type=simple
 User=pi
-WorkingDirectory=$FILE_DEST
-ExecStart=$FILE_DEST/bin/service
+WorkingDirectory=/mnt/usb/carburantes
+ExecStart=/mnt/usb/carburantes/current/bin/service
 Restart=always
 RestartSec=5
 StandardOutput=journal

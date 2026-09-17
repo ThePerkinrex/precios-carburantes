@@ -1,15 +1,15 @@
 [Unit]
 Description=Run Precios Carburantes Script
 # Only run if the executable exists at this path
-ConditionPathExists=$FILE_DEST/bin/downloader
+ConditionPathExists=/mnt/usb/carburantes/current/bin/downloader
 StartLimitIntervalSec=300
 StartLimitBurst=3
 
 [Service]
 Type=exec
 User=pi
-WorkingDirectory=$FILE_DEST
-ExecStart=$FILE_DEST/bin/downloader
+WorkingDirectory=/mnt/usb/carburantes
+ExecStart=/mnt/usb/carburantes/current/bin/downloader
 # Optional: Logs output to syslog
 StandardOutput=journal
 StandardError=journal
@@ -20,4 +20,3 @@ RestartSec=30
 
 [Install]
 WantedBy=multi-user.target
-

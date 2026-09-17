@@ -6,3 +6,4 @@
 
 config/
 certs/
+/deploy-docs

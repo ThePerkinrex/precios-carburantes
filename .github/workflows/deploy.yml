@@ -1,0 +1,55 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install aarch64 rust target + cross-linker
+        run: |
+          rustup target add aarch64-unknown-linux-gnu
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: aarch64-unknown-linux-gnu
+
+      - name: Cross-compile
+        run: |
+          cargo build --release --target aarch64-unknown-linux-gnu -p downloader
+          cargo build --release --target aarch64-unknown-linux-gnu -p service --features include-static
+
+      - name: Stage bundle contents
+        run: |
+          mkdir -p staging/bin staging/systemd
+          cp target/aarch64-unknown-linux-gnu/release/downloader staging/bin/
+          cp target/aarch64-unknown-linux-gnu/release/service staging/bin/
+          cp systemd/carburantes.service systemd/downloader.service systemd/downloader.timer staging/systemd/
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: carburantes-staging
+          path: staging
+
+  deploy:
+    needs: build
+    uses: ThePerkinrex/deploy-agent/.github/workflows/deploy.yml@v1.0.0
+    with:
+      project: carburantes
+      artifact-name: carburantes-staging
+      staging-dir: staging
+      agent-host: ${{ vars.AGENT_HOST }}
+      port: "8443"
+      deploy-ci-repo: ThePerkinrex/deploy-agent   # reusable workflow's own default is stale
+      deploy-ci-version: deploy-ci-v0.1.0         # pinned, not "latest" — bump deliberately on new deploy-ci releases
+    secrets:
+      hmac-key: ${{ secrets.HMAC_KEY }}
+      tailscale-oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+      tailscale-oauth-client-secret: ${{ secrets.TS_OAUTH_CLIENT_SECRET }}
+      deploy-ca-cert: ${{ secrets.DEPLOY_CA_CERT }}
