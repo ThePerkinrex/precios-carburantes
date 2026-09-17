@@ -7,7 +7,7 @@ StartLimitBurst=3
 
 [Service]
 Type=exec
-User=pi
+User=carburantes
 WorkingDirectory=/mnt/usb/carburantes
 ExecStart=/mnt/usb/carburantes/current/bin/downloader
 # Optional: Logs output to syslog

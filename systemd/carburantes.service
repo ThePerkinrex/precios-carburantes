@@ -4,7 +4,7 @@ ConditionPathExists=/mnt/usb/carburantes/current/bin/service
 
 [Service]
 Type=simple
-User=pi
+User=carburantes
 WorkingDirectory=/mnt/usb/carburantes
 ExecStart=/mnt/usb/carburantes/current/bin/service
 Restart=always
