@@ -1,4 +1,4 @@
-use std::{path::Path, sync::Mutex};
+use std::{path::Path, time::Instant};
 
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{Connection, OptionalExtension, params};
@@ -166,7 +166,6 @@ const MIGRATIONS: &[&[&str]] = &[
 ];
 
 pub const DEFAULT_DB_PATH: &str = "precios_carburantes.db";
-static MIGRATIONS_APPLIED: Mutex<bool> = Mutex::new(false);
 
 fn get_hash(mig: &[&str]) -> String {
     let mut hasher = Sha256::new();
@@ -181,90 +180,100 @@ pub fn get_migration_hashes() -> impl Iterator<Item = (usize, String)> {
     MIGRATIONS.iter().map(|&x| get_hash(x)).enumerate()
 }
 
-fn apply_init(conn: &mut Connection) -> rusqlite::Result<()> {
+/// Per-connection settings: only journal_mode is stored in the database file.
+fn configure(conn: &mut Connection) -> rusqlite::Result<()> {
     conn.execute_batch(
         "
         PRAGMA journal_mode = WAL;
         PRAGMA synchronous = NORMAL;
         PRAGMA foreign_keys = ON;
     ",
-    )?;
+    )
+}
 
-    eprintln!("Locking migrations");
-    let mut lock = MIGRATIONS_APPLIED.lock().unwrap();
+fn apply_migrations(conn: &mut Connection) -> rusqlite::Result<()> {
+    eprintln!("Applying migrations");
+    let start = Instant::now();
+    let mut applied_any = false;
+    let mut tx = conn.transaction()?;
 
-    if !*lock {
-        eprintln!("Applying migrations");
-        let mut applied_any = false;
-        let mut tx = conn.transaction()?;
-
-        tx.execute(
-            "CREATE TABLE IF NOT EXISTS migrations (
+    tx.execute(
+        "CREATE TABLE IF NOT EXISTS migrations (
             id INTEGER PRIMARY KEY,
             migration_hash TEXT
         )",
-            [],
-        )?;
+        [],
+    )?;
 
-        for (i, &mig) in MIGRATIONS.iter().enumerate() {
-            let i = i as i64;
-            let hash = get_hash(mig);
+    for (i, &mig) in MIGRATIONS.iter().enumerate() {
+        let i = i as i64;
+        let hash = get_hash(mig);
 
-            let old_hash: Option<String> = tx
-                .query_one(
-                    "SELECT migration_hash FROM migrations WHERE id = ?",
-                    params![&i],
-                    |row| row.get("migration_hash"),
+        let old_hash: Option<String> = tx
+            .query_one(
+                "SELECT migration_hash FROM migrations WHERE id = ?",
+                params![&i],
+                |row| row.get("migration_hash"),
+            )
+            .optional()?;
+
+        if let Some(old_hash) = old_hash {
+            if hash != old_hash {
+                panic!(
+                    "Non matching hashes ({:?} vs applied {:?}) for migration {}: {:?}",
+                    hash, old_hash, i as u64, mig
                 )
-                .optional()?;
-
-            if let Some(old_hash) = old_hash {
-                if hash != old_hash {
-                    panic!(
-                        "Non matching hashes ({:?} vs applied {:?}) for migration {}: {:?}",
-                        hash, old_hash, i as u64, mig
-                    )
-                } else {
-                    eprintln!(
-                        "Migration {} with hash {:?} already applied",
-                        i as u64, hash
-                    );
-                }
             } else {
-                eprintln!("Applying migration {} with hash {:?}", i as u64, hash);
-                let savepoint = tx.savepoint()?;
-                for x in mig {
-                    savepoint.execute(x, params![])?;
-                }
-                savepoint.execute(
-                    "INSERT INTO migrations (id, migration_hash) VALUES (?1, ?2)",
-                    params![i, hash],
-                )?;
-                savepoint.commit()?;
-                applied_any = true;
+                eprintln!(
+                    "Migration {} with hash {:?} already applied",
+                    i as u64, hash
+                );
             }
+        } else {
+            eprintln!("Applying migration {} with hash {:?}", i as u64, hash);
+            let mig_start = Instant::now();
+            let savepoint = tx.savepoint()?;
+            for x in mig {
+                savepoint.execute(x, params![])?;
+            }
+            savepoint.execute(
+                "INSERT INTO migrations (id, migration_hash) VALUES (?1, ?2)",
+                params![i, hash],
+            )?;
+            savepoint.commit()?;
+            eprintln!(
+                "Applied migration {} in {:.2}s",
+                i as u64,
+                mig_start.elapsed().as_secs_f32()
+            );
+            applied_any = true;
         }
-
-        tx.commit()?;
-
-        // Migrations may free a lot of pages (e.g. table rebuilds); VACUUM can't run inside
-        // a transaction, so reclaim the space here.
-        if applied_any {
-            eprintln!("Vacuuming database");
-            conn.execute_batch("VACUUM")?;
-        }
-
-        *lock = true;
     }
 
-    drop(lock);
+    tx.commit()?;
+
+    // Migrations may free a lot of pages (e.g. table rebuilds); VACUUM can't run inside
+    // a transaction, so reclaim the space here.
+    if applied_any {
+        eprintln!("Vacuuming database");
+        let vacuum_start = Instant::now();
+        conn.execute_batch("VACUUM")?;
+        eprintln!(
+            "Vacuumed database in {:.2}s",
+            vacuum_start.elapsed().as_secs_f32()
+        );
+    }
+
+    eprintln!("Migrations done in {:.2}s", start.elapsed().as_secs_f32());
 
     Ok(())
 }
 
 pub fn get_connection_manager<P: AsRef<Path>>(db: P) -> rusqlite::Result<SqliteConnectionManager> {
-    // Run migrations eagerly on a dedicated connection: a slow migration (table rebuild + VACUUM)
-    // inside the pool's init would make the pool's other connections time out waiting on the lock.
-    apply_init(&mut Connection::open(&db)?)?;
-    Ok(SqliteConnectionManager::file(db).with_init(apply_init))
+    // Migrate once, before the pool opens any connection: the pool's connections only need
+    // the per-connection settings.
+    let mut conn = Connection::open(&db)?;
+    configure(&mut conn)?;
+    apply_migrations(&mut conn)?;
+    Ok(SqliteConnectionManager::file(db).with_init(configure))
 }
