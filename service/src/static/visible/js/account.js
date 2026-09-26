@@ -1,17 +1,17 @@
 import { getMyCerts, getUserState, renewMyCert, revokeMyCert } from "./api.js";
-import { certRow, expiryWarning, formatDate } from "./certs_ui.js";
+import { certItem, certLists, expiryWarning, formatDate, showError } from "./certs_ui.js";
 
 let state;
 
 async function loadCerts() {
-	const rows = document.getElementById("certRows");
+	const container = document.getElementById("certs");
 	const message = document.getElementById("certsMessage");
 	message.textContent = "";
 	try {
 		const certs = await getMyCerts();
-		rows.replaceChildren(
-			...certs.map((cert) =>
-				certRow(cert, {
+		container.replaceChildren(
+			...certLists(certs, (cert) =>
+				certItem(cert, {
 					note: cert.current ? "this device" : null,
 					onRevoke: async () => {
 						const warning = cert.current
@@ -22,27 +22,26 @@ async function loadCerts() {
 							await revokeMyCert(cert.serial);
 							await loadCerts();
 						} catch (e) {
-							message.textContent = e.message;
-							message.className = "error";
+							showError(message, e);
 						}
 					},
 				}),
 			),
 		);
 	} catch (e) {
-		message.textContent = e.message;
-		message.className = "error";
+		showError(message, e);
 	}
 }
 
 async function load() {
 	state = await getUserState();
 	const current = document.getElementById("currentCert");
+	const renew = document.getElementById("renew");
 	const form = document.getElementById("renewForm");
 
 	if (!state.cert) {
 		current.textContent = "Not using a client certificate (development mode).";
-		document.getElementById("renewSection").hidden = true;
+		renew.hidden = true;
 	} else {
 		current.textContent = `Signed in as ${state.username} with "${state.cert.label}", valid until ${formatDate(state.cert.not_after)}.`;
 		form.label.value = state.cert.label;
@@ -52,6 +51,7 @@ async function load() {
 			const banner = document.getElementById("expiryBanner");
 			banner.textContent = `${warning} Renew it below.`;
 			banner.hidden = false;
+			renew.open = true;
 		}
 	}
 
@@ -69,8 +69,7 @@ async function load() {
 			form.label.value = state.cert.label;
 			await loadCerts();
 		} catch (e) {
-			message.textContent = e.message;
-			message.className = "error";
+			showError(message, e);
 		} finally {
 			button.disabled = false;
 		}

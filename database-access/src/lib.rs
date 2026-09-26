@@ -110,11 +110,11 @@ fn apply_init(conn: &mut Connection) -> rusqlite::Result<()> {
     ",
     )?;
 
-    println!("Locking migrations");
+    eprintln!("Locking migrations");
     let mut lock = MIGRATIONS_APPLIED.lock().unwrap();
 
     if !*lock {
-        println!("Applying migrations");
+        eprintln!("Applying migrations");
         let mut tx = conn.transaction()?;
 
         tx.execute(
@@ -144,13 +144,13 @@ fn apply_init(conn: &mut Connection) -> rusqlite::Result<()> {
                         hash, old_hash, i as u64, mig
                     )
                 } else {
-                    println!(
+                    eprintln!(
                         "Migration {} with hash {:?} already applied",
                         i as u64, hash
                     );
                 }
             } else {
-                println!("Applying migration {} with hash {:?}", i as u64, hash);
+                eprintln!("Applying migration {} with hash {:?}", i as u64, hash);
                 let savepoint = tx.savepoint()?;
                 for x in mig {
                     savepoint.execute(x, params![])?;

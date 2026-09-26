@@ -9,18 +9,20 @@
          certificate, and nginx only lets /enroll/ through for them. -->
     <style>
         :root { --bg: #f4f7f6; --card: #fff; --primary: #2c3e50; --muted: #6b7a89; --bad: #b03a2e; }
-        body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--primary); margin: 0; padding: 20px; }
-        .card { max-width: 560px; margin: 0 auto; background: var(--card); padding: 24px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,.05); }
+        body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--primary); margin: 0; padding: 12px; }
+        .card { max-width: 560px; margin: 0 auto; background: var(--card); padding: 16px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,.05); }
+        @media (min-width: 640px) { body { padding: 20px; } .card { padding: 24px; } }
         h1 { margin-top: 0; font-size: 1.5rem; }
         .muted { color: var(--muted); font-size: .9rem; }
         .error { color: var(--bad); }
+        .error:empty { display: none; }
         form { display: flex; flex-direction: column; gap: 12px; margin: 1.5rem 0; }
         label { display: flex; flex-direction: column; gap: 4px; font-size: .9rem; }
         input { padding: 10px 12px; border-radius: 6px; border: 1px solid #ccc; font-size: 1rem; }
-        button { padding: 10px 14px; border-radius: 6px; border: none; background: var(--primary); color: #fff; font-size: 1rem; cursor: pointer; }
+        button { min-height: 44px; padding: 10px 14px; border-radius: 6px; border: none; background: var(--primary); color: #fff; font-size: 1rem; cursor: pointer; }
         button:disabled { opacity: .5; }
-        details { margin: .5rem 0; }
-        summary { cursor: pointer; font-weight: 600; }
+        details { margin: .25rem 0; }
+        summary { cursor: pointer; font-weight: 600; padding: 8px 0; }
         details p, details ol { margin: .5rem 0 0 1rem; font-size: .95rem; }
     </style>
 </head>
@@ -49,21 +51,21 @@
 
         <div id="done" hidden>
             <p><strong id="doneFile"></strong> has been downloaded. Import it with the password you just chose:</p>
-            <details open>
+            <details data-platform="android">
                 <summary>Android</summary>
                 <ol>
                     <li>Settings → Security → Encryption &amp; credentials → Install a certificate → VPN &amp; app user certificate.</li>
                     <li>Pick the downloaded file and enter the password.</li>
                 </ol>
             </details>
-            <details>
+            <details data-platform="ios">
                 <summary>iPhone / iPad</summary>
                 <ol>
                     <li>Open the downloaded file from Files. It gets added as a profile.</li>
                     <li>Settings → General → VPN &amp; Device Management → install the profile and enter the password.</li>
                 </ol>
             </details>
-            <details>
+            <details data-platform="desktop">
                 <summary>Windows / macOS (Chrome, Edge, Safari)</summary>
                 <p>Double-click the file and follow the import wizard (on macOS it goes into the login keychain).</p>
             </details>
@@ -78,6 +80,16 @@
     <script>
         const base = location.pathname.replace(/\/+$/, "");
         const status = document.getElementById("status");
+
+        // Open the import steps for the platform this is most likely running on.
+        function platform() {
+            const ua = navigator.userAgent;
+            if (/Android/i.test(ua)) return "android";
+            // iPadOS reports itself as a Mac, but Macs have no touch screen.
+            if (/iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) return "ios";
+            return "desktop";
+        }
+        document.querySelector(`details[data-platform="${platform()}"]`).open = true;
 
         async function errorText(response) {
             return (await response.text()) || `Something went wrong (HTTP ${response.status}).`;

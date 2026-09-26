@@ -5,37 +5,35 @@ import {
 	adminListUsers,
 	adminRevokeCert,
 } from "./api.js";
-import { certRow, formatDate } from "./certs_ui.js";
-
-function showError(element, e) {
-	element.textContent = e.message;
-	element.className = "error";
-}
+import { actionButton, certItem, certLists, fillList, formatDate, listItem, showError } from "./certs_ui.js";
 
 async function loadInvites() {
-	const rows = document.getElementById("inviteRows");
-	const invites = await adminListInvites();
-	rows.replaceChildren(
-		...invites.map((invite) => {
-			const tr = document.createElement("tr");
-			for (const text of [invite.cn, invite.label, invite.created_by, formatDate(invite.expires_at)]) {
-				const td = document.createElement("td");
-				td.textContent = text;
-				tr.append(td);
-			}
-			const action = document.createElement("td");
-			const button = document.createElement("button");
-			button.className = "danger";
-			button.textContent = "Cancel";
-			button.addEventListener("click", async () => {
-				await adminCancelInvite(invite.id);
-				await loadInvites();
-			});
-			action.append(button);
-			tr.append(action);
-			return tr;
-		}),
-	);
+	const list = document.getElementById("inviteList");
+	const message = document.getElementById("invitesMessage");
+	message.textContent = "";
+	try {
+		const invites = await adminListInvites();
+		fillList(
+			list,
+			invites.map((invite) =>
+				listItem({
+					title: `${invite.cn} · ${invite.label}`,
+					lines: [{ text: `By ${invite.created_by}, expires ${formatDate(invite.expires_at)}` }],
+					action: actionButton("Cancel", async () => {
+						try {
+							await adminCancelInvite(invite.id);
+							await loadInvites();
+						} catch (e) {
+							showError(message, e);
+						}
+					}),
+				}),
+			),
+			"No pending invites.",
+		);
+	} catch (e) {
+		showError(message, e);
+	}
 }
 
 async function loadUsers() {
@@ -62,31 +60,20 @@ async function loadUsers() {
 					heading.append(tag);
 				}
 
-				const table = document.createElement("table");
-				table.innerHTML =
-					"<thead><tr><th>Device</th><th>Status</th><th>Expires</th><th>Serial</th><th></th></tr></thead>";
-				const body = document.createElement("tbody");
-				body.append(
-					...user.certs.map((cert) =>
-						certRow(cert, {
-							onRevoke: async () => {
-								if (!confirm(`Revoke ${user.cn}'s "${cert.label}" certificate? This can't be undone.`)) return;
-								try {
-									await adminRevokeCert(cert.serial, "cessation_of_operation");
-									await loadUsers();
-								} catch (e) {
-									showError(message, e);
-								}
-							},
-						}),
-					),
-				);
-				table.append(body);
+				const item = (cert) =>
+					certItem(cert, {
+						onRevoke: async () => {
+							if (!confirm(`Revoke ${user.cn}'s "${cert.label}" certificate? This can't be undone.`)) return;
+							try {
+								await adminRevokeCert(cert.serial, "cessation_of_operation");
+								await loadUsers();
+							} catch (e) {
+								showError(message, e);
+							}
+						},
+					});
 
-				const wrap = document.createElement("div");
-				wrap.className = "table-wrap";
-				wrap.append(table);
-				div.append(heading, wrap);
+				div.append(heading, ...certLists(user.certs, item));
 				return div;
 			}),
 		);
@@ -100,14 +87,21 @@ function setupInviteForm() {
 	const message = document.getElementById("inviteMessage");
 	const result = document.getElementById("inviteResult");
 	const url = document.getElementById("inviteUrl");
+	const copy = document.getElementById("copyInvite");
+	const share = document.getElementById("shareInvite");
+	// The share sheet is the easy way to send the link on a phone.
+	share.hidden = !navigator.share;
 
 	form.addEventListener("submit", async (e) => {
 		e.preventDefault();
+		const button = form.querySelector("button[type=submit]");
+		button.disabled = true;
 		message.textContent = "";
 		result.hidden = true;
 		try {
 			const invite = await adminCreateInvite(form.cn.value, form.label.value, form.admin.checked);
 			url.value = invite.url;
+			copy.textContent = "Copy";
 			result.hidden = false;
 			message.textContent = `Link for ${form.cn.value} (${form.label.value}), valid until ${new Date(invite.expires_at * 1000).toLocaleString()}. It won't be shown again.`;
 			message.className = "";
@@ -115,11 +109,22 @@ function setupInviteForm() {
 			await loadInvites();
 		} catch (e) {
 			showError(message, e);
+		} finally {
+			button.disabled = false;
 		}
 	});
 
-	document.getElementById("copyInvite").addEventListener("click", async () => {
+	copy.addEventListener("click", async () => {
 		await navigator.clipboard.writeText(url.value);
+		copy.textContent = "Copied";
+	});
+
+	share.addEventListener("click", async () => {
+		try {
+			await navigator.share({ title: "Carburantes invite", url: url.value });
+		} catch {
+			// Dismissed the share sheet.
+		}
 	});
 }
 

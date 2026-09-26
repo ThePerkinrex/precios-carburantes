@@ -73,7 +73,8 @@ fn run_invite_cli(args: &[String], config: &Config, pool: &DbPool) -> Result<(),
     let expires = time::OffsetDateTime::from_unix_timestamp(invite.expires_at)
         .map(|t| t.to_string())
         .unwrap_or_default();
-    println!("{}\n(single use, expires {expires})", invite.url);
+    println!("{}", invite.url);
+    eprintln!("(single use, expires {expires})");
     Ok(())
 }
 
@@ -90,8 +91,10 @@ async fn main() {
         .with_default_directive(LevelFilter::INFO.into())
         .with_env_var("PRICE_LOG")
         .from_env_lossy();
+    // stderr, so stdout carries only a CLI command's output (e.g. the invite URL).
     tracing_subscriber::fmt()
         .with_env_filter(filter.clone())
+        .with_writer(std::io::stderr)
         .init();
 
     info!("EnvFilter: {}", filter);
