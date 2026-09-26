@@ -1,7 +1,7 @@
 use chrono::Local;
 use rusqlite::{Result, params};
 use serde::{Deserialize, Deserializer};
-use std::{error::Error, time::Instant};
+use std::{collections::HashMap, error::Error, time::Instant};
 
 use database_access::{DEFAULT_DB_PATH, get_connection_manager};
 
@@ -127,6 +127,16 @@ fn main_internal() -> Result<(), Box<dyn Error>> {
 
     // 3. Inserción Eficiente (Transacción)
     let tx = conn.transaction()?;
+    let fecha = ahora_ts.timestamp();
+
+    tx.execute("INSERT OR IGNORE INTO snapshots (fecha) VALUES (?1)", params![fecha])?;
+
+    // Precios actuales de cada estación, para guardar solo los cambios
+    let mut actuales: HashMap<i32, (Option<f64>, Option<f64>)> = tx
+        .prepare("SELECT id_estacion, gasoleo_a, gasolina_95 FROM precios_actuales")?
+        .query_map([], |row| Ok((row.get(0)?, (row.get(1)?, row.get(2)?))))?
+        .collect::<Result<_>>()?;
+    let mut cambios = 0;
 
     for est in resp.lista_eess {
         let id: i32 = est.id_eess.parse().unwrap_or(0);
@@ -163,18 +173,49 @@ fn main_internal() -> Result<(), Box<dyn Error>> {
             ],
         )?;
 
-        // Insertar precio diario
-        tx.execute(
-            "INSERT OR REPLACE INTO precios (fecha, id_estacion, gasoleo_a, gasolina_95) 
-             VALUES (?1, ?2, ?3, ?4)",
-            params![ahora_ts.timestamp(), id, est.precio_gasoleo_a, est.precio_gasolina_95],
-        )?;
+        // Guardar el precio solo si la estación es nueva, vuelve a aparecer o ha cambiado
+        let precios = (est.precio_gasoleo_a, est.precio_gasolina_95);
+        if actuales.remove(&id) != Some(precios) {
+            tx.execute(
+                "INSERT OR REPLACE INTO precios (id_estacion, fecha, reportado, gasoleo_a, gasolina_95) 
+                 VALUES (?1, ?2, 1, ?3, ?4)",
+                params![id, fecha, precios.0, precios.1],
+            )?;
+            tx.execute(
+                "INSERT OR REPLACE INTO precios_actuales (id_estacion, gasoleo_a, gasolina_95) 
+                 VALUES (?1, ?2, ?3)",
+                params![id, precios.0, precios.1],
+            )?;
+            cambios += 1;
+        }
     }
+
+    // Las estaciones que quedan no se han reportado en esta descarga
+    for id in actuales.keys() {
+        tx.execute(
+            "INSERT OR REPLACE INTO precios (id_estacion, fecha, reportado) VALUES (?1, ?2, 0)",
+            params![id, fecha],
+        )?;
+        tx.execute("DELETE FROM precios_actuales WHERE id_estacion = ?1", params![id])?;
+    }
+
+    // Precios medios por provincia en esta descarga
+    tx.execute(
+        "INSERT OR REPLACE INTO precios_provincia
+            SELECT ?1, e.id_provincia, e.id_ccaa,
+                SUM(a.gasoleo_a), COUNT(a.gasoleo_a), SUM(a.gasolina_95), COUNT(a.gasolina_95)
+            FROM precios_actuales a
+            JOIN estaciones e ON e.id = a.id_estacion
+            GROUP BY e.id_provincia",
+        params![fecha],
+    )?;
 
     tx.commit()?;
     println!(
-        "Datos guardados correctamente para la fecha: {} en {:.2}s",
+        "Datos guardados correctamente para la fecha: {} ({} cambios, {} no reportadas) en {:.2}s",
         ahora,
+        cambios,
+        actuales.len(),
         start.elapsed().as_secs_f32()
     );
 

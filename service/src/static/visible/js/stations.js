@@ -98,6 +98,27 @@ export function buildDefaultPopupContent(eess, blacklist = null) {
 }
 
 /**
+ * Prices are only stored when they change: gives the station's prices at
+ * every snapshot, carrying each change forward until the next one. Where the
+ * station wasn't reported, the prices are null, so the chart shows a gap.
+ * Both lists are sorted, and fechas are "YYYY-MM-DD HH:MM:SS", so they
+ * compare as strings.
+ */
+function rebuildHistory(snapshots, changes) {
+	let next = 0;
+	let current = null;
+	return snapshots.map((fecha) => {
+		while (next < changes.length && changes[next].fecha <= fecha) current = changes[next++];
+		const reported = current?.reportado ?? false;
+		return {
+			fecha,
+			gasoleo_a: reported ? current.gasoleo_a : null,
+			gasolina_95: reported ? current.gasolina_95 : null,
+		};
+	});
+}
+
+/**
  * Draws the 7-day price history chart into a popup built with
  * buildDefaultPopupContent. No-ops if the popup doesn't contain the
  * expected #gasolinera-<id> / .chart elements, so custom popup builders
@@ -109,10 +130,11 @@ async function drawHistoryChart(eess) {
 	if (!chart) return;
 
 	const from = new Date(new Date().setDate(new Date().getDate() - 7));
-	const history = await fetch(
+	const { snapshots, changes } = await fetch(
 		`/api/${eess.id}/history?` +
 			new URLSearchParams({ from: from.toISOString() }).toString(),
 	).then((x) => x.json());
+	const history = rebuildHistory(snapshots, changes);
 
 	new Chart(chart, {
 		type: "line",

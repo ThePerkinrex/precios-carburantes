@@ -88,7 +88,7 @@ function renderChart(history) {
 				tooltip: {
 					callbacks: {
 						title: (items) => formatDateTime(history[items[0].dataIndex].date),
-						label: (item) => `${item.dataset.label}: ${item.parsed.y.toFixed(3)} €/l`,
+						label: (item) => `${item.dataset.label}: ${item.parsed.y.toFixed(3)} €/L`,
 					},
 				},
 			},

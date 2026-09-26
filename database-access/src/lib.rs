@@ -83,26 +83,85 @@ const MIGRATIONS: &[&[&str]] = &[
             used_at INTEGER,
             used_serial TEXT
         )"],
-    // Rebuild precios as a WITHOUT ROWID table clustered on (fecha, id_estacion).
-    // The old rowid table + PK autoindex + two secondary indexes stored every row four times.
-    // idx_precios_estacion implicitly contains the PK, so it covers (id_estacion, fecha) lookups.
+    // Store prices only when they change, instead of one row per station per download.
     // fecha goes from local-time text ("%Y-%m-%d %H:%M:%S") to unix seconds, which is much smaller.
+    //
+    // - snapshots: the time of every download.
+    // - precios: a station's prices from `fecha` until its next row. A row is written when a
+    //   station first appears, reappears, or any price changes (NULL included). A row with
+    //   reportado = 0 means the station stopped appearing in downloads (its prices are NULL).
+    //   Clustered on (id_estacion, fecha): every query on it is per station.
+    // - precios_actuales: the prices of the stations present in the latest snapshot.
+    // - precios_provincia: per snapshot and province, the sum and count of every fuel's prices,
+    //   so average prices for any area are a quick SUM(suma) / SUM(n).
     &[
-        "CREATE TABLE precios_new (
+        "CREATE TABLE snapshots (fecha INTEGER PRIMARY KEY)",
+        "INSERT INTO snapshots (fecha)
+            SELECT DISTINCT CAST(strftime('%s', fecha, 'utc') AS INTEGER) FROM precios ORDER BY 1",
+        "CREATE TABLE precios_provincia (
             fecha INTEGER NOT NULL,
+            id_provincia TEXT NOT NULL,
+            id_ccaa TEXT NOT NULL,
+            suma_gasoleo_a REAL,
+            n_gasoleo_a INTEGER NOT NULL,
+            suma_gasolina_95 REAL,
+            n_gasolina_95 INTEGER NOT NULL,
+            PRIMARY KEY (fecha, id_provincia)
+        ) WITHOUT ROWID",
+        "INSERT INTO precios_provincia
+            SELECT CAST(strftime('%s', p.fecha, 'utc') AS INTEGER), e.id_provincia, e.id_ccaa,
+                SUM(p.gasoleo_a), COUNT(p.gasoleo_a), SUM(p.gasolina_95), COUNT(p.gasolina_95)
+            FROM precios p
+            JOIN estaciones e ON e.id = p.id_estacion
+            GROUP BY p.fecha, e.id_provincia",
+        "CREATE TABLE precios_new (
             id_estacion INTEGER NOT NULL,
+            fecha INTEGER NOT NULL,
+            reportado INTEGER NOT NULL,
             gasoleo_a REAL,
             gasolina_95 REAL,
-            PRIMARY KEY (fecha, id_estacion),
+            PRIMARY KEY (id_estacion, fecha),
             FOREIGN KEY (id_estacion) REFERENCES estaciones(id)
         ) WITHOUT ROWID",
-        "INSERT INTO precios_new (fecha, id_estacion, gasoleo_a, gasolina_95)
-            SELECT CAST(strftime('%s', fecha, 'utc') AS INTEGER), id_estacion, gasoleo_a, gasolina_95
-            FROM precios
-            ORDER BY fecha, id_estacion",
+        // n numbers the snapshots, so a gap in a station's n sequence means it wasn't reported.
+        // Keep the rows that start a run or change a price, and add a reportado = 0 row at the
+        // snapshot after the end of every run that isn't the latest snapshot.
+        "INSERT INTO precios_new (id_estacion, fecha, reportado, gasoleo_a, gasolina_95)
+            WITH sn AS (
+                SELECT fecha, row_number() OVER (ORDER BY fecha) AS n FROM snapshots
+            ),
+            p AS (
+                SELECT p.id_estacion, sn.fecha, sn.n, p.gasoleo_a AS a, p.gasolina_95 AS b
+                FROM precios p
+                JOIN sn ON sn.fecha = CAST(strftime('%s', p.fecha, 'utc') AS INTEGER)
+            ),
+            l AS (
+                SELECT *, lag(n) OVER w AS pn, lag(a) OVER w AS pa, lag(b) OVER w AS pb,
+                    lead(n) OVER w AS nn
+                FROM p
+                WINDOW w AS (PARTITION BY id_estacion ORDER BY n)
+            )
+            SELECT id_estacion, fecha, 1, a, b FROM l
+                WHERE pn IS NULL OR pn <> n - 1 OR a IS NOT pa OR b IS NOT pb
+            UNION ALL
+            SELECT l.id_estacion, sn.fecha, 0, NULL, NULL FROM l
+                JOIN sn ON sn.n = l.n + 1
+                WHERE l.nn IS NULL OR l.nn <> l.n + 1
+            ORDER BY 1, 2",
         "DROP TABLE precios",
         "ALTER TABLE precios_new RENAME TO precios",
-        "CREATE INDEX idx_precios_estacion ON precios(id_estacion)",
+        "CREATE TABLE precios_actuales (
+            id_estacion INTEGER PRIMARY KEY,
+            gasoleo_a REAL,
+            gasolina_95 REAL,
+            FOREIGN KEY (id_estacion) REFERENCES estaciones(id)
+        )",
+        "INSERT INTO precios_actuales (id_estacion, gasoleo_a, gasolina_95)
+            SELECT p.id_estacion, p.gasoleo_a, p.gasolina_95
+            FROM estaciones e
+            CROSS JOIN precios p ON p.id_estacion = e.id
+                AND p.fecha = (SELECT MAX(fecha) FROM precios q WHERE q.id_estacion = e.id)
+            WHERE p.reportado = 1",
     ],
 ];
 

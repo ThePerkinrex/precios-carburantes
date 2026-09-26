@@ -22,7 +22,7 @@ export async function getPriceHistory({ ccaa, provincia } = {}) {
 // 1.629 -> "1,62<small>9</small>": the last digit smaller, as on the signs.
 function priceHtml(value) {
 	const [whole, thousandths] = value.toLocaleString("es-ES", { minimumFractionDigits: 3, maximumFractionDigits: 3 }).split(/(\d)$/);
-	return `${whole}<small>${thousandths}</small><span class="unit">€/l</span>`;
+	return `${whole}<small>${thousandths}</small><span class="unit">€/L</span>`;
 }
 
 // The change between two prices in euro cents.

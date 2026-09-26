@@ -45,9 +45,6 @@ async fn get_latest_station_data(pool: DbPool) -> Result<Vec<EstacionPrecio>, Ap
 
     let mut stmt = conn.prepare(
         r#"
-            WITH latest AS (
-                SELECT MAX(fecha) AS fecha FROM precios
-            )
             SELECT 
                 e.id,
                 e.rotulo,
@@ -56,7 +53,7 @@ async fn get_latest_station_data(pool: DbPool) -> Result<Vec<EstacionPrecio>, Ap
                 e.provincia,
                 e.latitud,
                 e.longitud,
-                p.fecha,
+                (SELECT MAX(fecha) FROM snapshots),
                 p.gasoleo_a,
                 p.gasolina_95,
                 e.margen,
@@ -64,8 +61,7 @@ async fn get_latest_station_data(pool: DbPool) -> Result<Vec<EstacionPrecio>, Ap
                 e.horario,
                 e.cp
             FROM estaciones e
-            JOIN precios p ON p.id_estacion = e.id
-            JOIN latest l ON p.fecha = l.fecha
+            JOIN precios_actuales p ON p.id_estacion = e.id
             "#,
     )?;
 
@@ -107,6 +103,24 @@ struct PricePoint {
     gasolina_95: Option<f64>,
 }
 
+#[derive(Serialize)]
+struct PriceChange {
+    fecha: String,
+    reportado: bool,
+    gasoleo_a: Option<f64>,
+    gasolina_95: Option<f64>,
+}
+
+/// A station's prices are stored only when they change: the frontend rebuilds the value at
+/// every snapshot from the last change at or before it.
+#[derive(Serialize)]
+struct StationHistory {
+    /// Every download since `from`.
+    snapshots: Vec<String>,
+    /// The station's changes since `from`, plus the last one before it.
+    changes: Vec<PriceChange>,
+}
+
 #[derive(Deserialize)]
 struct StationHistoryParams {
     from: chrono::DateTime<chrono::Utc>,
@@ -116,36 +130,36 @@ async fn price_history_station(
     Path(id): Path<i64>,
     Query(params): Query<StationHistoryParams>,
     State(state): State<DbPool>,
-) -> Result<Json<Vec<PricePoint>>, AppError> {
+) -> Result<Json<StationHistory>, AppError> {
     let conn = state.get().unwrap();
-    let mut stmt = conn.prepare(
-        r#"
-            
-            SELECT 
-                fecha,
-                gasoleo_a,
-                gasolina_95
+    let from = params.from.timestamp();
+
+    let snapshots = conn
+        .prepare("SELECT fecha FROM snapshots WHERE fecha >= ? ORDER BY fecha ASC")?
+        .query_map(params![from], |row| Ok(format_fecha(row.get(0)?)))?
+        .collect::<Result<_, _>>()?;
+
+    let changes = conn
+        .prepare(
+            r#"
+            SELECT fecha, reportado, gasoleo_a, gasolina_95
             FROM precios
-            WHERE id_estacion = ? AND fecha >= ?
-ORDER BY fecha ASC;
+            WHERE id_estacion = ?1
+              AND fecha >= COALESCE((SELECT MAX(fecha) FROM precios WHERE id_estacion = ?1 AND fecha <= ?2), ?2)
+            ORDER BY fecha ASC
             "#,
-    )?;
-    let fecha = params.from.timestamp();
-    // info!("Filtering by {fecha}");
-    let rows = stmt.query_map(params![id, fecha], |row| {
-        Ok(PricePoint {
-            fecha: format_fecha(row.get(0)?),
-            gasoleo_a: row.get(1)?,
-            gasolina_95: row.get(2)?,
-        })
-    })?;
+        )?
+        .query_map(params![id, from], |row| {
+            Ok(PriceChange {
+                fecha: format_fecha(row.get(0)?),
+                reportado: row.get(1)?,
+                gasoleo_a: row.get(2)?,
+                gasolina_95: row.get(3)?,
+            })
+        })?
+        .collect::<Result<_, _>>()?;
 
-    let mut precios = Vec::new();
-    for row in rows {
-        precios.push(row?);
-    }
-
-    Ok(Json(precios))
+    Ok(Json(StationHistory { snapshots, changes }))
 }
 
 #[derive(Deserialize)]
@@ -164,16 +178,15 @@ async fn price_history(
     let mut stmt = conn
         .prepare(
             r#"
-            SELECT 
-    p.fecha, 
-    AVG(p.gasoleo_a) as avg_gasoleo, 
-    AVG(p.gasolina_95) as avg_gasolina
-FROM precios p
-JOIN estaciones e ON p.id_estacion = e.id
-WHERE (?1 IS NULL OR e.id_ccaa = ?1)
-  AND (?2 IS NULL OR e.id_provincia = ?2)
-GROUP BY p.fecha
-ORDER BY p.fecha ASC;
+            SELECT
+    fecha,
+    SUM(suma_gasoleo_a) / SUM(n_gasoleo_a) AS avg_gasoleo,
+    SUM(suma_gasolina_95) / SUM(n_gasolina_95) AS avg_gasolina
+FROM precios_provincia
+WHERE (?1 IS NULL OR id_ccaa = ?1)
+  AND (?2 IS NULL OR id_provincia = ?2)
+GROUP BY fecha
+ORDER BY fecha ASC;
             "#,
         )
         .map_err(|e| {
