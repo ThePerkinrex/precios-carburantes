@@ -14,8 +14,9 @@ function expiryWarning(notAfter) {
 
 // Menu button in the top-left corner with links to the other pages.
 // `statePromise` resolves to getUserState(); the button works before that,
-// the links fill in once it arrives.
-export function addMenuControl(map, statePromise) {
+// the links fill in once it arrives. `current` is the page's id in PAGES,
+// left out of the links (null: every page is linked).
+export function addMenuControl(map, statePromise, current = "map") {
 	const MenuControl = L.Control.extend({
 		options: { position: "topleft" },
 
@@ -51,7 +52,7 @@ export function addMenuControl(map, statePromise) {
 				}
 			});
 
-			statePromise.then((state) => fill(container, state));
+			statePromise.then((state) => fill(container, state, current));
 			return container;
 		},
 	});
@@ -59,12 +60,12 @@ export function addMenuControl(map, statePromise) {
 	new MenuControl().addTo(map);
 }
 
-function fill(container, state) {
+function fill(container, state, current) {
 	container.querySelector(".map-menu-user").textContent = state.display_name || state.username;
 
 	container.querySelector(".map-menu-links").replaceChildren(
 		...pagesFor(state)
-			.filter((page) => page.id !== "map")
+			.filter((page) => page.id !== current)
 			.map((page) => {
 				const li = document.createElement("li");
 				const link = document.createElement("a");

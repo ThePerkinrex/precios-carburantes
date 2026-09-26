@@ -163,6 +163,58 @@ const MIGRATIONS: &[&[&str]] = &[
                 AND p.fecha = (SELECT MAX(fecha) FROM precios q WHERE q.id_estacion = e.id)
             WHERE p.reportado = 1",
     ],
+    // Saved trips (a route plus the user's review of its stations) and route history.
+    //
+    // - trips: private to `username`. `id` is random hex, so it can't be guessed or counted.
+    // - trip_blacklist: stations the owner excluded from that trip's plans.
+    // - trip_shares: single-use share links. Only the token's hash is stored; the first user
+    //   to open the link becomes `claimed_by` and gets read access to the trip.
+    // - route_searches: the routes each user searched. Replaces the never-used table of the
+    //   same name. Routes are private: a user can only open one they searched, or one of a
+    //   trip they own or claimed. `last_route_idx` is the alternative they last opened.
+    // - user_configs gets the rest of the car profile used by the fuel planner.
+    &[
+        "DROP TABLE IF EXISTS route_searches",
+        "CREATE TABLE trips (
+            id TEXT PRIMARY KEY,
+            username TEXT NOT NULL,
+            hash TEXT NOT NULL REFERENCES routes(hash),
+            route_idx INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            max_distance REAL,
+            created_at INTEGER NOT NULL,
+            last_used_at INTEGER NOT NULL
+        )",
+        "CREATE INDEX idx_trips_username ON trips(username)",
+        "CREATE TABLE trip_blacklist (
+            trip_id TEXT NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+            station_id INTEGER NOT NULL,
+            PRIMARY KEY (trip_id, station_id)
+        )",
+        "CREATE TABLE trip_shares (
+            token_hash TEXT PRIMARY KEY,
+            trip_id TEXT NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+            created_at INTEGER NOT NULL,
+            expires_at INTEGER NOT NULL,
+            claimed_by TEXT,
+            claimed_at INTEGER
+        )",
+        "CREATE INDEX idx_trip_shares_trip ON trip_shares(trip_id)",
+        "CREATE INDEX idx_trip_shares_claimed_by ON trip_shares(claimed_by)",
+        "CREATE TABLE route_searches (
+            username TEXT NOT NULL,
+            hash TEXT NOT NULL REFERENCES routes(hash),
+            searched_at INTEGER NOT NULL,
+            last_used_at INTEGER NOT NULL,
+            last_route_idx INTEGER,
+            PRIMARY KEY (username, hash)
+        )",
+        "CREATE INDEX idx_route_searches_hash ON route_searches(hash)",
+        "CREATE INDEX idx_trips_hash ON trips(hash)",
+        "ALTER TABLE user_configs ADD COLUMN fuel TEXT",
+        "ALTER TABLE user_configs ADD COLUMN stop_min REAL",
+        "ALTER TABLE user_configs ADD COLUMN stop_max REAL",
+    ],
 ];
 
 pub const DEFAULT_DB_PATH: &str = "precios_carburantes.db";

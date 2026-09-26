@@ -1,4 +1,4 @@
-import { createRoute, getRoutes } from "./api.js";
+import { createRoute, getRoutes, routePageUrl } from "./api.js";
 
 // Colors used to distinguish alternative routes on the map and in the tabs.
 export const ROUTE_COLORS = ["#2563eb", "#f97316", "#16a34a", "#9333ea", "#dc2626"];
@@ -54,6 +54,7 @@ export function addRouteControl(map) {
 		waypoints: [], // { marker, latlng }
 		routeLayers: [],
 		routes: [],
+		hash: null, // of the calculated routes, for the planner link
 		selectedRouteIndex: 0,
 		loading: false,
 	};
@@ -189,6 +190,7 @@ export function addRouteControl(map) {
 		for (const layer of state.routeLayers) map.removeLayer(layer);
 		state.routeLayers = [];
 		state.routes = [];
+		state.hash = null;
 		state.selectedRouteIndex = 0;
 		summaryEl.classList.add("hidden");
 		summaryEl.innerHTML = "";
@@ -310,6 +312,12 @@ export function addRouteControl(map) {
 			<span class="route-duration">${formatDuration(selected.duration)}</span>
 		`;
 		summaryEl.appendChild(info);
+
+		const planLink = document.createElement("a");
+		planLink.className = "route-plan-link";
+		planLink.href = routePageUrl(state.hash, state.selectedRouteIndex);
+		planLink.textContent = "Planificar repostaje";
+		summaryEl.appendChild(planLink);
 	}
 
 	async function calculateRoute() {
@@ -331,6 +339,7 @@ export function addRouteControl(map) {
 			}
 
 			state.routes = data.routes;
+			state.hash = hash;
 			state.selectedRouteIndex = 0;
 			drawRoutes();
 			renderSummary();

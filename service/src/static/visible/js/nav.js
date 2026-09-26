@@ -3,6 +3,7 @@
 
 export const PAGES = [
 	{ id: "map", href: "/files/map", label: "Map", es: "Mapa", hint: "Stations and prices near you" },
+	{ id: "trips", href: "/files/trips", label: "My trips", es: "Mis viajes", hint: "Saved routes and their fuel stops" },
 	{ id: "dashboard", href: "/files/dashboard", label: "Price trends", es: "Evolución de precios", hint: "Average prices over time, by region" },
 	{ id: "account", href: "/files/account", label: "My devices", es: "Mis dispositivos", hint: "Renew or revoke your certificates" },
 	{ id: "admin", href: "/files/admin", label: "Users", es: "Usuarios", hint: "Invite people and manage access", role: "admin_users" },

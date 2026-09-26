@@ -57,6 +57,100 @@ body {
 	margin: 10px;
 }
 
+/* Saved-trip box (route_page.js), under the summary in the same corner. */
+
+.trip-control {
+	background: #ffffff;
+	border-radius: 10px;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+	padding: 10px 12px;
+	max-width: 240px;
+	font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+	font-size: 13px;
+	color: #1f2937;
+}
+
+.leaflet-control.trip-control {
+	margin: 0 10px 10px;
+}
+
+.trip-control-title {
+	font-weight: 700;
+	font-size: 14px;
+	overflow-wrap: anywhere;
+}
+
+.trip-control-note,
+.trip-control-message {
+	color: #6b7280;
+	font-size: 12px;
+	margin-top: 4px;
+}
+
+.trip-control-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin-top: 8px;
+}
+
+.trip-control-actions button {
+	border: 1px solid #2563eb;
+	background: #2563eb;
+	color: #ffffff;
+	border-radius: 8px;
+	padding: 6px 10px;
+	font-size: 12px;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.trip-control-actions button + button {
+	background: #ffffff;
+	color: #2563eb;
+}
+
+.trip-control-share {
+	margin-top: 8px;
+}
+
+.trip-control-share input {
+	width: 100%;
+	box-sizing: border-box;
+	font-family: ui-monospace, monospace;
+	font-size: 11px;
+	padding: 6px;
+	border: 1px solid #e5e7eb;
+	border-radius: 6px;
+}
+
+/* Arrival line on top of each station popup. */
+.route-eta {
+	font-size: 12px;
+	padding: 4px 8px;
+	margin-bottom: 6px;
+	border-radius: 6px;
+	background: #ecfdf5;
+	color: #065f46;
+}
+
+/* Beats stations.css's generic .open/.closed pill colors. */
+.route-eta.open {
+	background: #ecfdf5;
+	color: #065f46;
+}
+
+.route-eta.closesSoon,
+.route-eta.unknown {
+	background: #fef3c7;
+	color: #92400e;
+}
+
+.route-eta.closed {
+	background: #fee2e2;
+	color: #991b1b;
+}
+
 @media (max-width: 480px) {
 	.route-summary {
 		padding: 8px 12px;

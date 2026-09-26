@@ -125,9 +125,10 @@ impl IntoResponse for AppError {
             ),
             Self::Forbidden => (StatusCode::FORBIDDEN.into_response(), None),
             Self::BadRequest(msg) => ((StatusCode::BAD_REQUEST, msg).into_response(), None),
-            Self::Cert(
-                e @ (CertError::InvalidName(_) | CertError::LabelInUse { .. }),
-            ) => ((StatusCode::BAD_REQUEST, e.to_string()).into_response(), None),
+            Self::Cert(e @ (CertError::InvalidName(_) | CertError::LabelInUse { .. })) => (
+                (StatusCode::BAD_REQUEST, e.to_string()).into_response(),
+                None,
+            ),
             Self::Cert(e @ CertError::NotFound(_)) => {
                 ((StatusCode::NOT_FOUND, e.to_string()).into_response(), None)
             }

@@ -1,8 +1,17 @@
 import {
+	addTripBlacklist,
+	createTrip,
+	createTripShare,
 	getPricesOnRoute,
 	getRoute,
+	getTrip,
+	getTrips,
 	getUserState,
+	removeTripBlacklist,
+	routePageUrl,
+	updateCar,
 	updateFilter,
+	updateTrip,
 } from "./api.js";
 import {
 	ROUTE_COLORS,
@@ -12,21 +21,47 @@ import {
 	waypointDivIcon,
 } from "./route.js";
 import {
+	buildDefaultPopupContent,
 	createStationsLayer,
 	getLogoKey,
 	sortLogos,
 	StationBlacklist,
 } from "./stations.js";
 import { addRouteOptionsControl } from "./route_options.js";
+import { addMenuControl } from "./map_menu.js";
 import { getLogos } from "./logos.js";
-import { mapFilterToArray } from "./filter.js";
 import { createTripAlternativesPanel } from "./trip_alternatives.js";
+import { arrivalTime, planStops, statusAt } from "./fuel_planner.js";
 
-// Radius (in meters, measured along the route from the destination) used to
-// estimate the fuel price at arrival: we average the price of every
-// (filtered) station within this range of the final waypoint. If none are
-// found, we fall back to the single closest station to the destination.
-const DEST_PRICE_RADIUS_M = 10000;
+const STATUS_TEXT = {
+	open: "abierta",
+	closesSoon: "cierra pronto",
+	closed: "cerrada",
+	unknown: "horario desconocido",
+};
+
+// The saved trip for this route, if any: the one in ?trip=, or else the
+// user's most recently used trip on this same route.
+async function findTrip(hash, routeIdx, tripId) {
+	if (tripId) {
+		try {
+			return { trip: await getTrip(tripId) };
+		} catch {
+			return { trip: null, error: "Este viaje no existe o no tienes acceso a él." };
+		}
+	}
+	try {
+		const { saved } = await getTrips();
+		const mine = saved.find((t) => t.hash === hash && t.route_idx === routeIdx);
+		return { trip: mine ? await getTrip(mine.id) : null };
+	} catch {
+		return { trip: null };
+	}
+}
+
+function setTripInUrl(hash, routeIdx, tripId) {
+	history.replaceState(null, "", routePageUrl(hash, routeIdx, tripId));
+}
 
 async function load() {
 	const url = new URL(location.href);
@@ -35,17 +70,20 @@ async function load() {
 	const hash = path[2];
 	const route_idx = parseInt(path[3]);
 
-	if (hash === null || route_idx == null) {
+	if (!hash || Number.isNaN(route_idx)) {
 		location.assign("/files/map");
 		return;
 	}
 
 	let route_data = getRoute(hash, route_idx);
 	let logos = getLogos();
-
 	let state = getUserState();
+	let tripResult = findTrip(hash, route_idx, url.searchParams.get("trip"));
 
-	const map = L.map("map").setView([40.4165, -3.70256], 11);
+	// Zoom is added after the menu so the menu sits at the very top, as on the map.
+	const map = L.map("map", { zoomControl: false }).setView([40.4165, -3.70256], 11);
+	addMenuControl(map, state, null);
+	L.control.zoom().addTo(map);
 
 	L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
 		maxZoom: 19,
@@ -54,8 +92,6 @@ async function load() {
 	}).addTo(map);
 
 	route_data = await route_data;
-
-	console.log(route_data);
 
 	const { waypoints, route } = route_data;
 
@@ -101,6 +137,13 @@ async function load() {
 	logos = await logos;
 	const logos_sorted = sortLogos(logos);
 	state = await state;
+	const { trip: loadedTrip, error: tripError } = await tripResult;
+	if (tripError) setTripInUrl(hash, route_idx, null);
+	else if (loadedTrip) setTripInUrl(hash, route_idx, loadedTrip.id);
+
+	// { id, name, owned, owner } of the saved trip shown, or null. The
+	// blacklist is saved with it only when it's the user's own.
+	let trip = loadedTrip;
 
 	// Currently-rendered station layer, so we can tear it down and rebuild
 	// it whenever the "distance from route" setting changes.
@@ -109,46 +152,85 @@ async function load() {
 	// newer one (e.g. if the user drags the distance slider twice quickly).
 	let requestToken = 0;
 
-	// Car profile from the options control; kept around for whatever
-	// stop-suggestion logic ends up using it.
 	let carSettings = null;
-	let price_data = [];
+	let departure = new Date();
+	let distance = null;
+	let price_data = null; // null until the first fetch lands
 
 	let station_filter = state.filter;
-	const blacklist = new StationBlacklist(); // TODO base blacklist for the trip
+	const blacklist = new StationBlacklist(loadedTrip?.blacklist ?? []);
 
-	blacklist.on("change", (station, x) => {
-		reloadStops();
+	const tripControl = addTripControl();
+
+	blacklist.on("add", (stationId) => {
+		if (trip?.owned) addTripBlacklist(trip.id, stationId).catch(tripControl.showError);
 	});
+	blacklist.on("delete", (stationId) => {
+		if (trip?.owned) removeTripBlacklist(trip.id, stationId).catch(tripControl.showError);
+	});
+	blacklist.on("change", () => reloadStops());
+
+	function focusStation(station) {
+		const marker = stationsLayer?.markersById?.get(station.id);
+		if (!marker) return;
+
+		map.setView([station.latitud, station.longitud], 15);
+		// Uncluster the marker before opening its popup.
+		if (typeof stationsLayer.markers?.zoomToShowLayer === "function") {
+			stationsLayer.markers.zoomToShowLayer(marker, () => marker.openPopup());
+		} else {
+			marker.openPopup();
+		}
+	}
+
+	// Numbered rings over the selected plan's stops, above the clusters.
+	const planLayer = L.layerGroup().addTo(map);
+	function showPlan(plan) {
+		planLayer.clearLayers();
+		plan?.stops.forEach((s, i) => {
+			L.marker([s.station.latitud, s.station.longitud], {
+				icon: L.divIcon({
+					className: "",
+					html: `<div class="trip-stop-marker">${i + 1}</div>`,
+					iconSize: [30, 30],
+					iconAnchor: [15, 15],
+				}),
+				zIndexOffset: 1000,
+				title: s.station.rotulo,
+			})
+				.on("click", () => focusStation(s.station))
+				.addTo(planLayer);
+		});
+	}
 
 	const alternativesPanel = createTripAlternativesPanel({
-		onStationClick: (station) => {
-			if (!stationsLayer || !stationsLayer.markersById) return;
-
-			const marker = stationsLayer.markersById.get(station.id);
-			if (marker) {
-				// Zoom and pan to the station marker
-				map.setView([station.latitud, station.longitud], 15);
-
-				// If using Leaflet MarkerCluster, ensure the cluster is unspidered before opening popup
-				if (stationsLayer.markers && typeof stationsLayer.markers.zoomToShowLayer === "function") {
-					stationsLayer.markers.zoomToShowLayer(marker, () => {
-						marker.openPopup();
-					});
-				} else {
-					marker.openPopup();
-				}
-			}
-		},
+		onStationClick: focusStation,
+		onPlanSelect: showPlan,
 	});
+
+	// The default popup, plus when we'd get there and whether it's open then.
+	function buildPopupContent(eess, blacklist) {
+		const eta = arrivalTime(eess, departure);
+		const time = eta.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit", hour12: false });
+		const status = statusAt(eess, eta);
+		const detourKm = (2 * (eess.distance_from_route ?? 0)) / 1000;
+		return `
+			<div class="route-eta ${status}">
+				Llegada ~${time}: <b>${STATUS_TEXT[status]}</b>
+				• km ${(eess.distance_along_route / 1000).toFixed(1)}
+				${detourKm >= 0.1 ? `• ~${detourKm.toFixed(1)} km desvío` : ""}
+			</div>
+			${buildDefaultPopupContent(eess, blacklist)}`;
+	}
 
 	async function reloadStations(maxDistance) {
 		const token = ++requestToken;
-		price_data = await getPricesOnRoute(hash, route_idx, {
+		const data = await getPricesOnRoute(hash, route_idx, {
 			max_distance: maxDistance,
 			order_by: "DistanceAlongRoute",
 		});
 		if (token !== requestToken) return; // a newer request already landed
+		price_data = data;
 
 		if (stationsLayer) {
 			map.removeLayer(stationsLayer.markers);
@@ -165,297 +247,218 @@ async function load() {
 				reloadStops();
 			},
 			blacklist,
-			// buildPopupContent: myCustomPopupBuilder, // override to customize popup contents
+			buildPopupContent,
 		});
 	}
 
-	// Estimates what it would cost to fill up right at the destination, so
-	// the trip planner can weigh "buy fuel along the way" against "top up
-	// when I get there". Averages the price of every station within
-	// DEST_PRICE_RADIUS_M (measured along the route from the destination);
-	// if there's nothing that close, falls back to the closest priced
-	// station to the destination. Returns null if no station has a usable
-	// price at all.
-	function estimateDestinationPrice(stations, totalDistanceM, priceOf) {
-		const priced = [];
-		for (const s of stations) {
-			const price = priceOf(s);
-			if (price == null) continue;
-			priced.push({
-				price,
-				distToDest: totalDistanceM - s.distance_along_route,
-			});
-		}
-		if (!priced.length) return null;
-
-		const nearby = priced.filter(
-			({ distToDest }) => distToDest <= DEST_PRICE_RADIUS_M,
-		);
-		if (nearby.length) {
-			const sum = nearby.reduce((acc, { price }) => acc + price, 0);
-			return sum / nearby.length;
-		}
-
-		// Nothing within range: fall back to the single closest station.
-		let closest = priced[0];
-		for (const cand of priced) {
-			if (cand.distToDest < closest.distToDest) closest = cand;
-		}
-		return closest.price;
-	}
-
-	async function reloadStops(k = 5) {
-		if (!carSettings || !price_data.length) {
-			renderStopsResult([]);
+	function reloadStops() {
+		if (!carSettings) return;
+		if (!price_data) {
+			alternativesPanel.update({ plans: [], diagnosis: { reason: "loading" } }, departure);
 			return;
 		}
 
-		const { consumption, tankSize, initialFuel, stopMin, stopMax, fuel } =
-			carSettings;
-		if (!consumption || consumption <= 0) {
-			renderStopsResult([]);
-			return;
-		}
-
-		// Hardcoded assumption: a driver wouldn't actually arrive with less than
-		// 3/5 of a tank — they'd have topped up somewhere along the way. Without
-		// this, the DP is free to minimize purchased liters by coasting in on a
-		// near-empty tank after one early cheap fill, which isn't realistic.
-		const MIN_ARRIVAL_FRACTION = 3 / 5;
-		const minFinalFuel = 0; //tankSize * MIN_ARRIVAL_FRACTION;
-
-		const litersPerMeter = consumption / 100.0 / 1000.0;
-		const totalDistanceM = route.distance; // meters
-
-		console.log(station_filter);
-		const stations = [...price_data]
-			.filter(
-				(s) =>
-					station_filter.has(
-						getLogoKey(s, logos, logos_sorted).logoKey,
-					) &&
-					!blacklist.has(s.id) &&
-					Number.isFinite(s.distance_along_route),
-			)
-			.sort((a, b) => a.distance_along_route - b.distance_along_route);
-		console.log(stations);
-
-		const priceOf = (station) =>
-			fuel === "gasolina" ? station.gasolina_95 : station.gasoleo_a;
-
-		// What it would cost to fill the remaining tank once we arrive, based
-		// on the (filtered) stations near the destination. null means we have
-		// no basis for an estimate, in which case arrival cost is ignored.
-		const destPricePerLiter = estimateDestinationPrice(
-			stations,
-			totalDistanceM,
-			priceOf,
-		);
-		console.log(
-			"Estimated destination price per liter:",
-			destPricePerLiter,
+		const stations = price_data.filter(
+			(s) =>
+				station_filter.has(getLogoKey(s, logos, logos_sorted).logoKey) &&
+				!blacklist.has(s.id) &&
+				Number.isFinite(s.distance_along_route),
 		);
 
-		const nodes = [
-			{ pos: 0, station: null, isStart: true },
-			...stations.map((s) => ({
-				pos: s.distance_along_route,
-				station: s,
-			})),
-			{ pos: totalDistanceM, station: null, isEnd: true },
-		];
-		const endIdx = nodes.length - 1;
-
-		const departFuel = (i) => (nodes[i].isStart ? initialFuel : tankSize);
-
-		// dp[j] is now an ARRAY of up to k candidates, sorted by (stops, cost).
-		// Each candidate: { stops, cost, prev, prevCandIdx, fuelOnArrival, pathKey }
-		const dp = new Array(nodes.length).fill(null).map(() => []);
-		dp[0] = [
-			{
-				stops: 0,
-				cost: 0,
-				prev: -1,
-				prevCandIdx: -1,
-				fuelOnArrival: initialFuel,
-				pathKey: "s",
-			},
-		];
-
-		function insertCandidate(list, cand) {
-			// Skip exact-duplicate paths (can happen via different orderings landing
-			// on the same station sequence — shouldn't normally, but stay safe).
-			if (list.some((c) => c.pathKey === cand.pathKey)) return;
-			list.push(cand);
-			list.sort((a, b) => a.stops - b.stops || a.cost - b.cost);
-			if (list.length > k) list.length = k;
-		}
-
-		for (let i = 0; i < nodes.length; i++) {
-			if (!dp[i].length) continue;
-			const fuelAtI = departFuel(i);
-
-			for (let j = i + 1; j < nodes.length; j++) {
-				const distM = nodes[j].pos - nodes[i].pos;
-				const fuelNeeded = distM * litersPerMeter;
-				if (fuelNeeded > fuelAtI) break; // sorted by position, so nothing further is reachable
-
-				const arrivalFuel = fuelAtI - fuelNeeded;
-				const isFinal = j === endIdx;
-				if (
-					!isFinal &&
-					(arrivalFuel < stopMin || arrivalFuel > stopMax)
-				)
-					continue;
-				if (isFinal && arrivalFuel < minFinalFuel) continue;
-
-				let stationCost = 0;
-				if (!isFinal) {
-					const pricePerLiter = priceOf(nodes[j].station);
-					if (pricePerLiter == null) continue;
-					stationCost =
-						Math.max(0, tankSize - arrivalFuel) * pricePerLiter;
-				} else if (destPricePerLiter != null) {
-					// Arriving with a less-than-full tank isn't free: charge the
-					// estimated cost of topping it back up at the destination.
-					// This is what lets a cheap destination favor arriving low
-					// (skip a stop) and an expensive one favor arriving full.
-					stationCost =
-						Math.max(0, tankSize - arrivalFuel) * destPricePerLiter;
-				}
-
-				// Fan out every candidate at i into a new candidate at j.
-				for (let ci = 0; ci < dp[i].length; ci++) {
-					const base = dp[i][ci];
-					insertCandidate(dp[j], {
-						stops: base.stops + (isFinal ? 0 : 1),
-						cost: base.cost + stationCost,
-						prev: i,
-						prevCandIdx: ci,
-						fuelOnArrival: arrivalFuel,
-						pathKey: `${base.pathKey}>${j}`,
-					});
-				}
-			}
-		}
-
-		if (!dp[endIdx].length) {
-			console.warn(
-				"No feasible fuel-stop plan found for this route/car settings.",
-			);
-			renderStopsResult([]);
-			return;
-		}
-
-		// Backtrack each of the top-K final candidates into a full plan.
-		const plans = dp[endIdx].map((finalCand) => {
-			const path = [];
-			let node = endIdx;
-			let cand = finalCand;
-			while (node !== -1) {
-				path.unshift({ node, cand });
-				if (cand.prev === -1) break;
-				const prevNode = cand.prev;
-				const prevCand = dp[prevNode][cand.prevCandIdx];
-				node = prevNode;
-				cand = prevCand;
-			}
-
-			const stops = path
-				.filter(({ node }) => nodes[node].station)
-				.map(({ node, cand }) => {
-					const station = nodes[node].station;
-					const pricePerLiter = priceOf(station);
-					const litersBought = Math.max(
-						0,
-						tankSize - cand.fuelOnArrival,
-					);
-					return {
-						station,
-						arrivalFuel: cand.fuelOnArrival,
-						litersBought,
-						pricePerLiter,
-						cost: litersBought * pricePerLiter,
-					};
-				});
-
-			// Broken out separately from totalCost (which already includes it)
-			// purely so the UI can show "X on the road + Y to top up on arrival".
-			const destRefillLiters = Math.max(
-				0,
-				tankSize - finalCand.fuelOnArrival,
-			);
-			const destRefillCost =
-				destPricePerLiter != null
-					? destRefillLiters * destPricePerLiter
-					: 0;
-
-			return {
-				stops,
-				totalCost: finalCand.cost,
-				totalStops: finalCand.stops,
-				finalArrivalFuel: finalCand.fuelOnArrival, // fuel left in tank at destination
-				destPricePerLiter,
-				destRefillLiters,
-				destRefillCost,
-			};
+		const result = planStops(stations, {
+			totalDistanceM: route.distance,
+			car: carSettings,
+			departure,
 		});
-
-		renderStopsResult(plans);
+		alternativesPanel.update(result, departure);
 	}
 
-	function renderStopsResult(plans) {
-		if (!plans.length) {
-			console.log("Sin paradas necesarias o sin plan factible.");
-		} else {
-			plans.forEach((plan, planIdx) => {
-				// totalCost (used by the DP for ranking) bundles on-route fuel with
-				// the estimated destination top-up; split it back out here so the
-				// two are printed separately.
-				const onTripCost = plan.totalCost - plan.destRefillCost;
-
-				console.log(
-					`--- Opción ${planIdx + 1}: ${plan.totalStops} parada(s) ---`,
-				);
-				plan.stops.forEach((s, i) => {
-					const km = (s.station.distance_along_route / 1000).toFixed(
-						1,
-					);
-					console.log(
-						`  ${i + 1}. ${s.station.rotulo} (${s.station.municipio}) — km ${km} — ` +
-							`llega con ${s.arrivalFuel.toFixed(1)} L, reposta ${s.litersBought.toFixed(1)} L ` +
-							`a ${s.pricePerLiter} €/L = ${s.cost.toFixed(2)} €`,
-					);
-				});
-				console.log(`  Coste en ruta: ${onTripCost.toFixed(2)} €`);
-				console.log(
-					`  Llegada al destino con ${plan.finalArrivalFuel.toFixed(1)} L restantes` +
-						(plan.destPricePerLiter != null
-							? ` — repostar al llegar (${plan.destRefillLiters.toFixed(1)} L a ${plan.destPricePerLiter.toFixed(3)} €/L): ${plan.destRefillCost.toFixed(2)} €`
-							: " — sin precio estimado de destino"),
-				);
-				console.log(
-					`  Coste total estimado (ruta + destino): ${plan.totalCost.toFixed(2)} €`,
-				);
-			});
-		}
-
-		// Render plans in the UI panel
-		alternativesPanel.update(plans);
-	}
+	// The car profile as the server stores it (initialFuel stays local).
+	const toServerCar = (car) => ({
+		fuel: car.fuel,
+		consumption: car.consumption,
+		tank_size: car.tankSize,
+		stop_min: car.stopMin,
+		stop_max: car.stopMax,
+	});
+	let savedCar = JSON.stringify(state.car);
 
 	addRouteOptionsControl(map, {
 		position: "topleft",
-		initialDistance: 2000,
-		onDistanceChange: async (distance) => {
-			await reloadStations(distance);
-			await reloadStops();
+		initialDistance: trip?.max_distance ?? undefined,
+		initialCar: {
+			fuel: state.car.fuel,
+			consumption: state.car.consumption,
+			tankSize: state.car.tank_size,
+			stopMin: state.car.stop_min,
+			stopMax: state.car.stop_max,
 		},
-		onCarChange: async (car) => {
+		onDistanceChange: async (newDistance) => {
+			const initial = distance === null;
+			distance = newDistance;
+			if (!initial && trip?.owned) {
+				updateTrip(trip.id, { max_distance: distance }).catch(tripControl.showError);
+			}
+			try {
+				await reloadStations(distance);
+			} catch (e) {
+				console.error("No se pudieron cargar las gasolineras", e);
+				alternativesPanel.update({ plans: [], diagnosis: { reason: "error" } }, departure);
+				return;
+			}
+			reloadStops();
+		},
+		onCarChange: (car) => {
 			carSettings = car;
-			await reloadStops();
+			const serverCar = JSON.stringify(toServerCar(car));
+			if (serverCar !== savedCar) {
+				savedCar = serverCar;
+				updateCar(toServerCar(car)).catch((e) => console.error("No se pudo guardar el coche", e));
+			}
+			reloadStops();
+		},
+		onDepartureChange: (date) => {
+			departure = date;
+			reloadStops();
 		},
 	});
+
+	// Top-right box under the summary: which saved trip this is, and saving /
+	// renaming / sharing it.
+	function addTripControl() {
+		const control = L.control({ position: "topright" });
+		let box;
+		let message = tripError ?? "";
+		let shareUrl = null;
+
+		function defaultName() {
+			const from = waypoints[0]?.name;
+			const to = waypoints[last]?.name;
+			return from && to ? `${from} → ${to}` : "Mi viaje";
+		}
+
+		async function save() {
+			const name = prompt("Nombre del viaje", trip?.name ?? defaultName())?.trim();
+			if (!name) return;
+			try {
+				const { id } = await createTrip({
+					hash,
+					route_idx,
+					name,
+					max_distance: distance,
+					blacklist: [...blacklist.blacklist],
+				});
+				trip = { id, name, owned: true, owner: state.display_name };
+				message = "";
+				shareUrl = null;
+				setTripInUrl(hash, route_idx, id);
+				render();
+			} catch (e) {
+				showError(e);
+			}
+		}
+
+		async function rename() {
+			const name = prompt("Nombre del viaje", trip.name)?.trim();
+			if (!name || name === trip.name) return;
+			try {
+				await updateTrip(trip.id, { name });
+				trip.name = name;
+				render();
+			} catch (e) {
+				showError(e);
+			}
+		}
+
+		async function share() {
+			try {
+				shareUrl = (await createTripShare(trip.id)).url;
+				message = "";
+				render();
+				await navigator.clipboard?.writeText(shareUrl);
+				message = "Enlace copiado.";
+				render();
+			} catch (e) {
+				if (shareUrl) render(); // clipboard refused: the link is still shown
+				else showError(e);
+			}
+		}
+
+		function button(text, onClick) {
+			const b = document.createElement("button");
+			b.type = "button";
+			b.textContent = text;
+			b.addEventListener("click", onClick);
+			return b;
+		}
+
+		function render() {
+			if (!box) return;
+			box.replaceChildren();
+
+			const title = document.createElement("div");
+			title.className = "trip-control-title";
+			const actions = document.createElement("div");
+			actions.className = "trip-control-actions";
+
+			if (!trip) {
+				title.textContent = "Viaje sin guardar";
+				actions.append(button("Guardar viaje", save));
+			} else if (trip.owned) {
+				title.textContent = trip.name;
+				actions.append(button("Renombrar", rename), button("Compartir", share));
+			} else {
+				title.textContent = `${trip.name} · de ${trip.owner}`;
+				const note = document.createElement("div");
+				note.className = "trip-control-note";
+				note.textContent =
+					"Compartido contigo: los cambios en la lista negra no se guardan hasta que guardes una copia.";
+				box.append(title, note);
+				actions.append(button("Guardar copia", save));
+			}
+			if (!box.contains(title)) box.append(title);
+			box.append(actions);
+
+			if (shareUrl) {
+				const shareBox = document.createElement("div");
+				shareBox.className = "trip-control-share";
+				const input = document.createElement("input");
+				input.readOnly = true;
+				input.value = shareUrl;
+				input.addEventListener("focus", () => input.select());
+				const note = document.createElement("div");
+				note.className = "trip-control-note";
+				note.textContent =
+					"Solo sirve para una persona: la primera que lo abra. Caduca en 7 días si nadie lo usa.";
+				shareBox.append(input, note);
+				box.append(shareBox);
+			}
+
+			if (message) {
+				const msg = document.createElement("div");
+				msg.className = "trip-control-message";
+				msg.textContent = message;
+				box.append(msg);
+			}
+		}
+
+		function showError(e) {
+			console.error(e);
+			message = `Error: ${e.message}`;
+			render();
+		}
+
+		control.onAdd = function () {
+			box = L.DomUtil.create("div", "trip-control");
+			L.DomEvent.disableClickPropagation(box);
+			L.DomEvent.disableScrollPropagation(box);
+			render();
+			return box;
+		};
+		control.addTo(map);
+
+		return { showError };
+	}
 }
 
 load();

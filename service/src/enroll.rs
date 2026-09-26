@@ -35,15 +35,23 @@ use crate::{
 const MIN_PASSWORD_LEN: usize = 6;
 const MAX_PASSWORD_LEN: usize = 128;
 
-fn hex(bytes: &[u8]) -> String {
+pub(crate) fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
-fn hash_token(token: &str) -> String {
+/// `N` random bytes, hex encoded: for tokens and unguessable ids.
+pub(crate) fn random_hex<const N: usize>() -> Result<String, AppError> {
+    let mut bytes = [0u8; N];
+    getrandom::fill(&mut bytes)
+        .map_err(|e| AppError::IO(std::io::Error::other(format!("getrandom failed: {e}"))))?;
+    Ok(hex(&bytes))
+}
+
+pub(crate) fn hash_token(token: &str) -> String {
     hex(&Sha3_256::digest(token.as_bytes()))
 }
 
-fn now() -> i64 {
+pub(crate) fn now() -> i64 {
     OffsetDateTime::now_utc().unix_timestamp()
 }
 
@@ -75,18 +83,21 @@ pub fn create_invite(
     validate_name(cn)?;
     validate_name(label)?;
 
-    let mut bytes = [0u8; 32];
-    getrandom::fill(&mut bytes).map_err(|e| {
-        AppError::IO(std::io::Error::other(format!("getrandom failed: {e}")))
-    })?;
-    let token = hex(&bytes);
+    let token = random_hex::<32>()?;
 
     let created_at = now();
     let expires_at = created_at + i64::from(config.certs.invite_ttl_hours) * 3600;
     conn.execute(
         "INSERT INTO enrollments (token_hash, cn, label, created_by, created_at, expires_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        params![hash_token(&token), cn, label, created_by, created_at, expires_at],
+        params![
+            hash_token(&token),
+            cn,
+            label,
+            created_by,
+            created_at,
+            expires_at
+        ],
     )?;
     info!("{created_by} created an invite for {cn}/{label}");
 

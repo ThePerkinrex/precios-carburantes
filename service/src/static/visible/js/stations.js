@@ -46,15 +46,21 @@ export function buildDefaultPopupContent(eess, blacklist = null) {
 			: "";
 
 	let status = getStatus(eess.horario, new Date());
+	const closeText = (d) => (d ? `Cierre ${formatOpenCloseDate(d)}` : "24 h");
 	let pill = "";
 	if (status.status == "open") {
-		pill = `<div class="pill open">Abierto; Cierre ${formatOpenCloseDate(status.nextClose)}</div>`;
+		pill = `<div class="pill open">Abierto; ${closeText(status.nextClose)}</div>`;
 	} else if (status.status == "opensSoon") {
 		pill = `<div class="pill open soon">Abre pronto; Apertura ${formatOpenCloseDate(status.nextOpen)}</div>`;
-	} else if (status.status == "close") {
-		pill = `<div class="pill close">Cerrado; Apertura ${formatOpenCloseDate(status.nextOpen)}</div>`;
+	} else if (status.status == "closed") {
+		pill = status.nextOpen
+			? `<div class="pill closed">Cerrado; Apertura ${formatOpenCloseDate(status.nextOpen)}</div>`
+			: `<div class="pill closed">Cerrado</div>`;
 	} else if (status.status == "closesSoon") {
-		pill = `<div class="pill close soon">Cierra pronto; Cierre ${formatOpenCloseDate(status.nextClose)}</div>`;
+		pill = `<div class="pill closed soon">Cierra pronto; ${closeText(status.nextClose)}</div>`;
+	}
+	if (status.uncertain) {
+		pill += `<div class="pill uncertain" title="El horario publicado solo indica el lunes; se asume el mismo horario todos los días">Horario dudoso (solo lunes)</div>`;
 	}
 
 	// https://www.google.com/maps/search/?api=1&query=47.5951518%2C-122.3316393

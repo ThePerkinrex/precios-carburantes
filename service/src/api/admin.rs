@@ -122,7 +122,9 @@ async fn create_invite(
     Json(params): Json<NewInvite>,
 ) -> Result<Json<InviteCreated>, AppError> {
     auth.require_role(ADMIN_USERS_ROLE)?;
-    certs.check_label_free(&params.cn, &params.label, None).await?;
+    certs
+        .check_label_free(&params.cn, &params.label, None)
+        .await?;
 
     let conn = pool.get()?;
     let invite = enroll::create_invite(&conn, &config, &params.cn, &params.label, &auth.username)?;

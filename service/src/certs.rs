@@ -211,7 +211,10 @@ pub struct CertManager {
 /// nginx's `$ssl_client_serial` leaves out, so both sides go through here.
 fn serial_to_hex(serial: &SerialNumber) -> String {
     let bytes = serial.as_ref();
-    let start = bytes.iter().position(|&b| b != 0).unwrap_or(bytes.len().saturating_sub(1));
+    let start = bytes
+        .iter()
+        .position(|&b| b != 0)
+        .unwrap_or(bytes.len().saturating_sub(1));
     bytes[start..].iter().map(|b| format!("{b:02x}")).collect()
 }
 
@@ -299,7 +302,10 @@ impl CertManager {
             && tokio::fs::try_exists(&ca_key_pem_path).await?;
 
         if !have_ca {
-            info!("No CA found in {:?}, creating {:?}", config.ca, config.ca_name);
+            info!(
+                "No CA found in {:?}, creating {:?}",
+                config.ca, config.ca_name
+            );
             Self::create_ca(&config.ca_name, &ca_cert_pem_path, &ca_key_pem_path).await?;
         }
 
@@ -309,7 +315,11 @@ impl CertManager {
         let crl_number = Self::load_crl_number(&config.ca).await;
         let crl_next_update = Self::load_crl_next_update(&config.ca).await;
 
-        info!("Loaded {} client certs from {:?}", certs.len(), config.user_certs);
+        info!(
+            "Loaded {} client certs from {:?}",
+            certs.len(),
+            config.user_certs
+        );
 
         let manager = Self {
             config,
@@ -968,7 +978,10 @@ mod tests {
     fn serial_normalization() {
         assert_eq!(normalize_serial("3ADD9E67"), "3add9e67");
         assert_eq!(normalize_serial("00:8a:01"), "8a01");
-        assert_eq!(serial_to_hex(&SerialNumber::from_slice(&[0, 0x8a, 1])), "8a01");
+        assert_eq!(
+            serial_to_hex(&SerialNumber::from_slice(&[0, 0x8a, 1])),
+            "8a01"
+        );
         assert_eq!(normalize_serial("00"), "00");
     }
 
@@ -1007,8 +1020,13 @@ mod tests {
         cm.issue_p12("bob", "laptop", None, "pw").await.unwrap();
 
         // Renewal may keep its own label, repeatedly...
-        let b = cm.issue_p12("alice", "laptop", Some(&a.serial), "pw").await.unwrap();
-        cm.issue_p12("alice", "laptop", Some(&b.serial), "pw").await.unwrap();
+        let b = cm
+            .issue_p12("alice", "laptop", Some(&a.serial), "pw")
+            .await
+            .unwrap();
+        cm.issue_p12("alice", "laptop", Some(&b.serial), "pw")
+            .await
+            .unwrap();
         // ...but not steal another cert's label.
         assert!(matches!(
             cm.issue_p12("alice", "phone", Some(&a.serial), "pw").await,
@@ -1022,7 +1040,9 @@ mod tests {
             .into_iter()
             .find(|c| c.label == "phone")
             .unwrap();
-        cm.revoke_cert(&phone.serial, RevocationReason::KeyCompromise).await.unwrap();
+        cm.revoke_cert(&phone.serial, RevocationReason::KeyCompromise)
+            .await
+            .unwrap();
         assert!(!cm.lookup(&phone.serial).await.unwrap().is_active());
         cm.issue_p12("alice", "phone", None, "pw").await.unwrap();
 
@@ -1043,7 +1063,10 @@ mod tests {
         import_legacy_fixture(&config);
 
         let cm = CertManager::new(config.clone()).await.unwrap();
-        assert!(config.ca.join(CRL_PEM_FILE).exists(), "CRL created for imported CA");
+        assert!(
+            config.ca.join(CRL_PEM_FILE).exists(),
+            "CRL created for imported CA"
+        );
 
         let legacy = cm.certs_for("alice").await;
         assert_eq!(legacy.len(), 1);
@@ -1059,11 +1082,22 @@ mod tests {
         let new_pem = dir.path().join("new.pem");
         leaf_pem_from_p12(&issued.p12, "pw", &new_pem);
 
-        assert!(openssl_verify(&config, &legacy_pem), "legacy cert still valid");
-        assert!(openssl_verify(&config, &new_pem), "new cert chains to legacy CA");
+        assert!(
+            openssl_verify(&config, &legacy_pem),
+            "legacy cert still valid"
+        );
+        assert!(
+            openssl_verify(&config, &new_pem),
+            "new cert chains to legacy CA"
+        );
 
-        cm.revoke_cert(&legacy[0].serial, RevocationReason::Superseded).await.unwrap();
-        assert!(!openssl_verify(&config, &legacy_pem), "revoked legacy cert rejected");
+        cm.revoke_cert(&legacy[0].serial, RevocationReason::Superseded)
+            .await
+            .unwrap();
+        assert!(
+            !openssl_verify(&config, &legacy_pem),
+            "revoked legacy cert rejected"
+        );
         assert!(openssl_verify(&config, &new_pem), "other certs unaffected");
     }
 }

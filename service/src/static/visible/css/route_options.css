@@ -130,6 +130,34 @@
 	border-color: var(--route-accent);
 }
 
+.route-options-departure {
+	display: flex;
+	gap: 6px;
+	margin-bottom: 6px;
+}
+
+.route-options-departure-input {
+	flex: 1 1 auto;
+	min-width: 0;
+	font-family: var(--route-font);
+	font-size: 0.85rem;
+	color: var(--route-text);
+	border: 1px solid var(--route-border);
+	border-radius: var(--route-radius-md);
+	padding: 6px 8px;
+}
+
+.route-options-now-btn {
+	flex: 0 0 auto;
+	border: 1px solid var(--route-border);
+	border-radius: var(--route-radius-md);
+	background: var(--route-surface-muted);
+	color: var(--route-text);
+	font-size: 0.8rem;
+	padding: 6px 8px;
+	cursor: pointer;
+}
+
 .route-options-stop-range {
 	display: flex;
 	gap: 8px;
@@ -169,4 +197,9 @@
 
 .route-options-save-btn:hover {
 	opacity: 0.9;
+}
+.route-options-hint {
+	font-size: 0.75rem;
+	color: var(--route-text-muted);
+	margin: -2px 0 6px;
 }

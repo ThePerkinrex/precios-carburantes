@@ -129,7 +129,10 @@ fn main_internal() -> Result<(), Box<dyn Error>> {
     let tx = conn.transaction()?;
     let fecha = ahora_ts.timestamp();
 
-    tx.execute("INSERT OR IGNORE INTO snapshots (fecha) VALUES (?1)", params![fecha])?;
+    tx.execute(
+        "INSERT OR IGNORE INTO snapshots (fecha) VALUES (?1)",
+        params![fecha],
+    )?;
 
     // Precios actuales de cada estación, para guardar solo los cambios
     let mut actuales: HashMap<i32, (Option<f64>, Option<f64>)> = tx
@@ -196,7 +199,10 @@ fn main_internal() -> Result<(), Box<dyn Error>> {
             "INSERT OR REPLACE INTO precios (id_estacion, fecha, reportado) VALUES (?1, ?2, 0)",
             params![id, fecha],
         )?;
-        tx.execute("DELETE FROM precios_actuales WHERE id_estacion = ?1", params![id])?;
+        tx.execute(
+            "DELETE FROM precios_actuales WHERE id_estacion = ?1",
+            params![id],
+        )?;
     }
 
     // Precios medios por provincia en esta descarga

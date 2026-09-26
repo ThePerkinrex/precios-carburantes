@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- The token is in this page's URL: don't pass it on to other sites. -->
+    <meta name="referrer" content="no-referrer">
+    <title>Shared trip</title>
+    <link rel="stylesheet" href="/files/css/account.css">
+</head>
+<body>
+    <div class="page">
+        <header>
+            <a class="back" href="/files/trips">‹ My trips</a>
+            <h1>Shared trip</h1>
+        </header>
+        <section class="card">
+            <p id="message" class="muted">Opening the trip…</p>
+        </section>
+    </div>
+    <script type="module">
+        import { claimTripShare, routePageUrl } from "/files/js/api.js";
+
+        // Claimed with a POST from here, not when the page is fetched, so
+        // link previews can't use the link up.
+        const token = location.pathname.split("/").pop();
+        try {
+            const { trip_id, hash, route_idx } = await claimTripShare(token);
+            location.replace(routePageUrl(hash, route_idx, trip_id));
+        } catch (e) {
+            const message = document.getElementById("message");
+            message.textContent = e.status === 404
+                ? "This link is invalid, has expired, or was already opened by someone else. Share links only work for one person: ask for a new one."
+                : `Couldn't open the trip: ${e.message}`;
+            message.className = "error";
+        }
+    </script>
+</body>
+</html>

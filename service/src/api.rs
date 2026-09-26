@@ -11,12 +11,17 @@ use crate::{DbPool, error::AppError};
 mod admin;
 mod geo;
 pub mod route;
+mod trips;
 mod user;
 
 /// `precios.fecha` is stored as unix seconds; the API exposes it as local time text.
 fn format_fecha(ts: i64) -> String {
     chrono::DateTime::from_timestamp(ts, 0)
-        .map(|d| d.with_timezone(&chrono::Local).format("%Y-%m-%d %H:%M:%S").to_string())
+        .map(|d| {
+            d.with_timezone(&chrono::Local)
+                .format("%Y-%m-%d %H:%M:%S")
+                .to_string()
+        })
         .unwrap_or_default()
 }
 
@@ -259,4 +264,5 @@ pub fn get_router() -> Router<DbPool> {
         .nest("/admin", admin::get_router())
         .nest("/geo", geo::get_router())
         .nest("/route/", route::get_router())
+        .nest("/trips", trips::get_router())
 }

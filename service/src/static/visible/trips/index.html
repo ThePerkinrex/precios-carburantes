@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My trips</title>
+    <link rel="stylesheet" href="/files/css/account.css">
+    <link rel="stylesheet" href="/files/css/trips.css">
+</head>
+<body>
+    <div class="page">
+        <nav id="nav" class="nav" aria-label="Pages">
+            <a href="/files/map">Map</a>
+            <a href="/files/trips" aria-current="page">My trips</a>
+        </nav>
+        <header>
+            <h1>My trips</h1>
+        </header>
+
+        <p id="message"></p>
+
+        <section class="card">
+            <h2>Saved trips</h2>
+            <p class="muted">
+                A trip is a route plus the stations you excluded from it. Open one before each drive
+                to get the best fuel stops with today's prices. Only you can see your trips, unless
+                you share one.
+            </p>
+            <ul id="saved" class="list"></ul>
+        </section>
+
+        <section class="card" id="sharedCard" hidden>
+            <h2>Shared with me</h2>
+            <p class="muted">Trips other people shared with you. Save a copy to change its excluded stations.</p>
+            <ul id="shared" class="list"></ul>
+        </section>
+
+        <section class="card">
+            <h2>Searched routes</h2>
+            <p class="muted">
+                Routes you searched on the map, newest first. Only you can open them. Removing one from
+                here also deletes it, unless it's the route of a trip.
+            </p>
+            <ul id="searches" class="list"></ul>
+        </section>
+    </div>
+    <script type="module" src="/files/js/trips.js"></script>
+</body>
+</html>

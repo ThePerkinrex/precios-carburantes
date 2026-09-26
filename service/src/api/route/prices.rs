@@ -14,7 +14,8 @@ use tracing::debug;
 
 use crate::{
     DbPool,
-    api::{EstacionPrecio, get_latest_station_data, route::get_route},
+    api::{EstacionPrecio, get_latest_station_data, route::route_for},
+    auth::ClientAuth,
     error::AppError,
 };
 
@@ -46,7 +47,7 @@ impl PointDistance for IndexedSegment {
 
 #[derive(Serialize)]
 struct PositionedStation {
-	#[serde(flatten)]
+    #[serde(flatten)]
     station: EstacionPrecio,
     distance_along_route: f64,
     duration: f64,
@@ -93,14 +94,13 @@ fn closest_point_on_segment(p: Point<f64>, a: Coord<f64>, b: Coord<f64>) -> (Poi
 
 async fn get_prices_on_route(
     State(pool): State<DbPool>,
+    auth: ClientAuth,
     Path((hash, route_idx)): Path<(String, usize)>,
     Query(query): Query<RoutePricesQuery>,
 ) -> Result<Json<Vec<PositionedStation>>, AppError> {
     let start = Instant::now();
-    let (stations, Json(route)) = tokio::try_join!(
-        get_latest_station_data(pool.clone()),
-        get_route(State(pool), Path((hash.clone(), route_idx))),
-    )?;
+    let route = route_for(&*pool.get()?, &auth.username, &hash, route_idx)?;
+    let stations = get_latest_station_data(pool).await?;
 
     debug!("Get data: {:.4}s", start.elapsed().as_secs_f64());
     let start = Instant::now();

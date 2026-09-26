@@ -161,6 +161,11 @@
 	color: #000000;
 }
 
+.pill.uncertain {
+	background: #fef3c7;
+	color: #92400e;
+}
+
 .google-maps.map-link {
 	background: #ebdaa4;
 	color: black;

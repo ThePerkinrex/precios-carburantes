@@ -8,12 +8,16 @@ use axum::{
 use bytemuck::{Pod, Zeroable};
 use geo_types::LineString;
 use polyline::errors::PolylineError;
-use rusqlite::{OptionalExtension, params};
+use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use sha3::{Digest, Sha3_256};
 use thiserror::Error;
+use tokio::{
+    sync::Mutex,
+    time::{Duration, Instant},
+};
 
-use crate::{DbPool, error::AppError};
+use crate::{DbPool, auth::ClientAuth, enroll::now, error::AppError};
 
 #[derive(Debug, Error)]
 pub enum RouteError {
@@ -110,6 +114,12 @@ struct RouteResponse {
     route: Route,
 }
 
+/// The public OSRM demo server allows at most one request per second. Every
+/// call goes through this lock, which holds the time of the last request.
+static OSRM_LAST_REQUEST: Mutex<Option<Instant>> = Mutex::const_new(None);
+const OSRM_MIN_INTERVAL: Duration = Duration::from_secs(1);
+
+/// Must be called with `OSRM_LAST_REQUEST` held (see `find_routes`).
 async fn query_osrm(waypoints: &[Waypoint]) -> Result<RouteOSRMResponse, RouteError> {
     const BASE_URI: &str = "http://router.project-osrm.org/route/v1/driving/";
     let url = format!(
@@ -151,12 +161,37 @@ async fn query_osrm(waypoints: &[Waypoint]) -> Result<RouteOSRMResponse, RouteEr
     Ok(parsed)
 }
 
-pub async fn get_route_from_db(
-    pool: DbPool,
-    hash: &str,
-) -> Result<Option<RouteOSRMResponse>, RouteError> {
-    let conn = pool.get().unwrap();
+/// What a list of routes shows about one of them.
+#[derive(Debug, Serialize)]
+pub struct RouteSummary {
+    pub distance: f64,
+    pub duration: f64,
+    /// OSRM's name for the first/last waypoint (a street), if it has one.
+    pub from: Option<String>,
+    pub to: Option<String>,
+}
 
+impl RouteOSRMResponse {
+    /// Every alternative's summary, in order.
+    pub fn summaries(&self) -> Vec<RouteSummary> {
+        (0..self.routes.len())
+            .filter_map(|i| self.summary(i))
+            .collect()
+    }
+
+    pub fn summary(&self, route_idx: usize) -> Option<RouteSummary> {
+        let route = self.routes.get(route_idx)?;
+        let name = |wp: Option<&OSRMWaypoint>| wp.map(|w| w.name.clone()).filter(|n| !n.is_empty());
+        Some(RouteSummary {
+            distance: route.distance,
+            duration: route.duration,
+            from: name(self.waypoints.first()),
+            to: name(self.waypoints.last()),
+        })
+    }
+}
+
+pub fn load_route(conn: &Connection, hash: &str) -> Result<Option<RouteOSRMResponse>, RouteError> {
     let data: Option<String> = conn
         .query_one(
             "SELECT data FROM routes WHERE hash = ?",
@@ -165,13 +200,33 @@ pub async fn get_route_from_db(
         )
         .optional()?;
 
-    if let Some(data) = data {
-        let res: RouteOSRMResponse = serde_json::from_str(&data)?;
+    Ok(data.map(|data| serde_json::from_str(&data)).transpose()?)
+}
 
-        Ok(Some(res))
-    } else {
-        Ok(None)
+/// Removes a route from the user's search history. They keep access only if
+/// it's the route of a trip they own or claimed.
+async fn forget_search(
+    State(pool): State<DbPool>,
+    auth: ClientAuth,
+    Path(hash): Path<String>,
+) -> Result<axum::http::StatusCode, AppError> {
+    let conn = pool.get()?;
+    let deleted = conn.execute(
+        "DELETE FROM route_searches WHERE username = ?1 AND hash = ?2",
+        params![auth.username, hash],
+    )?;
+    if deleted == 0 {
+        return Err(AppError::FileNotFound);
     }
+    forget_route_if_unused(&conn, &hash)?;
+    Ok(axum::http::StatusCode::NO_CONTENT)
+}
+
+pub async fn get_route_from_db(
+    pool: DbPool,
+    hash: &str,
+) -> Result<Option<RouteOSRMResponse>, RouteError> {
+    load_route(&pool.get().unwrap(), hash)
 }
 
 async fn find_routes(pool: DbPool, waypoints: &[Waypoint]) -> Result<String, RouteError> {
@@ -186,33 +241,68 @@ async fn find_routes(pool: DbPool, waypoints: &[Waypoint]) -> Result<String, Rou
 
     tracing::info!("Hash: {hash}");
 
-    if get_route_from_db(pool.clone(), &hash).await?.is_none() {
-        let conn = pool.get().unwrap();
-
-        let data = query_osrm(waypoints).await?;
-        let data = serde_json::to_string(&data)?;
-
-        conn.execute(
-            "INSERT INTO routes(hash, data) VALUES(?, ?)",
-            params![&hash, &data],
-        )?;
+    if get_route_from_db(pool.clone(), &hash).await?.is_some() {
+        return Ok(hash);
     }
 
-    // tracing::info!("Trips: {resp:#?}");
+    let mut last_request = OSRM_LAST_REQUEST.lock().await;
 
-    // Ok(parsed
-    //     .routes
-    //     .into_iter()
-    //     .map(|x| {
-    //         Ok(RouteResponse {
-    //             geometry: polyline::decode_polyline(&x.geometry, 5)?,
-    //             duration: x.duration,
-    //             distance: x.distance,
-    //         })
-    //     })
-    //     .collect::<Result<Vec<_>, PolylineError>>()?)
+    // Another request for the same waypoints may have fetched it while we waited.
+    if get_route_from_db(pool.clone(), &hash).await?.is_some() {
+        return Ok(hash);
+    }
+
+    if let Some(last) = *last_request {
+        tokio::time::sleep_until(last + OSRM_MIN_INTERVAL).await;
+    }
+    let data = query_osrm(waypoints).await;
+    *last_request = Some(Instant::now());
+    drop(last_request);
+
+    let data = serde_json::to_string(&data?)?;
+    pool.get().unwrap().execute(
+        "INSERT OR IGNORE INTO routes(hash, data) VALUES(?, ?)",
+        params![&hash, &data],
+    )?;
 
     Ok(hash)
+}
+
+/// Routes are private: a user sees one only if they searched it, own a trip
+/// on it, or claimed a share link for such a trip. Everyone else gets a 404,
+/// as if it didn't exist.
+pub fn can_see_route(conn: &Connection, username: &str, hash: &str) -> rusqlite::Result<bool> {
+    conn.query_row(
+        "SELECT EXISTS (SELECT 1 FROM route_searches WHERE username = ?1 AND hash = ?2)
+            OR EXISTS (
+                SELECT 1 FROM trips t
+                WHERE t.hash = ?2 AND (
+                    t.username = ?1
+                    OR EXISTS (SELECT 1 FROM trip_shares s WHERE s.trip_id = t.id AND s.claimed_by = ?1)
+                )
+            )",
+        params![username, hash],
+        |r| r.get(0),
+    )
+}
+
+pub fn require_route_access(conn: &Connection, username: &str, hash: &str) -> Result<(), AppError> {
+    if can_see_route(conn, username, hash)? {
+        Ok(())
+    } else {
+        Err(AppError::FileNotFound)
+    }
+}
+
+/// Deletes a stored route once no search or trip refers to it any more.
+pub fn forget_route_if_unused(conn: &Connection, hash: &str) -> rusqlite::Result<()> {
+    conn.execute(
+        "DELETE FROM routes WHERE hash = ?1
+            AND NOT EXISTS (SELECT 1 FROM route_searches WHERE hash = ?1)
+            AND NOT EXISTS (SELECT 1 FROM trips WHERE hash = ?1)",
+        params![hash],
+    )?;
+    Ok(())
 }
 
 #[derive(Debug, Serialize)]
@@ -221,22 +311,41 @@ struct CreateRouteResponse {
 }
 
 async fn create_route(
-    State(state): State<DbPool>,
+    State(pool): State<DbPool>,
+    auth: ClientAuth,
     Json(req): Json<RouteRequest>,
 ) -> Result<Json<CreateRouteResponse>, AppError> {
-    Ok(Json(CreateRouteResponse {
-        hash: find_routes(state, &req.waypoints).await?,
-    }))
+    // Searching a route is what gives access to it, and puts it in the
+    // user's search history. The stored route can be deleted between finding
+    // it and recording the search (when its last user forgets it): then the
+    // insert fails its foreign key, and one more try fetches it again.
+    for attempt in 0.. {
+        let hash = find_routes(pool.clone(), &req.waypoints).await?;
+        let recorded = pool.get()?.execute(
+            "INSERT INTO route_searches (username, hash, searched_at, last_used_at)
+             VALUES (?1, ?2, ?3, ?3)
+             ON CONFLICT (username, hash) DO UPDATE SET searched_at = excluded.searched_at",
+            params![auth.username, hash, now()],
+        );
+        match recorded {
+            Ok(_) => return Ok(Json(CreateRouteResponse { hash })),
+            Err(e)
+                if attempt == 0
+                    && e.sqlite_error_code() == Some(rusqlite::ErrorCode::ConstraintViolation) => {}
+            Err(e) => return Err(e.into()),
+        }
+    }
+    unreachable!()
 }
 
-#[axum_macros::debug_handler]
 async fn get_routes(
     State(pool): State<DbPool>,
+    auth: ClientAuth,
     Path(hash): Path<String>,
 ) -> Result<Json<RoutesResponse>, AppError> {
-    let data = get_route_from_db(pool, &hash)
-        .await?
-        .ok_or(AppError::FileNotFound)?;
+    let conn = pool.get()?;
+    require_route_access(&conn, &auth.username, &hash)?;
+    let data = load_route(&conn, &hash)?.ok_or(AppError::FileNotFound)?;
 
     Ok(Json(RoutesResponse {
         waypoints: data.waypoints,
@@ -249,28 +358,37 @@ async fn get_routes(
     }))
 }
 
-async fn get_route(
-    State(pool): State<DbPool>,
-    Path((hash, route_idx)): Path<(String, usize)>,
-) -> Result<Json<RouteResponse>, AppError> {
-    let data = get_route_from_db(pool, &hash)
-        .await?
-        .ok_or(AppError::FileNotFound)?;
+/// One of a route's alternatives, if `username` may see it.
+fn route_for(
+    conn: &Connection,
+    username: &str,
+    hash: &str,
+    route_idx: usize,
+) -> Result<RouteResponse, AppError> {
+    require_route_access(conn, username, hash)?;
+    let data = load_route(conn, hash)?.ok_or(AppError::FileNotFound)?;
 
     let route = data.routes.get(route_idx).ok_or(AppError::FileNotFound)?;
-
     let route = Route::try_from(route.clone()).map_err(RouteError::Polyline)?;
 
-    Ok(Json(RouteResponse {
+    Ok(RouteResponse {
         waypoints: data.waypoints,
         route,
-    }))
+    })
+}
+
+async fn get_route(
+    State(pool): State<DbPool>,
+    auth: ClientAuth,
+    Path((hash, route_idx)): Path<(String, usize)>,
+) -> Result<Json<RouteResponse>, AppError> {
+    route_for(&*pool.get()?, &auth.username, &hash, route_idx).map(Json)
 }
 
 pub fn get_router() -> Router<DbPool> {
     Router::new()
         .route("/", post(create_route))
-        .route("/{hash}", get(get_routes))
+        .route("/{hash}", get(get_routes).delete(forget_search))
         .route("/{hash}/{route_idx}", get(get_route))
         .nest("/{hash}/{route_idx}/prices", prices::get_router())
 }

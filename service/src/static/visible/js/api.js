@@ -62,7 +62,101 @@ export async function getRoute(hash, idx) {
 
 export async function getPricesOnRoute(hash, idx, query = {}) {
 	let params = new URLSearchParams(query)
-	return await fetch(`${API_LOCATION}/route/${hash}/${idx}/prices?${params}`).then((x) => x.json());
+	return await fetch(`${API_LOCATION}/route/${hash}/${idx}/prices?${params}`)
+		.then(checkOk)
+		.then((x) => x.json());
+}
+
+// { fuel, consumption, tank_size, stop_min, stop_max }; any of them may be null.
+export async function updateCar(car) {
+	await fetch(API_LOCATION + "/user/car", {
+		method: "PUT",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify(car),
+	}).then(checkOk);
+}
+
+// ---------------------------------------------------------------------------
+// Saved trips. Private to their owner; others only see one through a share
+// link they claimed (single use: the first user to open it keeps it).
+// ---------------------------------------------------------------------------
+
+// Removes a route from the user's searches (and access to it, unless it's
+// the route of one of their trips).
+export async function forgetSearch(hash) {
+	await fetch(`${API_LOCATION}/route/${hash}`, { method: "DELETE" }).then(checkOk);
+}
+
+// { saved: [...], shared_with_me: [...], searches: [...] }
+export async function getTrips() {
+	return await fetch(API_LOCATION + "/trips").then(checkOk).then((x) => x.json());
+}
+
+// { id, name, hash, route_idx, max_distance, owned, owner, blacklist: [station ids] }
+export async function getTrip(id) {
+	return await fetch(`${API_LOCATION}/trips/${id}`).then(checkOk).then((x) => x.json());
+}
+
+// -> { id }. Also how a shared trip is copied: pass the blacklist being shown.
+export async function createTrip({ hash, route_idx, name, max_distance = null, blacklist = [] }) {
+	return await fetch(API_LOCATION + "/trips", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ hash, route_idx, name, max_distance, blacklist }),
+	})
+		.then(checkOk)
+		.then((x) => x.json());
+}
+
+// `changes`: { name?, max_distance? }
+export async function updateTrip(id, changes) {
+	await fetch(`${API_LOCATION}/trips/${id}`, {
+		method: "PATCH",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify(changes),
+	}).then(checkOk);
+}
+
+export async function deleteTrip(id) {
+	await fetch(`${API_LOCATION}/trips/${id}`, { method: "DELETE" }).then(checkOk);
+}
+
+export async function addTripBlacklist(id, stationId) {
+	await fetch(`${API_LOCATION}/trips/${id}/blacklist/${stationId}`, { method: "PUT" }).then(checkOk);
+}
+
+export async function removeTripBlacklist(id, stationId) {
+	await fetch(`${API_LOCATION}/trips/${id}/blacklist/${stationId}`, { method: "DELETE" }).then(checkOk);
+}
+
+// -> { url, expires_at }. The link works for the first user who opens it.
+export async function createTripShare(id) {
+	const share = await fetch(`${API_LOCATION}/trips/${id}/shares`, { method: "POST" })
+		.then(checkOk)
+		.then((x) => x.json());
+	return { url: location.origin + share.path, expires_at: share.expires_at };
+}
+
+// [{ id, created_at, expires_at, claimed_by, claimed_at }]
+export async function getTripShares(id) {
+	return await fetch(`${API_LOCATION}/trips/${id}/shares`).then(checkOk).then((x) => x.json());
+}
+
+export async function revokeTripShare(id, shareId) {
+	await fetch(`${API_LOCATION}/trips/${id}/shares/${shareId}`, { method: "DELETE" }).then(checkOk);
+}
+
+// -> { trip_id, hash, route_idx }
+export async function claimTripShare(token) {
+	return await fetch(`${API_LOCATION}/trips/claim/${token}`, { method: "POST" })
+		.then(checkOk)
+		.then((x) => x.json());
+}
+
+// The planner page for a route, optionally with a saved trip applied.
+export function routePageUrl(hash, routeIdx, tripId = null) {
+	const url = `/route/${hash}/${routeIdx}`;
+	return tripId ? `${url}?trip=${encodeURIComponent(tripId)}` : url;
 }
 
 
@@ -72,7 +166,11 @@ export async function getPricesOnRoute(hash, idx, query = {}) {
 
 async function checkOk(response) {
 	if (!response.ok) {
-		throw new Error((await response.text()) || `HTTP ${response.status}`);
+		// A 404 comes back as the HTML "not found" page; don't show that as text.
+		const isHtml = response.headers.get("Content-Type")?.includes("text/html");
+		const error = new Error((!isHtml && (await response.text())) || `HTTP ${response.status}`);
+		error.status = response.status;
+		throw error;
 	}
 	return response;
 }

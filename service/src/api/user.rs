@@ -25,8 +25,24 @@ pub struct UserState {
     display_name: String,
     filter: String,
     roles: Vec<String>,
+    car: CarProfile,
     /// The cert this request came in with; `None` in dev mode.
     cert: Option<CurrentCert>,
+}
+
+/// The fuel planner's car settings. Every field is unset until the user saves
+/// them once; the client fills in defaults.
+#[derive(Debug, Serialize, Deserialize)]
+struct CarProfile {
+    /// "diesel" | "gasolina"
+    fuel: Option<String>,
+    /// L/100km
+    consumption: Option<f64>,
+    /// Liters
+    tank_size: Option<f64>,
+    /// Liters in the tank between which a stop should be suggested.
+    stop_min: Option<f64>,
+    stop_max: Option<f64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -46,7 +62,12 @@ fn get_user_state(
         SELECT
             username,
             display_name,
-            last_filter
+            last_filter,
+            fuel,
+            avg_consumption,
+            tank_maximum,
+            stop_min,
+            stop_max
         FROM user_configs
         WHERE username = ?1
 
@@ -55,7 +76,8 @@ fn get_user_state(
         SELECT
             ?1 AS username,
             ?1 AS display_name,
-            'all' AS last_filter
+            'all' AS last_filter,
+            NULL, NULL, NULL, NULL, NULL
         WHERE NOT EXISTS (
             SELECT 1 FROM user_configs WHERE username = ?1
         )
@@ -68,6 +90,13 @@ fn get_user_state(
                 display_name: row.get(1)?,
                 filter: row.get(2)?,
                 roles,
+                car: CarProfile {
+                    fuel: row.get(3)?,
+                    consumption: row.get(4)?,
+                    tank_size: row.get(5)?,
+                    stop_min: row.get(6)?,
+                    stop_max: row.get(7)?,
+                },
                 cert: None,
             })
         },
@@ -83,6 +112,32 @@ fn update_user_filter(conn: &Connection, username: &str, new_filter: &str) -> ru
         SET last_filter = excluded.last_filter
         ",
         params![username, new_filter],
+    )?;
+
+    Ok(())
+}
+
+fn update_user_car(conn: &Connection, username: &str, car: &CarProfile) -> rusqlite::Result<()> {
+    conn.execute(
+        "
+        INSERT INTO user_configs
+            (username, display_name, last_filter, fuel, avg_consumption, tank_maximum, stop_min, stop_max)
+        VALUES (?1, ?1, 'all', ?2, ?3, ?4, ?5, ?6)
+        ON CONFLICT(username) DO UPDATE
+        SET fuel = excluded.fuel,
+            avg_consumption = excluded.avg_consumption,
+            tank_maximum = excluded.tank_maximum,
+            stop_min = excluded.stop_min,
+            stop_max = excluded.stop_max
+        ",
+        params![
+            username,
+            car.fuel,
+            car.consumption,
+            car.tank_size,
+            car.stop_min,
+            car.stop_max
+        ],
     )?;
 
     Ok(())
@@ -153,6 +208,31 @@ async fn set_filter(
     Ok(StatusCode::OK)
 }
 
+async fn set_car(
+    State(pool): State<DbPool>,
+    auth: ClientAuth,
+    Json(car): Json<CarProfile>,
+) -> Result<StatusCode, AppError> {
+    if car
+        .fuel
+        .as_deref()
+        .is_some_and(|f| f != "diesel" && f != "gasolina")
+    {
+        return Err(AppError::BadRequest(
+            "fuel must be \"diesel\" or \"gasolina\"".into(),
+        ));
+    }
+    let values = [car.consumption, car.tank_size, car.stop_min, car.stop_max];
+    if values.iter().flatten().any(|v| !v.is_finite() || *v < 0.0) {
+        return Err(AppError::BadRequest(
+            "Car values must be non-negative numbers".into(),
+        ));
+    }
+    let conn = pool.get()?;
+    update_user_car(&conn, &auth.username, &car)?;
+    Ok(StatusCode::OK)
+}
+
 #[derive(Serialize)]
 struct MyCert {
     #[serde(flatten)]
@@ -215,7 +295,9 @@ async fn renew_cert(
 ) -> Result<Response, AppError> {
     check_password(&form.password, &form.password2)?;
     let Some(serial) = auth.serial.as_deref() else {
-        return Err(AppError::BadRequest("No client certificate to renew".into()));
+        return Err(AppError::BadRequest(
+            "No client certificate to renew".into(),
+        ));
     };
     let label = form
         .label
@@ -238,4 +320,5 @@ pub fn get_router() -> Router<DbPool> {
         .route("/cert/renew", post(renew_cert))
         .route("/name/display", put(set_user_display_name))
         .route("/filter", put(set_filter))
+        .route("/car", put(set_car))
 }

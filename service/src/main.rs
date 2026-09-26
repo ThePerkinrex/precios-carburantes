@@ -16,7 +16,11 @@ use tracing::{debug, info, level_filters::LevelFilter, warn};
 use tracing_subscriber::EnvFilter;
 
 use crate::{
-    api::route::get_route_from_db, certs::CertManager, config::Config, error::AppError,
+    api::route::{load_route, require_route_access},
+    auth::ClientAuth,
+    certs::CertManager,
+    config::Config,
+    error::AppError,
     files::load_file_hidden,
 };
 
@@ -41,15 +45,30 @@ mod files;
 
 async fn get_route(
     State(pool): State<DbPool>,
+    auth: ClientAuth,
     Path((hash, route_idx)): Path<(String, usize)>,
 ) -> Result<Response, AppError> {
-    let data = get_route_from_db(pool, &hash)
-        .await?
-        .ok_or(AppError::FileNotFound)?;
-
+    let conn = pool.get()?;
+    require_route_access(&conn, &auth.username, &hash)?;
+    let data = load_route(&conn, &hash)?.ok_or(AppError::FileNotFound)?;
     let _ = data.routes.get(route_idx).ok_or(AppError::FileNotFound)?;
 
+    // Keeps the search history's order and "last opened" up to date. Opening
+    // a shared trip's route doesn't add it to the history.
+    conn.execute(
+        "UPDATE route_searches SET last_used_at = ?3, last_route_idx = ?4
+         WHERE username = ?1 AND hash = ?2",
+        rusqlite::params![auth.username, hash, enroll::now(), route_idx as i64],
+    )?;
+    drop(conn);
+
     load_file_hidden("route").await
+}
+
+/// Opening a trip share link. The page claims it with a POST from JS, so
+/// anything that merely fetches the URL (like a link preview) can't use it up.
+async fn trip_claim_page(Path(_token): Path<String>) -> Result<Response, AppError> {
+    load_file_hidden("trip_claim").await
 }
 
 /// `service invite <cn> <label> [--admin]`: prints a one-time enrollment
@@ -62,7 +81,8 @@ fn run_invite_cli(args: &[String], config: &Config, pool: &DbPool) -> Result<(),
         _ => return Err("usage: service invite <cn> <label> [--admin]".into()),
     };
     let conn = pool.get().map_err(|e| e.to_string())?;
-    let invite = enroll::create_invite(&conn, config, cn, label, "cli").map_err(|e| e.to_string())?;
+    let invite =
+        enroll::create_invite(&conn, config, cn, label, "cli").map_err(|e| e.to_string())?;
     if admin {
         conn.execute(
             "INSERT OR IGNORE INTO user_roles (username, role) VALUES (?1, ?2)",
@@ -141,6 +161,7 @@ async fn main() {
         .nest("/files", files::get_router())
         .route("/", get(|| async { Redirect::to("/files/index.html") }))
         .route("/route/{hash}/{id}", get(get_route))
+        .route("/trips/claim/{token}", get(trip_claim_page))
         .fallback(not_found)
         .layer(middleware::from_fn(auth::auth_middleware));
 

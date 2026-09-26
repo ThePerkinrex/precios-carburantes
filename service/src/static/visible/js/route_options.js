@@ -1,10 +1,17 @@
-// A Leaflet control with two things in it:
+// A Leaflet control with three things in it:
 //   1. how far from the route to look for stations (triggers an API refetch)
-//   2. the user's car profile (consumption, tank size, current fuel, the
+//   2. when the trip starts (to know which stations are open on arrival)
+//   3. the user's car profile (consumption, tank size, current fuel, the
 //      fill-level range within which a stop should be suggested)
+//
+// The car profile is saved on the server by the caller (onCarChange); only
+// the current fuel, which changes every drive, is kept in this browser.
 
 const STORAGE_DISTANCE_KEY = "routeOptions:distance";
-const STORAGE_CAR_KEY = "routeOptions:car";
+const STORAGE_INITIAL_FUEL_KEY = "routeOptions:initialFuel";
+// Where the whole car profile was kept before it moved to the server; read
+// once so nobody has to type theirs in again.
+const LEGACY_STORAGE_CAR_KEY = "routeOptions:car";
 
 const DEFAULT_CAR = {
 	fuel: "diesel", // "diesel" | "gasolina"
@@ -32,6 +39,20 @@ function loadJson(key, fallback) {
 	}
 }
 
+function saveJson(key, value) {
+	try {
+		localStorage.setItem(key, JSON.stringify(value));
+	} catch {
+		// Private mode, storage full...: it just won't be remembered.
+	}
+}
+
+// "YYYY-MM-DDTHH:MM" in local time, the format of <input type="datetime-local">.
+function toLocalInputValue(date) {
+	const pad = (n) => String(n).padStart(2, "0");
+	return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 /**
  * Calculates remaining range in kilometers from liters and consumption rate.
  */
@@ -42,6 +63,14 @@ function fuelToKm(liters, consumption) {
 	return Math.round((liters / consumption) * 100);
 }
 
+/**
+ * @param {object} [options]
+ * @param {object} [options.initialCar]  the saved car profile; missing fields
+ *        fall back to the legacy local copy, then to DEFAULT_CAR
+ * @param {(car: object) => any} [options.onCarChange]  called with the whole
+ *        car (including initialFuel) whenever a field changes
+ * @param {(departure: Date) => any} [options.onDepartureChange]
+ */
 export function addRouteOptionsControl(
 	map,
 	{
@@ -50,26 +79,33 @@ export function addRouteOptionsControl(
 		distanceMin = 200,
 		distanceMax = 10000,
 		distanceStep = 100,
-		initialCar,
+		initialCar = {},
 		persist = true,
 		onDistanceChange,
 		onCarChange,
+		onDepartureChange,
 	} = {},
 ) {
 	let distance =
 		initialDistance ??
 		(persist ? loadJson(STORAGE_DISTANCE_KEY, 2000) : 2000);
+	const legacyCar = persist ? loadJson(LEGACY_STORAGE_CAR_KEY, {}) : {};
+	const savedCar = Object.fromEntries(
+		Object.entries(initialCar).filter(([, v]) => v != null),
+	);
 	let car = {
 		...DEFAULT_CAR,
-		...(persist ? loadJson(STORAGE_CAR_KEY, {}) : {}),
-		...initialCar,
+		...legacyCar,
+		...savedCar,
 	};
+	if (persist) car.initialFuel = loadJson(STORAGE_INITIAL_FUEL_KEY, car.initialFuel);
+	let departure = new Date();
 
 	function saveDistance() {
-		if (persist) localStorage.setItem(STORAGE_DISTANCE_KEY, JSON.stringify(distance));
+		if (persist) saveJson(STORAGE_DISTANCE_KEY, distance);
 	}
-	function saveCar() {
-		if (persist) localStorage.setItem(STORAGE_CAR_KEY, JSON.stringify(car));
+	function saveInitialFuel() {
+		if (persist) saveJson(STORAGE_INITIAL_FUEL_KEY, car.initialFuel);
 	}
 
 	const control = L.control({ position });
@@ -79,7 +115,7 @@ export function addRouteOptionsControl(
 
 		const toggle = L.DomUtil.create("button", "route-options-fab", container);
 		toggle.type = "button";
-		toggle.title = "Distancia y coche";
+		toggle.title = "Distancia, salida y coche";
 		toggle.innerHTML = "⛽";
 
 		const panel = L.DomUtil.create("div", "route-options-panel", container);
@@ -97,6 +133,12 @@ export function addRouteOptionsControl(
 						value="${distance}"
 					>
 					<span class="route-options-distance-value">${formatDistanceLabel(distance)}</span>
+				</div>
+
+				<div class="route-options-section-title">Salida</div>
+				<div class="route-options-departure">
+					<input type="datetime-local" class="route-options-departure-input" value="${toLocalInputValue(departure)}">
+					<button type="button" class="route-options-now-btn">Ahora</button>
 				</div>
 
 				<div class="route-options-section-title">Mi coche</div>
@@ -126,6 +168,7 @@ export function addRouteOptionsControl(
 				</label>
 
 				<div class="route-options-section-title">Repostar cuando quede entre</div>
+				<div class="route-options-hint">Nunca se baja del mínimo, tampoco al llegar al destino.</div>
 				<div class="route-options-stop-range">
 					<label class="route-options-field">
 						<span>Mínimo (L)</span>
@@ -140,7 +183,7 @@ export function addRouteOptionsControl(
 				</div>
 
 				<div class="route-options-actions">
-					<button type="button" class="route-options-save-btn">Guardar</button>
+					<button type="button" class="route-options-save-btn">Listo</button>
 				</div>
 			</div>
 		`;
@@ -163,6 +206,27 @@ export function addRouteOptionsControl(
 			distance = Number(slider.value);
 			saveDistance();
 			onDistanceChange?.(distance);
+		});
+
+		// Every change already applies (and saves) as it's made; this just
+		// gets the panel out of the way.
+		L.DomEvent.on(panel.querySelector(".route-options-save-btn"), "click", () => {
+			panel.style.display = "none";
+		});
+
+		// --- departure ---
+		const departureInput = panel.querySelector(".route-options-departure-input");
+		function setDeparture(date) {
+			departure = date;
+			departureInput.value = toLocalInputValue(date);
+			onDepartureChange?.(departure);
+		}
+		L.DomEvent.on(departureInput, "change", () => {
+			const date = new Date(departureInput.value);
+			if (!Number.isNaN(date.getTime())) setDeparture(date);
+		});
+		L.DomEvent.on(panel.querySelector(".route-options-now-btn"), "click", () => {
+			setDeparture(new Date());
 		});
 
 		// --- car profile & dynamic km ranges ---
@@ -207,7 +271,7 @@ export function addRouteOptionsControl(
 			});
 			L.DomEvent.on(input, "change", () => {
 				readCarFromForm();
-				saveCar();
+				saveInitialFuel();
 				onCarChange?.(car);
 			});
 		});
@@ -220,8 +284,9 @@ export function addRouteOptionsControl(
 
 	control.addTo(map);
 
-	onDistanceChange?.(distance);
+	onDepartureChange?.(departure);
 	onCarChange?.(car);
+	onDistanceChange?.(distance);
 
 	return control;
 }
