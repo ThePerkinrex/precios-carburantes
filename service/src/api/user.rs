@@ -1,13 +1,23 @@
+use std::sync::Arc;
+
 use axum::{
-    Json, Router,
-    extract::State,
+    Extension, Form, Json, Router,
+    extract::{Path, State},
     http::StatusCode,
-    routing::{get, put},
+    response::Response,
+    routing::{get, post, put},
 };
 use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};
 
-use crate::{DbPool, auth::ClientAuth, error::AppError};
+use crate::{
+    DbPool,
+    api::admin::{CertInfo, RevokeParams, parse_reason},
+    auth::ClientAuth,
+    certs::{CertManager, normalize_serial},
+    enroll::{check_password, p12_response},
+    error::AppError,
+};
 
 #[derive(Debug, Serialize)]
 pub struct UserState {
@@ -15,6 +25,15 @@ pub struct UserState {
     display_name: String,
     filter: String,
     roles: Vec<String>,
+    /// The cert this request came in with; `None` in dev mode.
+    cert: Option<CurrentCert>,
+}
+
+#[derive(Debug, Serialize)]
+struct CurrentCert {
+    label: String,
+    serial: String,
+    not_after: i64,
 }
 
 fn get_user_state(
@@ -49,6 +68,7 @@ fn get_user_state(
                 display_name: row.get(1)?,
                 filter: row.get(2)?,
                 roles,
+                cert: None,
             })
         },
     )
@@ -91,11 +111,16 @@ async fn user_state(
     auth: ClientAuth,
 ) -> Result<Json<UserState>, AppError> {
     let conn = pool.get()?;
-    Ok(Json(get_user_state(
-        &conn,
-        &auth.username,
-        auth.roles.clone(),
-    )?))
+    let mut state = get_user_state(&conn, &auth.username, auth.roles.clone())?;
+    state.cert = auth
+        .serial
+        .zip(auth.not_after)
+        .map(|(serial, not_after)| CurrentCert {
+            label: auth.label,
+            serial,
+            not_after: not_after.unix_timestamp(),
+        });
+    Ok(Json(state))
 }
 
 #[derive(Debug, Deserialize)]
@@ -128,9 +153,89 @@ async fn set_filter(
     Ok(StatusCode::OK)
 }
 
+#[derive(Serialize)]
+struct MyCert {
+    #[serde(flatten)]
+    cert: CertInfo,
+    /// The cert this request came in with.
+    current: bool,
+}
+
+async fn my_certs(
+    Extension(certs): Extension<Arc<CertManager>>,
+    auth: ClientAuth,
+) -> Json<Vec<MyCert>> {
+    Json(
+        certs
+            .certs_for(&auth.username)
+            .await
+            .into_iter()
+            .map(|c| MyCert {
+                current: auth.serial.as_deref() == Some(c.serial.as_str()),
+                cert: CertInfo::from(c),
+            })
+            .collect(),
+    )
+}
+
+/// Revoke one of your own devices (e.g. a lost phone).
+async fn revoke_my_cert(
+    Extension(certs): Extension<Arc<CertManager>>,
+    auth: ClientAuth,
+    Path(serial): Path<String>,
+    params: Option<Json<RevokeParams>>,
+) -> Result<StatusCode, AppError> {
+    let serial = normalize_serial(&serial);
+    match certs.lookup(&serial).await {
+        Some(cert) if cert.cn == auth.username => {}
+        // Same answer whether it doesn't exist or isn't yours.
+        _ => return Err(AppError::FileNotFound),
+    }
+    let Json(params) = params.unwrap_or_default();
+    certs
+        .revoke_cert(&serial, parse_reason(params.reason.as_deref()))
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Deserialize)]
+struct RenewForm {
+    password: String,
+    password2: String,
+    /// New label; defaults to the current cert's.
+    label: Option<String>,
+}
+
+/// Issues a replacement for the cert this request came in with. The old one
+/// stays valid until it expires, so a failed import can't lock anyone out.
+async fn renew_cert(
+    Extension(certs): Extension<Arc<CertManager>>,
+    auth: ClientAuth,
+    Form(form): Form<RenewForm>,
+) -> Result<Response, AppError> {
+    check_password(&form.password, &form.password2)?;
+    let Some(serial) = auth.serial.as_deref() else {
+        return Err(AppError::BadRequest("No client certificate to renew".into()));
+    };
+    let label = form
+        .label
+        .as_deref()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .unwrap_or(&auth.label);
+
+    let issued = certs
+        .issue_p12(&auth.username, label, Some(serial), &form.password)
+        .await?;
+    Ok(p12_response(label, issued.p12))
+}
+
 pub fn get_router() -> Router<DbPool> {
     Router::new()
         .route("/state", get(user_state))
-        .route("/name/diplay", put(set_user_display_name))
+        .route("/certs", get(my_certs))
+        .route("/certs/{serial}/revoke", post(revoke_my_cert))
+        .route("/cert/renew", post(renew_cert))
+        .route("/name/display", put(set_user_display_name))
         .route("/filter", put(set_filter))
 }

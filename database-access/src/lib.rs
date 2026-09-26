@@ -73,6 +73,16 @@ const MIGRATIONS: &[&[&str]] = &[
         "ALTER TABLE user_configs ADD COLUMN tank_maximum REAL",
         "ALTER TABLE user_configs ADD COLUMN avg_consumption REAL",
     ],
+    &["CREATE TABLE IF NOT EXISTS enrollments (
+            token_hash TEXT PRIMARY KEY,
+            cn TEXT NOT NULL,
+            label TEXT NOT NULL,
+            created_by TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            expires_at INTEGER NOT NULL,
+            used_at INTEGER,
+            used_serial TEXT
+        )"],
 ];
 
 pub const DEFAULT_DB_PATH: &str = "precios_carburantes.db";

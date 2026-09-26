@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My devices</title>
+    <link rel="stylesheet" href="/files/css/account.css">
+</head>
+<body>
+    <div class="page">
+        <header>
+            <h1>My devices</h1>
+            <a href="/files/index.html">Back</a>
+        </header>
+
+        <div id="expiryBanner" class="banner" hidden></div>
+
+        <section class="card">
+            <h2>This device</h2>
+            <p id="currentCert" class="muted">Loading…</p>
+        </section>
+
+        <section class="card" id="renewSection">
+            <h2>Renew this device's certificate</h2>
+            <p class="muted">
+                Downloads a new certificate file for this device. Your current one keeps working
+                until it expires, so there's no rush to import it. The password protects the file;
+                you'll need it once, when importing.
+            </p>
+            <form id="renewForm" class="inline">
+                <label>Device name
+                    <input type="text" name="label" required pattern="[a-z0-9_\-]{1,32}"
+                        title="1-32 lowercase letters, digits, '-' or '_'">
+                </label>
+                <label>File password
+                    <input type="password" name="password" required minlength="6" autocomplete="new-password">
+                </label>
+                <label>Repeat password
+                    <input type="password" name="password2" required minlength="6" autocomplete="new-password">
+                </label>
+                <button type="submit">Download new certificate</button>
+            </form>
+            <p id="renewMessage"></p>
+        </section>
+
+        <section class="card">
+            <h2>All my devices</h2>
+            <p class="muted">
+                Each device has its own certificate. If you lose a device, revoke it here and it stops
+                working immediately.
+            </p>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr><th>Device</th><th>Status</th><th>Expires</th><th>Serial</th><th></th></tr>
+                    </thead>
+                    <tbody id="certRows"></tbody>
+                </table>
+            </div>
+            <p id="certsMessage"></p>
+        </section>
+    </div>
+    <script type="module" src="/files/js/account.js"></script>
+</body>
+</html>

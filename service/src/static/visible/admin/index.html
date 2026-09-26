@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Users admin</title>
+    <link rel="stylesheet" href="/files/css/account.css">
+</head>
+<body>
+    <div class="page">
+        <header>
+            <h1>Users</h1>
+            <a href="/files/index.html">Back</a>
+        </header>
+
+        <section class="card">
+            <h2>Invite a device</h2>
+            <p class="muted">
+                Creates a single-use link that downloads a certificate for this user and device.
+                Send it privately. It expires after 48 hours. To replace a lost device, revoke its
+                certificate below first, or pick a new device name.
+            </p>
+            <form id="inviteForm" class="inline">
+                <label>User
+                    <input type="text" name="cn" required pattern="[a-z0-9_\-]{1,32}" list="knownUsers"
+                        title="1-32 lowercase letters, digits, '-' or '_'">
+                </label>
+                <datalist id="knownUsers"></datalist>
+                <label>Device name
+                    <input type="text" name="label" required pattern="[a-z0-9_\-]{1,32}" placeholder="phone"
+                        title="1-32 lowercase letters, digits, '-' or '_'">
+                </label>
+                <label class="check"><input type="checkbox" name="admin"> Make admin</label>
+                <button type="submit">Create link</button>
+            </form>
+            <p id="inviteMessage"></p>
+            <div class="invite-link" id="inviteResult" hidden>
+                <input type="text" id="inviteUrl" readonly>
+                <button type="button" id="copyInvite">Copy</button>
+            </div>
+        </section>
+
+        <section class="card">
+            <h2>Pending invites</h2>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr><th>User</th><th>Device</th><th>By</th><th>Expires</th><th></th></tr>
+                    </thead>
+                    <tbody id="inviteRows"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="card">
+            <h2>Certificates</h2>
+            <p id="usersMessage"></p>
+            <div id="users"></div>
+        </section>
+    </div>
+    <script type="module" src="/files/js/admin.js"></script>
+</body>
+</html>

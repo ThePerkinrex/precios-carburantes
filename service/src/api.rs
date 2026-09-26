@@ -10,6 +10,7 @@ use tracing::warn;
 
 use crate::{DbPool, error::AppError};
 
+mod admin;
 mod geo;
 pub mod route;
 mod user;
@@ -210,6 +211,7 @@ pub fn get_router() -> Router<DbPool> {
         .route("/prices/history", get(price_history))
         .route("/{id}/history", get(price_history_station))
         .nest("/user", user::get_router())
+        .nest("/admin", admin::get_router())
         .nest("/geo", geo::get_router())
         .nest("/route/", route::get_router())
 }

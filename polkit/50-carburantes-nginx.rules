@@ -1,0 +1,10 @@
+// /etc/polkit-1/rules.d/50-carburantes-nginx.rules
+// Lets the service reload nginx after changing the CRL (certs.reload_nginx).
+polkit.addRule(function (action, subject) {
+    if (action.id == "org.freedesktop.systemd1.manage-units" &&
+        action.lookup("unit") == "nginx.service" &&
+        action.lookup("verb") == "reload" &&
+        subject.user == "carburantes") {
+        return polkit.Result.YES;
+    }
+});

@@ -6,9 +6,27 @@
 	<title>Index</title>
 </head>
 <body>
+	<p id="expiryBanner" hidden></p>
 	<ul>
 		<li><a href="/files/dashboard">Dashboard</a></li>
 		<li><a href="/files/map">Map</a></li>
+		<li><a href="/files/account">My devices</a></li>
+		<li id="adminLink" hidden><a href="/files/admin">Users admin</a></li>
 	</ul>
+	<script type="module">
+		import { getUserState } from "/files/js/api.js";
+		import { expiryWarning } from "/files/js/certs_ui.js";
+
+		const state = await getUserState();
+		if (state.roles.includes("admin_users")) {
+			document.getElementById("adminLink").hidden = false;
+		}
+		const warning = state.cert && expiryWarning(state.cert.not_after);
+		if (warning) {
+			const banner = document.getElementById("expiryBanner");
+			banner.innerHTML = `${warning} <a href="/files/account">Renew it</a>.`;
+			banner.hidden = false;
+		}
+	</script>
 </body>
 </html>

@@ -33,6 +33,13 @@ fn user_certs_default() -> PathBuf {
     PathBuf::from("certs/users")
 }
 
+fn ca_name_default() -> String {
+    "carburantes-CA".to_string()
+}
+
+const fn invite_ttl_hours_default() -> u32 {
+    48
+}
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct CertConfig {
@@ -41,13 +48,28 @@ pub struct CertConfig {
     #[serde(default = "user_certs_default")]
     pub user_certs: PathBuf,
     #[serde(default)]
-    pub reload_nginx: bool
+    pub reload_nginx: bool,
+    /// CN of the CA, only used when a new one has to be created.
+    #[serde(default = "ca_name_default")]
+    pub ca_name: String,
+    #[serde(default = "invite_ttl_hours_default")]
+    pub invite_ttl_hours: u32,
 }
 
 impl Default for CertConfig {
     fn default() -> Self {
-        Self { ca: ca_default(), user_certs: user_certs_default(), reload_nginx: Default::default() }
+        Self {
+            ca: ca_default(),
+            user_certs: user_certs_default(),
+            reload_nginx: Default::default(),
+            ca_name: ca_name_default(),
+            invite_ttl_hours: invite_ttl_hours_default(),
+        }
     }
+}
+
+fn public_url_default() -> String {
+    "http://localhost:8001".to_string()
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -55,5 +77,8 @@ pub struct Config {
     pub addr: SocketAddrs,
     pub dev: Option<DevConfig>,
     #[serde(default)]
-    pub certs: CertConfig
+    pub certs: CertConfig,
+    /// Externally visible base URL (no trailing slash), used for invite links.
+    #[serde(default = "public_url_default")]
+    pub public_url: String,
 }

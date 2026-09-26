@@ -12,21 +12,23 @@ use database_access::{DEFAULT_DB_PATH, get_connection_manager};
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use reqwest::StatusCode;
-use tracing::{debug, info, level_filters::LevelFilter};
+use tracing::{debug, info, level_filters::LevelFilter, warn};
 use tracing_subscriber::EnvFilter;
 
 use crate::{
-    api::route::get_route_from_db, config::Config, error::AppError, files::load_file_hidden,
+    api::route::get_route_from_db, certs::CertManager, config::Config, error::AppError,
+    files::load_file_hidden,
 };
 
 type DbPool = Pool<SqliteConnectionManager>;
 
 mod api;
 mod auth;
+mod certs;
 mod config;
+mod enroll;
 mod error;
 mod files;
-mod certs;
 
 // fn wants_html(headers: &HeaderMap) -> bool {
 //     debug!("WANTS HTML. Accept: {:?}", headers.get(header::ACCEPT));
@@ -48,6 +50,31 @@ async fn get_route(
     let _ = data.routes.get(route_idx).ok_or(AppError::FileNotFound)?;
 
     load_file_hidden("route").await
+}
+
+/// `service invite <cn> <label> [--admin]`: prints a one-time enrollment
+/// link. For bootstrapping the first admin, or when nobody can reach the
+/// admin panel. Run from the service's working directory.
+fn run_invite_cli(args: &[String], config: &Config, pool: &DbPool) -> Result<(), String> {
+    let (cn, label, admin) = match args {
+        [cn, label] => (cn, label, false),
+        [cn, label, flag] if flag == "--admin" => (cn, label, true),
+        _ => return Err("usage: service invite <cn> <label> [--admin]".into()),
+    };
+    let conn = pool.get().map_err(|e| e.to_string())?;
+    let invite = enroll::create_invite(&conn, config, cn, label, "cli").map_err(|e| e.to_string())?;
+    if admin {
+        conn.execute(
+            "INSERT OR IGNORE INTO user_roles (username, role) VALUES (?1, ?2)",
+            rusqlite::params![cn, auth::ADMIN_USERS_ROLE],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    let expires = time::OffsetDateTime::from_unix_timestamp(invite.expires_at)
+        .map(|t| t.to_string())
+        .unwrap_or_default();
+    println!("{}\n(single use, expires {expires})", invite.url);
+    Ok(())
 }
 
 async fn not_found() -> Result<Response, AppError> {
@@ -81,16 +108,43 @@ async fn main() {
     let manager = get_connection_manager(DEFAULT_DB_PATH).unwrap();
     let pool = r2d2::Pool::new(manager).unwrap();
 
-    let addr = config.addr.to_slice().to_vec();
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if let Some((cmd, rest)) = args.split_first() {
+        let result = match cmd.as_str() {
+            "invite" => run_invite_cli(rest, &config, &pool),
+            _ => Err(format!("unknown command {cmd:?}; available: invite")),
+        };
+        if let Err(e) = result {
+            eprintln!("{e}");
+            std::process::exit(1);
+        }
+        return;
+    }
 
-    let app = Router::new()
+    let addr = config.addr.to_slice().to_vec();
+    if config.dev.is_some() && addr.iter().any(|a| !a.ip().is_loopback()) {
+        warn!(
+            "`dev` is set and the service listens on a non-loopback address: \
+             requests without auth headers are treated as the dev user"
+        );
+    }
+
+    let certs = Arc::new(CertManager::new(config.certs.clone()).await.unwrap());
+    certs.clone().spawn_crl_refresh_task();
+
+    // Everything except enrollment requires a verified client cert.
+    let protected = Router::new()
         .nest("/api", api::get_router())
         .nest("/files", files::get_router())
         .route("/", get(|| async { Redirect::to("/files/index.html") }))
         .route("/route/{hash}/{id}", get(get_route))
         .fallback(not_found)
-        .layer(middleware::from_fn(auth::auth_middleware))
+        .layer(middleware::from_fn(auth::auth_middleware));
+
+    let app = protected
+        .nest("/enroll", enroll::get_router())
         .layer(middleware::from_fn(error::log_app_errors))
+        .layer(Extension(certs))
         .layer(Extension(Arc::new(config)))
         .with_state(pool);
 

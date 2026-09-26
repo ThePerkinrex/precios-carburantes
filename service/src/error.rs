@@ -8,7 +8,7 @@ use axum::{
 use reqwest::StatusCode;
 use thiserror::Error;
 
-use crate::{api::route::RouteError, not_found};
+use crate::{api::route::RouteError, certs::CertError, not_found};
 
 #[derive(Debug, Error)]
 pub struct GenericLoggedError {
@@ -67,6 +67,12 @@ pub enum AppError {
     R2D2Error(#[from] r2d2::Error),
     #[error("Auth Error")]
     Auth,
+    #[error("Forbidden")]
+    Forbidden,
+    #[error("Bad request: {0}")]
+    BadRequest(Cow<'static, str>),
+    #[error(transparent)]
+    Cert(#[from] CertError),
     #[error(transparent)]
     Extension(#[from] ExtensionRejection),
     #[error(transparent)]
@@ -116,6 +122,18 @@ impl IntoResponse for AppError {
                 )
                     .into_response(),
                 None,
+            ),
+            Self::Forbidden => (StatusCode::FORBIDDEN.into_response(), None),
+            Self::BadRequest(msg) => ((StatusCode::BAD_REQUEST, msg).into_response(), None),
+            Self::Cert(
+                e @ (CertError::InvalidName(_) | CertError::LabelInUse { .. }),
+            ) => ((StatusCode::BAD_REQUEST, e.to_string()).into_response(), None),
+            Self::Cert(e @ CertError::NotFound(_)) => {
+                ((StatusCode::NOT_FOUND, e.to_string()).into_response(), None)
+            }
+            Self::Cert(e) => (
+                StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+                Some(format!("Cert Error: {e}").into()),
             ),
             Self::Extension(rejection) => {
                 let msg = format!("Extension Rejection: {rejection}");
