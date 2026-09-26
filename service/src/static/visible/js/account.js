@@ -1,5 +1,5 @@
 import { getMyCerts, getUserState, renewMyCert, revokeMyCert } from "./api.js";
-import { certItem, certLists, expiryWarning, formatDate, showError } from "./certs_ui.js";
+import { certItem, certLists, expiryWarning, formatDate, setupBackLink, showError } from "./certs_ui.js";
 
 let state;
 
@@ -78,4 +78,5 @@ async function load() {
 	await loadCerts();
 }
 
+setupBackLink();
 load();

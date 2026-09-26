@@ -1,6 +1,7 @@
 import { addVisibleStationsControl } from "./visible_stations.js";
 import { getLatestPrices, getUserState } from "./api.js";
 import { getLogos } from "./logos.js";
+import { addMenuControl } from "./map_menu.js";
 import { addRouteControl } from "./route.js";
 import { createStationsLayer } from "./stations.js";
 
@@ -61,7 +62,10 @@ async function load() {
 	let logos = getLogos();
 	let state = getUserState();
 
-	const map = L.map("map").setView([40.4165, -3.70256], 11);
+	// Zoom is added after the menu so the menu sits at the very top.
+	const map = L.map("map", { zoomControl: false }).setView([40.4165, -3.70256], 11);
+	addMenuControl(map, state);
+	L.control.zoom().addTo(map);
 
 	L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
 		maxZoom: 19,

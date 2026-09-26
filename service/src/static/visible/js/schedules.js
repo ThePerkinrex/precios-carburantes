@@ -1,3 +1,5 @@
+import { formatDate } from "./dates.js";
+
 const DAYS = {
 	L: 1, // lunes
 	M: 2,
@@ -179,7 +181,7 @@ export function formatOpenCloseDate(targetDate, now = new Date()) {
 		return `Mañana - ${time}`;
 	}
 
-	const date = targetDate.toLocaleDateString("es-ES");
+	const date = formatDate(targetDate);
 
 	return `${date} - ${time}`;
 }

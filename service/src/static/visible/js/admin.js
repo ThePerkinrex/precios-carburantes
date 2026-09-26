@@ -5,7 +5,8 @@ import {
 	adminListUsers,
 	adminRevokeCert,
 } from "./api.js";
-import { actionButton, certItem, certLists, fillList, formatDate, listItem, showError } from "./certs_ui.js";
+import { formatDateTime } from "./dates.js";
+import { actionButton, certItem, certLists, fillList, formatDate, listItem, setupBackLink, showError } from "./certs_ui.js";
 
 async function loadInvites() {
 	const list = document.getElementById("inviteList");
@@ -103,7 +104,7 @@ function setupInviteForm() {
 			url.value = invite.url;
 			copy.textContent = "Copy";
 			result.hidden = false;
-			message.textContent = `Link for ${form.cn.value} (${form.label.value}), valid until ${new Date(invite.expires_at * 1000).toLocaleString()}. It won't be shown again.`;
+			message.textContent = `Link for ${form.cn.value} (${form.label.value}), valid until ${formatDateTime(new Date(invite.expires_at * 1000))}. It won't be shown again.`;
 			message.className = "";
 			form.reset();
 			await loadInvites();
@@ -128,6 +129,7 @@ function setupInviteForm() {
 	});
 }
 
+setupBackLink();
 setupInviteForm();
 loadInvites();
 loadUsers();

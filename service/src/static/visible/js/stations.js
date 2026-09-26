@@ -1,3 +1,4 @@
+import { formatDateTime, parseFecha } from "./dates.js";
 import { getStatus, formatOpenCloseDate } from "./schedules.js";
 import { updateFilter } from "./api.js";
 
@@ -116,7 +117,7 @@ async function drawHistoryChart(eess) {
 	new Chart(chart, {
 		type: "line",
 		data: {
-			labels: history.map((x) => x.fecha),
+			labels: history.map((x) => formatDateTime(parseFecha(x.fecha))),
 			datasets: [
 				{
 					label: "Gasolina 95",

@@ -1,114 +1,111 @@
+import { getUserState } from "./api.js";
+import { renderNav } from "./nav.js";
+import { formatDate, formatDateTime } from "./dates.js";
+import { getPriceHistory, renderBoard } from "./price_board.js";
+
+const ccaaSelect = document.getElementById("ccaaSelect");
+const provSelect = document.getElementById("provinciaSelect");
+const board = document.getElementById("board");
+
 let fuelChart;
-let geoData = { ccaa: [], provincias: [] }; // Store data globally
+let geoData = { ccaa: [], provincias: [] };
+// Only the latest request gets to draw, so fast filter changes can't race.
+let requestId = 0;
 
-document.addEventListener('DOMContentLoaded', async () => {
-    await loadFilters();
-    updateDashboard();
-
-    document.getElementById('ccaaSelect').addEventListener('change', (e) => {
-        const selectedCcaaId = e.target.value;
-        
-        // 1. Repopulate the province dropdown based on selection
-        populateProvincias(selectedCcaaId);
-        
-        // 2. Refresh the chart
-        updateDashboard();
-    });
-
-    document.getElementById('provinciaSelect').addEventListener('change', updateDashboard);
-});
+// Same colours as the board's nozzle chips (see app.css).
+const style = getComputedStyle(document.documentElement);
+const G95 = style.getPropertyValue("--g95").trim();
+const DIESEL = style.getPropertyValue("--diesel").trim();
+Chart.defaults.font.family = style.getPropertyValue("--font").trim();
+Chart.defaults.color = style.getPropertyValue("--muted").trim();
 
 async function loadFilters() {
-    try {
-        const response = await fetch('/api/geo/filter');
-        geoData = await response.json(); // Save the whole object
-        
-        const ccaaSelect = document.getElementById('ccaaSelect');
-        
-        // Populate CCAA dropdown
-        geoData.ccaa.forEach(c => {
-            ccaaSelect.add(new Option(c.name, c.id));
-        });
-
-        // Initialize empty provinces
-        populateProvincias(""); 
-    } catch (err) {
-        console.error("Failed to load filters:", err);
-    }
+	try {
+		const response = await fetch("/api/geo/filter");
+		geoData = await response.json();
+		for (const c of geoData.ccaa) ccaaSelect.add(new Option(c.name, c.id));
+		populateProvincias("");
+	} catch (err) {
+		console.error("Failed to load filters:", err);
+	}
 }
 
+// All provinces, or only those of the selected region.
 function populateProvincias(ccaaId) {
-    const provSelect = document.getElementById('provinciaSelect');
-    
-    // Clear existing options except the first "All" option
-    provSelect.innerHTML = '<option value="">All Provinces</option>';
-    
-    if (!ccaaId) {
-        // Optional: show all provinces if no CCAA is selected, 
-        // or keep it disabled until one is picked.
-        geoData.provincias.forEach(p => {
-            provSelect.add(new Option(p.name, p.id));
-        });
-        return;
-    }
+	provSelect.replaceChildren(new Option("All provinces", ""));
+	for (const p of geoData.provincias) {
+		if (!ccaaId || p.ccaa === ccaaId) provSelect.add(new Option(p.name, p.id));
+	}
+}
 
-    // Filter provinces that match the selected CCAA ID
-    const filtered = geoData.provincias.filter(p => p.ccaa === ccaaId);
-    
-    filtered.forEach(p => {
-        provSelect.add(new Option(p.name, p.id));
-    });
+function selectedName(select, fallback) {
+	return select.value ? select.selectedOptions[0].text : fallback;
 }
 
 async function updateDashboard() {
-    const ccaa = document.getElementById('ccaaSelect').value;
-    const prov = document.getElementById('provinciaSelect').value;
-
-    const param_object = {};
-    if (ccaa) param_object.ccaa_id = ccaa;
-    if (prov) param_object.prov_id = prov;
-    
-    const params = new URLSearchParams(param_object);
-    
-    try {
-        const response = await fetch(`/api/prices/history?${params}`);
-        const data = await response.json();
-        renderChart(data);
-    } catch (err) {
-        console.error("Data fetch error:", err);
-    }
+	const id = ++requestId;
+	const where = provSelect.value
+		? selectedName(provSelect)
+		: selectedName(ccaaSelect, "Spain");
+	try {
+		const history = await getPriceHistory({ ccaa: ccaaSelect.value, provincia: provSelect.value });
+		if (id !== requestId) return;
+		renderBoard(board, history, where);
+		renderChart(history);
+	} catch (err) {
+		if (id !== requestId) return;
+		board.innerHTML = `<p class="board-empty"></p>`;
+		board.firstChild.textContent = err.message;
+	}
 }
 
-function renderChart(data) {
-    const ctx = document.getElementById('historyChart').getContext('2d');
-    
-    if (fuelChart) fuelChart.destroy();
+function renderChart(history) {
+	if (fuelChart) fuelChart.destroy();
 
-    fuelChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: data.map(d => d.fecha),
-            datasets: [
-                {
-                    label: 'Gasóleo A (€)',
-                    data: data.map(d => d.gasoleo_a),
-                    borderColor: '#3498db',
-                    tension: 0.1
-                },
-                {
-                    label: 'Gasolina 95 (€)',
-                    data: data.map(d => d.gasolina_95),
-                    borderColor: '#e67e22',
-                    tension: 0.1
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { position: 'top' }
-            }
-        }
-    });
+	const line = (label, key, color) => ({
+		label,
+		data: history.map((d) => d[key]),
+		borderColor: color,
+		backgroundColor: color,
+		borderWidth: 2,
+		pointRadius: 0,
+		pointHitRadius: 12,
+		tension: 0.2,
+	});
+
+	fuelChart = new Chart(document.getElementById("historyChart"), {
+		type: "line",
+		data: {
+			labels: history.map((d) => formatDate(d.date)),
+			datasets: [line("Gasolina 95", "gasolina_95", G95), line("Gasóleo A", "gasoleo_a", DIESEL)],
+		},
+		options: {
+			responsive: true,
+			maintainAspectRatio: false,
+			interaction: { mode: "index", intersect: false },
+			plugins: {
+				legend: { position: "top", align: "start", labels: { usePointStyle: true, pointStyle: "rectRounded", boxHeight: 10 } },
+				tooltip: {
+					callbacks: {
+						title: (items) => formatDateTime(history[items[0].dataIndex].date),
+						label: (item) => `${item.dataset.label}: ${item.parsed.y.toFixed(3)} €/l`,
+					},
+				},
+			},
+			scales: {
+				x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkipPadding: 16 } },
+				y: { ticks: { callback: (v) => `${v.toFixed(2)} €` } },
+			},
+		},
+	});
 }
+
+ccaaSelect.addEventListener("change", () => {
+	populateProvincias(ccaaSelect.value);
+	updateDashboard();
+});
+provSelect.addEventListener("change", updateDashboard);
+
+getUserState().then((state) => renderNav(document.getElementById("nav"), state, "dashboard"));
+await loadFilters();
+updateDashboard();

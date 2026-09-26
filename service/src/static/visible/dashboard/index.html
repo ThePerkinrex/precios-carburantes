@@ -1,31 +1,56 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fuel Price Tracker</title>
-    <link rel="stylesheet" href="/files/css/styles.css">
-    <link rel="stylesheet" href="/files/css/dashboard.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+	<meta name="theme-color" content="#15233a">
+	<title>Price trends</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&display=swap">
+	<link rel="stylesheet" href="/files/css/app.css">
+	<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-    <div class="dashboard">
-        <header>
-            <h1>Fuel Price Analytics</h1>
-            <div class="filters">
-                <select id="ccaaSelect">
-                    <option value="">Whole Country (Spain)</option>
-                </select>
-                <select id="provinciaSelect">
-                    <option value="">All Provinces</option>
-                </select>
-            </div>
-        </header>
+	<div class="page">
+		<nav id="nav" class="nav" aria-label="Pages">
+			<a href="/files/map">Map</a>
+			<a href="/files/dashboard" aria-current="page">Price trends</a>
+		</nav>
 
-        <main class="chart-container">
-            <canvas id="historyChart"></canvas>
-        </main>
-    </div>
-    <script src="/files/js/dashboard.js"></script>
+		<header class="page-head">
+			<h1>Price trends</h1>
+		</header>
+
+		<div class="trends">
+			<div class="trends-side">
+				<section id="board" class="board" aria-live="polite">
+					<div class="board-head"><span>Average price</span><strong>Spain</strong></div>
+					<p class="board-empty">Loading prices…</p>
+				</section>
+
+				<div class="filters">
+					<label>Region
+						<select id="ccaaSelect">
+							<option value="">All of Spain</option>
+						</select>
+					</label>
+					<label>Province
+						<select id="provinciaSelect">
+							<option value="">All provinces</option>
+						</select>
+					</label>
+				</div>
+			</div>
+
+			<section class="chart-card">
+				<h2>Average price over time</h2>
+				<div class="chart-box">
+					<canvas id="historyChart" aria-label="Average fuel prices over time"></canvas>
+				</div>
+			</section>
+		</div>
+	</div>
+	<script type="module" src="/files/js/dashboard.js"></script>
 </body>
 </html>
