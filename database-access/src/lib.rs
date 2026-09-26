@@ -83,6 +83,27 @@ const MIGRATIONS: &[&[&str]] = &[
             used_at INTEGER,
             used_serial TEXT
         )"],
+    // Rebuild precios as a WITHOUT ROWID table clustered on (fecha, id_estacion).
+    // The old rowid table + PK autoindex + two secondary indexes stored every row four times.
+    // idx_precios_estacion implicitly contains the PK, so it covers (id_estacion, fecha) lookups.
+    // fecha goes from local-time text ("%Y-%m-%d %H:%M:%S") to unix seconds, which is much smaller.
+    &[
+        "CREATE TABLE precios_new (
+            fecha INTEGER NOT NULL,
+            id_estacion INTEGER NOT NULL,
+            gasoleo_a REAL,
+            gasolina_95 REAL,
+            PRIMARY KEY (fecha, id_estacion),
+            FOREIGN KEY (id_estacion) REFERENCES estaciones(id)
+        ) WITHOUT ROWID",
+        "INSERT INTO precios_new (fecha, id_estacion, gasoleo_a, gasolina_95)
+            SELECT CAST(strftime('%s', fecha, 'utc') AS INTEGER), id_estacion, gasoleo_a, gasolina_95
+            FROM precios
+            ORDER BY fecha, id_estacion",
+        "DROP TABLE precios",
+        "ALTER TABLE precios_new RENAME TO precios",
+        "CREATE INDEX idx_precios_estacion ON precios(id_estacion)",
+    ],
 ];
 
 pub const DEFAULT_DB_PATH: &str = "precios_carburantes.db";
@@ -115,6 +136,7 @@ fn apply_init(conn: &mut Connection) -> rusqlite::Result<()> {
 
     if !*lock {
         eprintln!("Applying migrations");
+        let mut applied_any = false;
         let mut tx = conn.transaction()?;
 
         tx.execute(
@@ -160,10 +182,18 @@ fn apply_init(conn: &mut Connection) -> rusqlite::Result<()> {
                     params![i, hash],
                 )?;
                 savepoint.commit()?;
+                applied_any = true;
             }
         }
 
         tx.commit()?;
+
+        // Migrations may free a lot of pages (e.g. table rebuilds); VACUUM can't run inside
+        // a transaction, so reclaim the space here.
+        if applied_any {
+            eprintln!("Vacuuming database");
+            conn.execute_batch("VACUUM")?;
+        }
 
         *lock = true;
     }
@@ -174,5 +204,8 @@ fn apply_init(conn: &mut Connection) -> rusqlite::Result<()> {
 }
 
 pub fn get_connection_manager<P: AsRef<Path>>(db: P) -> rusqlite::Result<SqliteConnectionManager> {
+    // Run migrations eagerly on a dedicated connection: a slow migration (table rebuild + VACUUM)
+    // inside the pool's init would make the pool's other connections time out waiting on the lock.
+    apply_init(&mut Connection::open(&db)?)?;
     Ok(SqliteConnectionManager::file(db).with_init(apply_init))
 }

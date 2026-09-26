@@ -15,6 +15,13 @@ mod geo;
 pub mod route;
 mod user;
 
+/// `precios.fecha` is stored as unix seconds; the API exposes it as local time text.
+fn format_fecha(ts: i64) -> String {
+    chrono::DateTime::from_timestamp(ts, 0)
+        .map(|d| d.with_timezone(&chrono::Local).format("%Y-%m-%d %H:%M:%S").to_string())
+        .unwrap_or_default()
+}
+
 #[derive(Serialize)]
 struct EstacionPrecio {
     id: i64,
@@ -71,7 +78,7 @@ async fn get_latest_station_data(pool: DbPool) -> Result<Vec<EstacionPrecio>, Ap
             provincia: row.get(4)?,
             latitud: row.get(5)?,
             longitud: row.get(6)?,
-            fecha: row.get(7)?,
+            fecha: format_fecha(row.get(7)?),
             gasoleo_a: row.get(8)?,
             gasolina_95: row.get(9)?,
             margen: row.get(10)?,
@@ -111,8 +118,6 @@ async fn price_history_station(
     State(state): State<DbPool>,
 ) -> Result<Json<Vec<PricePoint>>, AppError> {
     let conn = state.get().unwrap();
-    let tz = chrono::Local;
-
     let mut stmt = conn.prepare(
         r#"
             
@@ -125,15 +130,11 @@ async fn price_history_station(
 ORDER BY fecha ASC;
             "#,
     )?;
-    let fecha = params
-        .from
-        .with_timezone(&tz)
-        .format("%Y-%m-%d %H:%M:%S")
-        .to_string();
+    let fecha = params.from.timestamp();
     // info!("Filtering by {fecha}");
     let rows = stmt.query_map(params![id, fecha], |row| {
         Ok(PricePoint {
-            fecha: row.get(0)?,
+            fecha: format_fecha(row.get(0)?),
             gasoleo_a: row.get(1)?,
             gasolina_95: row.get(2)?,
         })
@@ -184,7 +185,7 @@ ORDER BY p.fecha ASC;
     let rows = stmt
         .query_map(params![params.ccaa_id, params.provincia_id], |row| {
             Ok(PricePoint {
-                fecha: row.get(0)?,
+                fecha: format_fecha(row.get(0)?),
                 gasoleo_a: row.get(1)?,
                 gasolina_95: row.get(2)?,
             })

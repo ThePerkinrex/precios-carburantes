@@ -122,7 +122,8 @@ fn main_internal() -> Result<(), Box<dyn Error>> {
     );
 
     // Normalizar fecha de la API (tomamos solo la parte de la fecha)
-    let ahora = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    let ahora_ts = Local::now();
+    let ahora = ahora_ts.format("%Y-%m-%d %H:%M:%S").to_string();
 
     // 3. Inserción Eficiente (Transacción)
     let tx = conn.transaction()?;
@@ -166,7 +167,7 @@ fn main_internal() -> Result<(), Box<dyn Error>> {
         tx.execute(
             "INSERT OR REPLACE INTO precios (fecha, id_estacion, gasoleo_a, gasolina_95) 
              VALUES (?1, ?2, ?3, ?4)",
-            params![ahora, id, est.precio_gasoleo_a, est.precio_gasolina_95],
+            params![ahora_ts.timestamp(), id, est.precio_gasoleo_a, est.precio_gasolina_95],
         )?;
     }
 

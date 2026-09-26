@@ -3,6 +3,7 @@
 *.db
 *.db-shm
 *.db-wal
+/backup
 
 config/
 certs/
