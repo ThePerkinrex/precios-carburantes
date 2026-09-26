@@ -1,12 +1,10 @@
 use axum::{
     Json, Router,
     extract::{Path, Query, State},
-    http::StatusCode,
     routing::get,
 };
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
-use tracing::warn;
 
 use crate::{DbPool, error::AppError};
 
@@ -166,63 +164,96 @@ async fn price_history_station(
 struct HistoryParams {
     ccaa_id: Option<String>,
     provincia_id: Option<String>,
+    /// Only the snapshots at or after this instant.
+    from: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 async fn price_history(
     Query(params): Query<HistoryParams>,
     State(state): State<DbPool>,
-) -> Result<Json<Vec<PricePoint>>, StatusCode> {
+) -> Result<Json<Vec<PricePoint>>, AppError> {
     let conn = state.get().unwrap();
-    // let tz = chrono::Local;
+    let from = params.from.map(|f| f.timestamp());
 
-    let mut stmt = conn
+    let precios = conn
         .prepare(
             r#"
             SELECT
-    fecha,
-    SUM(suma_gasoleo_a) / SUM(n_gasoleo_a) AS avg_gasoleo,
-    SUM(suma_gasolina_95) / SUM(n_gasolina_95) AS avg_gasolina
-FROM precios_provincia
-WHERE (?1 IS NULL OR id_ccaa = ?1)
-  AND (?2 IS NULL OR id_provincia = ?2)
-GROUP BY fecha
-ORDER BY fecha ASC;
+                fecha,
+                SUM(suma_gasoleo_a) / SUM(n_gasoleo_a) AS avg_gasoleo,
+                SUM(suma_gasolina_95) / SUM(n_gasolina_95) AS avg_gasolina
+            FROM precios_provincia
+            WHERE (?1 IS NULL OR id_ccaa = ?1)
+              AND (?2 IS NULL OR id_provincia = ?2)
+              AND (?3 IS NULL OR fecha >= ?3)
+            GROUP BY fecha
+            ORDER BY fecha ASC
             "#,
-        )
-        .map_err(|e| {
-            warn!("SQL Error: {e}");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
-
-    // info!("Filtering by {fecha}");
-    let rows = stmt
-        .query_map(params![params.ccaa_id, params.provincia_id], |row| {
+        )?
+        .query_map(params![params.ccaa_id, params.provincia_id, from], |row| {
             Ok(PricePoint {
                 fecha: format_fecha(row.get(0)?),
                 gasoleo_a: row.get(1)?,
                 gasolina_95: row.get(2)?,
             })
-        })
-        .map_err(|e| {
-            warn!("SQL Error: {e}");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
-
-    let mut precios = Vec::new();
-    for row in rows {
-        precios.push(row.map_err(|e| {
-            warn!("SQL Error: {e}");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?);
-    }
+        })?
+        .collect::<Result<_, _>>()?;
 
     Ok(Json(precios))
+}
+
+#[derive(Serialize)]
+struct ProvinciaPrecio {
+    id_provincia: String,
+    id_ccaa: String,
+    gasoleo_a: Option<f64>,
+    gasolina_95: Option<f64>,
+    /// How many stations the averages cover.
+    estaciones: i64,
+}
+
+#[derive(Deserialize)]
+struct ProvinciasParams {
+    ccaa_id: Option<String>,
+}
+
+/// Every province's average prices at the latest snapshot, optionally within one region.
+async fn province_prices(
+    Query(params): Query<ProvinciasParams>,
+    State(state): State<DbPool>,
+) -> Result<Json<Vec<ProvinciaPrecio>>, AppError> {
+    let conn = state.get().unwrap();
+
+    let provincias = conn
+        .prepare(
+            r#"
+            SELECT id_provincia, id_ccaa,
+                suma_gasoleo_a / n_gasoleo_a, suma_gasolina_95 / n_gasolina_95,
+                MAX(n_gasoleo_a, n_gasolina_95)
+            FROM precios_provincia
+            WHERE fecha = (SELECT MAX(fecha) FROM snapshots)
+              AND (?1 IS NULL OR id_ccaa = ?1)
+            "#,
+        )?
+        .query_map(params![params.ccaa_id], |row| {
+            Ok(ProvinciaPrecio {
+                id_provincia: row.get(0)?,
+                id_ccaa: row.get(1)?,
+                gasoleo_a: row.get(2)?,
+                gasolina_95: row.get(3)?,
+                estaciones: row.get(4)?,
+            })
+        })?
+        .collect::<Result<_, _>>()?;
+
+    Ok(Json(provincias))
 }
 
 pub fn get_router() -> Router<DbPool> {
     Router::new()
         .route("/prices", get(latest_prices))
         .route("/prices/history", get(price_history))
+        .route("/prices/provinces", get(province_prices))
         .route("/{id}/history", get(price_history_station))
         .nest("/user", user::get_router())
         .nest("/admin", admin::get_router())

@@ -10,10 +10,12 @@ const FUELS = [
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
-export async function getPriceHistory({ ccaa, provincia } = {}) {
+// `from` (a Date) limits the history to the snapshots at or after it.
+export async function getPriceHistory({ ccaa, provincia, from } = {}) {
 	const params = new URLSearchParams();
 	if (ccaa) params.set("ccaa_id", ccaa);
 	if (provincia) params.set("provincia_id", provincia);
+	if (from) params.set("from", from.toISOString());
 	const response = await fetch(`/api/prices/history?${params}`);
 	if (!response.ok) throw new Error(`Couldn't load prices (HTTP ${response.status}).`);
 	return (await response.json()).map((point) => ({ ...point, date: parseFecha(point.fecha) }));
@@ -35,9 +37,15 @@ function deltaText(now, before) {
 		: { text: `▼ ${amount} cents`, className: "down" };
 }
 
+// 0.123 -> "12,3 cents"
+function centsText(euros) {
+	return `${(euros * 100).toLocaleString("es-ES", { maximumFractionDigits: 1, minimumFractionDigits: 1 })} cents`;
+}
+
 // Fills `board` with the last point of `history`, compared with the last
 // point at least a week older (or the oldest one, if there's less history).
-export function renderBoard(board, history, where) {
+// With `baseline: "start"` it's compared with the first point instead.
+export function renderBoard(board, history, where, { baseline = "week" } = {}) {
 	const latest = history.at(-1);
 	if (!latest) {
 		board.innerHTML = `<div class="board-head"><span>Average price</span><strong></strong></div>
@@ -46,7 +54,9 @@ export function renderBoard(board, history, where) {
 		return;
 	}
 	const cutoff = latest.date.getTime() - WEEK_MS;
-	const before = history.findLast((p) => p.date.getTime() <= cutoff) ?? history[0];
+	const before = baseline === "start"
+		? history[0]
+		: (history.findLast((p) => p.date.getTime() <= cutoff) ?? history[0]);
 	const compare = before !== latest;
 
 	board.innerHTML = `<div class="board-head"><span>Average price</span><strong></strong></div>`;
@@ -64,6 +74,13 @@ export function renderBoard(board, history, where) {
 			span.textContent = delta.text;
 			row.append(span);
 		}
+		board.append(row);
+	}
+	if (latest.gasolina_95 != null && latest.gasoleo_a != null) {
+		const spread = latest.gasolina_95 - latest.gasoleo_a;
+		const row = document.createElement("p");
+		row.className = "board-spread";
+		row.textContent = `Diesel is ${centsText(Math.abs(spread))} ${spread >= 0 ? "cheaper" : "dearer"} than Gasolina 95`;
 		board.append(row);
 	}
 	const foot = document.createElement("p");

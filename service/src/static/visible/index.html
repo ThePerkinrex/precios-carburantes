@@ -42,7 +42,8 @@
 		import { getPriceHistory, renderBoard } from "/files/js/price_board.js";
 
 		const board = document.getElementById("board");
-		getPriceHistory()
+		// The board compares with a week ago, so a little over a week is enough.
+		getPriceHistory({ from: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000) })
 			.then((history) => renderBoard(board, history, "Spain"))
 			.catch((e) => {
 				board.querySelector(".board-empty").textContent = e.message;

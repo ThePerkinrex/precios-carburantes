@@ -25,6 +25,12 @@
 	--g95: #16a34a;
 	--diesel: #1f2937;
 
+	/* Compared areas, in slot order (validated for colour-vision deficiency). */
+	--series-1: #2a78d6;
+	--series-2: #eb6834;
+	--series-3: #1baf7a;
+	--series-4: #eda100;
+
 	--radius: 16px;
 	--radius-sm: 10px;
 	--shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
@@ -204,6 +210,12 @@ a {
 	color: #7ee2a0;
 }
 
+.board-spread {
+	margin: 8px 0 0;
+	font-size: 0.85rem;
+	color: var(--board-text);
+}
+
 .board-foot {
 	margin: 6px 0 0;
 	font-size: 0.8rem;
@@ -221,10 +233,20 @@ a {
 .home,
 .home-links,
 .trends,
-.trends-side {
+.trends-main {
 	display: flex;
 	flex-direction: column;
 	gap: 16px;
+}
+
+/* Phones: the sidebar's pieces join the page column, with the ranking
+   after the chart. */
+.trends-side {
+	display: contents;
+}
+
+.ranking {
+	order: 1;
 }
 
 .primary-link {
@@ -365,21 +387,268 @@ select {
 	font-size: 1rem;
 }
 
-.chart-card {
+.card {
 	background: var(--surface);
 	border-radius: var(--radius);
 	box-shadow: var(--shadow);
 	padding: 12px 8px 8px;
 }
 
-.chart-card h2 {
+.card h2 {
 	margin: 0 8px 4px;
 	font-size: 1rem;
+}
+
+.card-note {
+	margin: 0 8px 8px;
+	font-size: 0.85rem;
+	color: var(--muted);
+}
+
+.card-head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	margin-bottom: 8px;
+}
+
+.card-head h2 {
+	margin-bottom: 0;
 }
 
 .chart-box {
 	position: relative;
 	height: 340px;
+}
+
+.chart-box.small {
+	height: 220px;
+}
+
+/* A row of toggle buttons, one of them checked. */
+.segmented {
+	display: flex;
+	gap: 2px;
+	padding: 2px;
+	margin: 0 8px 8px;
+	border-radius: var(--radius-sm);
+	background: var(--paper);
+	overflow-x: auto;
+	scrollbar-width: none;
+}
+
+.card-head .segmented {
+	margin: 0 8px;
+}
+
+.segmented button {
+	flex: 1 0 auto;
+	min-height: 40px;
+	padding: 0 12px;
+	border: none;
+	border-radius: 8px;
+	background: none;
+	color: var(--muted);
+	font: inherit;
+	font-size: 0.9rem;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.segmented button[aria-checked="true"] {
+	background: var(--surface);
+	color: var(--ink);
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+/* Compared areas. */
+.compare {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.chip {
+	display: flex;
+	align-items: stretch;
+	border-radius: 999px;
+	border: 1px solid var(--line);
+	background: var(--surface);
+	overflow: hidden;
+}
+
+.chip button {
+	min-height: 44px;
+	border: none;
+	background: none;
+	color: var(--ink);
+	font: inherit;
+	font-size: 0.9rem;
+	cursor: pointer;
+}
+
+.chip-name {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 0 4px 0 14px;
+}
+
+.chip-name::before {
+	content: "";
+	width: 10px;
+	height: 10px;
+	border-radius: 3px;
+	background: var(--swatch);
+}
+
+.chip:has(.chip-name[aria-pressed="true"]) {
+	border-color: var(--accent);
+	box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.chip-name[aria-pressed="true"] {
+	font-weight: 600;
+}
+
+.chip-remove {
+	width: 40px;
+	color: var(--muted) !important;
+}
+
+.ghost-button {
+	min-height: 44px;
+	padding: 0 16px;
+	border-radius: var(--radius-sm);
+	border: 1px dashed var(--muted);
+	background: none;
+	color: var(--ink);
+	font: inherit;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.ghost-button:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.hint {
+	margin: 0;
+	font-size: 0.8rem;
+	color: var(--muted);
+}
+
+/* Comparison table under the chart. */
+.table-scroll {
+	overflow-x: auto;
+}
+
+.compare-table {
+	width: 100%;
+	margin-top: 8px;
+	border-collapse: collapse;
+	font-size: 0.9rem;
+	font-variant-numeric: tabular-nums;
+}
+
+.compare-table th,
+.compare-table td {
+	padding: 8px;
+	text-align: right;
+	white-space: nowrap;
+	border-top: 1px solid var(--line);
+}
+
+.compare-table thead th {
+	border-top: none;
+	font-size: 0.8rem;
+	font-weight: 600;
+	color: var(--muted);
+}
+
+.compare-table th:first-child {
+	text-align: left;
+}
+
+.compare-table tbody th {
+	font-weight: 600;
+}
+
+.swatch {
+	display: inline-block;
+	width: 10px;
+	height: 10px;
+	margin-right: 8px;
+	border-radius: 3px;
+}
+
+/* Province ranking. */
+.ranking-list {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	max-height: 420px;
+	overflow-y: auto;
+}
+
+.ranking-list button {
+	display: grid;
+	grid-template-columns: 1fr auto;
+	grid-template-areas:
+		"name value"
+		"bar bar";
+	row-gap: 4px;
+	width: 100%;
+	min-height: 44px;
+	padding: 6px 8px;
+	border: none;
+	border-radius: var(--radius-sm);
+	background: none;
+	color: var(--ink);
+	font: inherit;
+	font-size: 0.9rem;
+	text-align: left;
+	cursor: pointer;
+}
+
+.ranking-list button:hover,
+.ranking-list button[aria-current="true"] {
+	background: var(--paper);
+}
+
+.ranking-list button[aria-current="true"] .name {
+	font-weight: 600;
+}
+
+.ranking-list .name {
+	grid-area: name;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ranking-list .value {
+	grid-area: value;
+	font-variant-numeric: tabular-nums;
+}
+
+.ranking-list .bar {
+	grid-area: bar;
+	height: 4px;
+	border-radius: 2px;
+	background: linear-gradient(var(--accent), var(--accent)) no-repeat left / var(--fill) 100%, var(--line);
 }
 
 /* ---------- Wider screens ---------- */
@@ -422,6 +691,12 @@ select {
 		grid-template-columns: 340px minmax(0, 1fr);
 		gap: 24px;
 		align-items: start;
+	}
+
+	.trends-side {
+		display: flex;
+		flex-direction: column;
+		gap: 16px;
 	}
 
 	.trends .filters {

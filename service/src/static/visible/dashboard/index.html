@@ -41,14 +41,57 @@
 						</select>
 					</label>
 				</div>
+
+				<div class="compare">
+					<ul id="areaChips" class="chips" aria-label="Compared areas"></ul>
+					<button id="compareButton" type="button" class="ghost-button">+ Compare with another area</button>
+					<p id="compareHint" class="hint" hidden>Tap an area to change it with the selects above. Up to 4.</p>
+				</div>
+
+				<section class="card ranking">
+					<h2 id="rankingTitle">Provinces right now</h2>
+					<p id="rankingNote" class="card-note">Cheapest first. Tap one to compare it.</p>
+					<ol id="ranking" class="ranking-list"></ol>
+				</section>
 			</div>
 
-			<section class="chart-card">
-				<h2>Average price over time</h2>
-				<div class="chart-box">
-					<canvas id="historyChart" aria-label="Average fuel prices over time"></canvas>
-				</div>
-			</section>
+			<div class="trends-main">
+				<section class="card chart-card">
+					<div class="card-head">
+						<h2 id="chartTitle">Average price over time</h2>
+						<div id="rangeGroup" class="segmented" role="radiogroup" aria-label="Time window">
+							<button type="button" role="radio" data-range="7d">7D</button>
+							<button type="button" role="radio" data-range="1m">1M</button>
+							<button type="button" role="radio" data-range="3m">3M</button>
+							<button type="button" role="radio" data-range="1y">1Y</button>
+							<button type="button" role="radio" data-range="all">All</button>
+						</div>
+					</div>
+					<div id="fuelGroup" class="segmented" role="radiogroup" aria-label="Fuel">
+						<button type="button" role="radio" data-fuel="both">Both</button>
+						<button type="button" role="radio" data-fuel="gasolina_95">Gasolina 95</button>
+						<button type="button" role="radio" data-fuel="gasoleo_a">Gasóleo A</button>
+						<button type="button" role="radio" data-fuel="spread">Spread</button>
+					</div>
+					<div class="chart-box">
+						<canvas id="historyChart" aria-label="Average fuel prices over time"></canvas>
+					</div>
+					<div class="table-scroll">
+						<table id="compareTable" class="compare-table" hidden>
+							<thead><tr><th scope="col">Area</th><th scope="col">Now</th><th scope="col">Change</th><th scope="col">vs first</th></tr></thead>
+							<tbody></tbody>
+						</table>
+					</div>
+				</section>
+
+				<section class="card weekday">
+					<h2>Cheapest day to fill up</h2>
+					<p id="weekdayNote" class="card-note">Price on each weekday compared with that week's average, in cents. Below zero is cheaper.</p>
+					<div id="weekdayBox" class="chart-box small">
+						<canvas id="weekdayChart" aria-label="Average price difference by weekday"></canvas>
+					</div>
+				</section>
+			</div>
 		</div>
 	</div>
 	<script type="module" src="/files/js/dashboard.js"></script>
