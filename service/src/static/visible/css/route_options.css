@@ -116,7 +116,9 @@
 
 .route-options-field input[type="number"] {
 	font-family: var(--route-font);
-	font-size: 0.85rem;
+	/* 16px keeps iOS from zooming in on focus; smaller on desktop below. */
+	font-size: 16px;
+	min-height: 44px;
 	color: var(--route-text);
 	border: 1px solid var(--route-border);
 	border-radius: var(--route-radius-md);
@@ -130,17 +132,22 @@
 	border-color: var(--route-accent);
 }
 
-.route-options-departure {
+/* "Salida" with the "Ahora" button at the end of the same line, so the
+   date input below gets the panel's full width (it's long on phones). */
+.route-options-departure-title {
 	display: flex;
-	gap: 6px;
-	margin-bottom: 6px;
+	align-items: center;
+	justify-content: space-between;
 }
 
 .route-options-departure-input {
-	flex: 1 1 auto;
-	min-width: 0;
+	display: block;
+	width: 100%;
+	margin-bottom: 6px;
+	min-height: 44px;
+	box-sizing: border-box;
 	font-family: var(--route-font);
-	font-size: 0.85rem;
+	font-size: 16px;
 	color: var(--route-text);
 	border: 1px solid var(--route-border);
 	border-radius: var(--route-radius-md);
@@ -149,6 +156,8 @@
 
 .route-options-now-btn {
 	flex: 0 0 auto;
+	min-height: 44px;
+	min-width: 56px;
 	border: 1px solid var(--route-border);
 	border-radius: var(--route-radius-md);
 	background: var(--route-surface-muted);
@@ -183,6 +192,7 @@
 
 .route-options-save-btn {
 	width: 100%;
+	min-height: 44px;
 	padding: 8px 12px;
 	background-color: var(--route-accent);
 	color: #ffffff;
@@ -202,4 +212,18 @@
 	font-size: 0.75rem;
 	color: var(--route-text-muted);
 	margin: -2px 0 6px;
+}
+
+/* Wider screens: a pointer is more precise, so the panel can be denser. */
+@media (min-width: 640px) {
+	.route-options-field input[type="number"],
+	.route-options-departure-input {
+		font-size: 0.85rem;
+		min-height: 0;
+	}
+
+	.route-options-now-btn,
+	.route-options-save-btn {
+		min-height: 36px;
+	}
 }

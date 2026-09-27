@@ -160,7 +160,15 @@ async function load() {
 	let station_filter = state.filter;
 	const blacklist = new StationBlacklist(loadedTrip?.blacklist ?? []);
 
+	const alternativesPanel = createTripAlternativesPanel({
+		onStationClick: focusStation,
+		onPlanSelect: showPlan,
+	});
 	const tripControl = addTripControl();
+
+	// Phones: the bottom sheet covers half the map, so it gets out of the way
+	// when something on the map (a station popup, the car panel) needs room.
+	const isPhone = () => matchMedia("(max-width: 639px)").matches;
 
 	blacklist.on("add", (stationId) => {
 		if (trip?.owned) addTripBlacklist(trip.id, stationId).catch(tripControl.showError);
@@ -173,6 +181,7 @@ async function load() {
 	function focusStation(station) {
 		const marker = stationsLayer?.markersById?.get(station.id);
 		if (!marker) return;
+		if (isPhone()) alternativesPanel.minimize();
 
 		map.setView([station.latitud, station.longitud], 15);
 		// Uncluster the marker before opening its popup.
@@ -191,9 +200,9 @@ async function load() {
 			L.marker([s.station.latitud, s.station.longitud], {
 				icon: L.divIcon({
 					className: "",
-					html: `<div class="trip-stop-marker">${i + 1}</div>`,
-					iconSize: [30, 30],
-					iconAnchor: [15, 15],
+					html: `<div class="trip-stop-marker"><span>${i + 1}</span></div>`,
+					iconSize: [44, 44],
+					iconAnchor: [22, 22],
 				}),
 				zIndexOffset: 1000,
 				title: s.station.rotulo,
@@ -203,10 +212,6 @@ async function load() {
 		});
 	}
 
-	const alternativesPanel = createTripAlternativesPanel({
-		onStationClick: focusStation,
-		onPlanSelect: showPlan,
-	});
 
 	// The default popup, plus when we'd get there and whether it's open then.
 	function buildPopupContent(eess, blacklist) {
@@ -321,13 +326,15 @@ async function load() {
 			departure = date;
 			reloadStops();
 		},
+		onPanelToggle: (open) => {
+			if (open && isPhone()) alternativesPanel.minimize();
+		},
 	});
 
-	// Top-right box under the summary: which saved trip this is, and saving /
-	// renaming / sharing it.
+	// Box at the top of the plans sheet: which saved trip this is, and
+	// saving / renaming / sharing it.
 	function addTripControl() {
-		const control = L.control({ position: "topright" });
-		let box;
+		const box = alternativesPanel.tripSlot;
 		let message = tripError ?? "";
 		let shareUrl = null;
 
@@ -393,7 +400,6 @@ async function load() {
 		}
 
 		function render() {
-			if (!box) return;
 			box.replaceChildren();
 
 			const title = document.createElement("div");
@@ -430,7 +436,13 @@ async function load() {
 				note.className = "trip-control-note";
 				note.textContent =
 					"Solo sirve para una persona: la primera que lo abra. Caduca en 7 días si nadie lo usa.";
-				shareBox.append(input, note);
+				const close = button("Cerrar", () => {
+					shareUrl = null;
+					message = "";
+					render();
+				});
+				close.className = "trip-control-share-close";
+				shareBox.append(input, note, close);
 				box.append(shareBox);
 			}
 
@@ -448,14 +460,7 @@ async function load() {
 			render();
 		}
 
-		control.onAdd = function () {
-			box = L.DomUtil.create("div", "trip-control");
-			L.DomEvent.disableClickPropagation(box);
-			L.DomEvent.disableScrollPropagation(box);
-			render();
-			return box;
-		};
-		control.addTo(map);
+		render();
 
 		return { showError };
 	}

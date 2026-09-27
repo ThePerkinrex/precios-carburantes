@@ -64,6 +64,7 @@ export function createTripAlternativesPanel(options = {}) {
 			<span>Alternativas de viaje</span>
 			<button class="trip-panel-toggle" aria-label="Minimizar panel">&#9650;</button>
 		</div>
+		<div class="trip-panel-trip"></div>
 		<div class="trip-plans-list"></div>
 	`;
 
@@ -196,6 +197,9 @@ export function createTripAlternativesPanel(options = {}) {
 			render();
 			onPlanSelect(plans[selectedIdx]);
 		},
+		// Where the page puts the saved-trip box (name, save, share), above
+		// the plans: on a phone there's no room for it over the map.
+		tripSlot: panel.querySelector(".trip-panel-trip"),
 		minimize() {
 			panel.classList.add("minimized");
 		},

@@ -170,8 +170,8 @@
 		bottom: 20px;
 		top: auto;
 		width: 320px;
-		/* Leaves the top-right controls (summary, trip, brands) uncovered. */
-		max-height: calc(100vh - 270px);
+		/* Leaves the top-right controls (summary, brands) uncovered. */
+		max-height: calc(100vh - 180px);
 		border-radius: var(--route-radius-lg);
 		box-shadow: var(--route-shadow);
 		border: 1px solid var(--route-border);
@@ -211,16 +211,25 @@
 	margin: 0 0 6px;
 }
 
-/* Numbered rings on the map around the selected plan's stops. */
+/* Numbered rings on the map around the selected plan's stops. The marker
+   is a 44px tap target; the visible ring is centered inside it. */
 .trip-stop-marker {
-	width: 30px;
-	height: 30px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 44px;
+	height: 44px;
+}
+
+.trip-stop-marker span {
+	width: 34px;
+	height: 34px;
 	box-sizing: border-box;
 	border-radius: 50%;
 	border: 3px solid var(--route-accent);
 	background: #ffffff;
 	color: var(--route-accent);
-	font: 700 14px/24px var(--route-font);
+	font: 700 15px/28px var(--route-font);
 	text-align: center;
 	box-shadow: var(--route-shadow);
 }

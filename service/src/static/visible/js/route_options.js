@@ -70,6 +70,7 @@ function fuelToKm(liters, consumption) {
  * @param {(car: object) => any} [options.onCarChange]  called with the whole
  *        car (including initialFuel) whenever a field changes
  * @param {(departure: Date) => any} [options.onDepartureChange]
+ * @param {(open: boolean) => any} [options.onPanelToggle]  the panel was opened/closed
  */
 export function addRouteOptionsControl(
 	map,
@@ -84,6 +85,7 @@ export function addRouteOptionsControl(
 		onDistanceChange,
 		onCarChange,
 		onDepartureChange,
+		onPanelToggle,
 	} = {},
 ) {
 	let distance =
@@ -135,11 +137,11 @@ export function addRouteOptionsControl(
 					<span class="route-options-distance-value">${formatDistanceLabel(distance)}</span>
 				</div>
 
-				<div class="route-options-section-title">Salida</div>
-				<div class="route-options-departure">
-					<input type="datetime-local" class="route-options-departure-input" value="${toLocalInputValue(departure)}">
+				<div class="route-options-section-title route-options-departure-title">
+					Salida
 					<button type="button" class="route-options-now-btn">Ahora</button>
 				</div>
+				<input type="datetime-local" class="route-options-departure-input" value="${toLocalInputValue(departure)}">
 
 				<div class="route-options-section-title">Mi coche</div>
 				<div class="route-options-fuel">
@@ -192,7 +194,9 @@ export function addRouteOptionsControl(
 		L.DomEvent.disableScrollPropagation(container);
 
 		L.DomEvent.on(toggle, "click", () => {
-			panel.style.display = panel.style.display === "none" ? "block" : "none";
+			const open = panel.style.display === "none";
+			panel.style.display = open ? "block" : "none";
+			onPanelToggle?.(open);
 		});
 
 		// --- distance slider ---
@@ -212,6 +216,7 @@ export function addRouteOptionsControl(
 		// gets the panel out of the way.
 		L.DomEvent.on(panel.querySelector(".route-options-save-btn"), "click", () => {
 			panel.style.display = "none";
+			onPanelToggle?.(false);
 		});
 
 		// --- departure ---

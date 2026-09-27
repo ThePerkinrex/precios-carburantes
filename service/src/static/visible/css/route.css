@@ -39,6 +39,12 @@
 	color: #fff;
 }
 
+/* On phones the open panel is a bottom sheet the button would sit on top
+   of (covering "Calcular ruta"); the sheet has its own close button. */
+.route-fab.active {
+	display: none;
+}
+
 /* Panel: bottom sheet on narrow viewports, side card on wide ones */
 .route-panel {
 	position: fixed;
@@ -244,7 +250,11 @@
 }
 
 .route-plan-link {
-	display: block;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 44px;
+	box-sizing: border-box;
 	margin-top: 8px;
 	padding: 10px;
 	border-radius: var(--route-radius-md, 10px);
@@ -328,6 +338,10 @@
 
 /* Wider viewports: dock the panel as a card instead of a full-width sheet */
 @media (min-width: 640px) {
+	.route-fab.active {
+		display: flex;
+	}
+
 	.route-panel {
 		left: auto;
 		right: 16px;

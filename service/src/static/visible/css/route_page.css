@@ -57,21 +57,17 @@ body {
 	margin: 10px;
 }
 
-/* Saved-trip box (route_page.js), under the summary in the same corner. */
+/* Saved-trip box (route_page.js), at the top of the plans sheet
+   (trip_alternatives.js). Phone first: 44px touch targets. */
 
-.trip-control {
-	background: #ffffff;
-	border-radius: 10px;
-	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
-	padding: 10px 12px;
-	max-width: 240px;
-	font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+.trip-panel-trip {
+	padding: 8px 0 10px;
+	border-bottom: 1px solid #e5e7eb;
 	font-size: 13px;
-	color: #1f2937;
 }
 
-.leaflet-control.trip-control {
-	margin: 0 10px 10px;
+.trip-alternatives-panel.minimized .trip-panel-trip {
+	display: none;
 }
 
 .trip-control-title {
@@ -94,13 +90,16 @@ body {
 	margin-top: 8px;
 }
 
+/* Phone first: 44px touch targets, each button as wide as the box. */
 .trip-control-actions button {
+	flex: 1 1 auto;
+	min-height: 44px;
 	border: 1px solid #2563eb;
 	background: #2563eb;
 	color: #ffffff;
 	border-radius: 8px;
-	padding: 6px 10px;
-	font-size: 12px;
+	padding: 8px 12px;
+	font-size: 14px;
 	font-weight: 600;
 	cursor: pointer;
 }
@@ -114,14 +113,49 @@ body {
 	margin-top: 8px;
 }
 
+.trip-control-share-close {
+	margin-top: 6px;
+	min-height: 44px;
+	width: 100%;
+	border: 1px solid #e5e7eb;
+	border-radius: 8px;
+	background: #f3f4f6;
+	color: #1f2937;
+	font-size: 14px;
+	cursor: pointer;
+}
+
 .trip-control-share input {
 	width: 100%;
 	box-sizing: border-box;
+	min-height: 44px;
 	font-family: ui-monospace, monospace;
-	font-size: 11px;
-	padding: 6px;
+	/* 16px keeps iOS from zooming in when it's focused (to copy it). */
+	font-size: 16px;
+	padding: 8px;
 	border: 1px solid #e5e7eb;
 	border-radius: 6px;
+}
+
+/* Wider screens: a pointer is more precise, so the box can be denser. */
+@media (min-width: 640px) {
+	.trip-control-actions button {
+		flex: 0 0 auto;
+		min-height: 36px;
+		padding: 6px 12px;
+		font-size: 13px;
+	}
+
+	.trip-control-share input {
+		min-height: 0;
+		font-size: 12px;
+		padding: 6px;
+	}
+
+	.trip-control-share-close {
+		min-height: 32px;
+		font-size: 13px;
+	}
 }
 
 /* Arrival line on top of each station popup. */

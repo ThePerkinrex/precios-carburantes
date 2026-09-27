@@ -399,6 +399,14 @@ export class StationBlacklist {
  *
  * @returns {{markers: L.MarkerClusterGroup, control: L.Control.Layers, subgroups: Array, allMarkers: L.Marker[], markersById: Map<number, L.Marker>}}
  */
+// When a popup opens, the map scrolls it clear of the menu button and route
+// summary at the top, and of a minimized bottom sheet on phones, instead of
+// Leaflet's default 5px margin (which leaves its first lines under them).
+const POPUP_OPTIONS = {
+	autoPanPaddingTopLeft: [10, 64],
+	autoPanPaddingBottomRight: [10, 76],
+};
+
 export function createStationsLayer(
 	map,
 	stations,
@@ -427,6 +435,7 @@ export function createStationsLayer(
 
 		const marker = L.marker([eess.latitud, eess.longitud], { icon }).bindPopup(
 			() => buildPopupContent(eess, blacklist),
+			POPUP_OPTIONS,
 		);
 		marker.on("popupopen", () => {
 			drawHistoryChart(eess);
