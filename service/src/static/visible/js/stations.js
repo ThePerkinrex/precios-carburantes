@@ -137,7 +137,7 @@ function boardLine(name, className, price) {
 			<span class="fuel-name"><span class="fuel-chip"></span>${name}</span>
 			${
 				price != null
-					? `<span class="board-price digits">${priceDigits(price)}<span class="unit">€/l</span></span>`
+					? `<span class="board-price digits">${priceDigits(price)}<span class="unit">€/L</span></span>`
 					: `<span class="board-price none">—</span>`
 			}
 		</div>`;
