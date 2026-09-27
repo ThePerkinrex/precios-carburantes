@@ -1,4 +1,5 @@
 import { createRoute, getRoutes, routePageUrl } from "./api.js";
+import { onlyOneOpen } from "./map_panels.js";
 
 // Colors used to distinguish alternative routes on the map and in the tabs.
 export const ROUTE_COLORS = ["#2563eb", "#f97316", "#16a34a", "#9333ea", "#dc2626"];
@@ -233,7 +234,14 @@ export function addRouteControl(map) {
 		addWaypoint(e.latlng);
 	}
 
+	// Opening the route search closes the map's other panels, and the other
+	// way round, so they never overlap.
+	const panels = onlyOneOpen(map, "route", () => {
+		if (state.active) setActive(false);
+	});
+
 	function setActive(active) {
+		if (active) panels.opened();
 		state.active = active;
 		panel.classList.toggle("hidden", !active);
 		fab.classList.toggle("active", active);
@@ -357,6 +365,7 @@ export function addRouteControl(map) {
 	return {
 		destroy() {
 			map.off("click", onMapClick);
+			panels.dispose();
 			clearAll();
 			fab.remove();
 			panel.remove();

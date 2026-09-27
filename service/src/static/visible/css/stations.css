@@ -1,164 +1,221 @@
-/* Shared design tokens — same values as route.css/map.css so every control
-   reads from one palette. Falling back to literal values means this file
-   doesn't depend on load order. */
-:root {
-	--route-accent: #2563eb;
-	--route-surface: #ffffff;
-	--route-surface-muted: #f3f4f6;
-	--route-border: #e5e7eb;
-	--route-text: #1f2937;
-	--route-text-muted: #6b7280;
-	--route-danger: #dc2626;
-	--route-success: #16a34a;
-	--route-radius-lg: 16px;
-	--route-radius-md: 10px;
-	--route-radius-pill: 999px;
-	--route-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-	--route-font: system-ui, -apple-system, "Segoe UI", sans-serif;
+/* Station markers, popups and the brand filter (stations.js).
+   Tokens and shared pieces (.map-button, .map-dropdown-panel, .digits,
+   .fuel-chip) are in map_base.css. Mobile first. */
+
+/* ---------- Marker: a mini price sign ----------
+   Sizes must match SIGN_* in stations.js: 60px wide, a 20px brand strip,
+   16px per price row plus 6px padding, and a 6px tail. */
+
+.leaflet-marker-icon.station-marker {
+	background: none;
+	border: none;
 }
 
-/* ---------- Leaflet layer control ("Otras", brand overlays) ---------- */
-.leaflet-control-layers {
-	border-radius: var(--route-radius-lg) !important;
-	box-shadow: var(--route-shadow) !important;
-	border: 1px solid var(--route-border) !important;
-	font-family: var(--route-font);
-	color: var(--route-text);
-	background: var(--route-surface) !important;
-}
-
-.leaflet-control-layers-toggle {
-	width: 40px !important;
-	height: 40px !important;
-	border-radius: var(--route-radius-pill) !important;
-}
-
-.leaflet-control-layers-list {
-	padding: 8px 10px;
-}
-
-.leaflet-control-layers label {
-	font-size: 0.85rem;
-	padding: 3px 0;
-}
-
-.leaflet-control-layers-separator {
-	border-top: 1px solid var(--route-border) !important;
-	margin: 8px -10px !important;
-}
-
-/* All / None buttons injected above the layer list */
-.layer-select-buttons {
+.station-sign {
+	position: relative;
 	display: flex;
-	gap: 8px;
-	margin-bottom: 8px;
-	padding-bottom: 8px;
-	border-bottom: 1px solid var(--route-border);
+	flex-direction: column;
+	width: 60px;
+	border-radius: 6px;
+	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+	transition: transform 0.12s ease, box-shadow 0.12s ease;
 }
 
-.layer-select-buttons button {
-	flex: 1 1 auto;
-	border: 1px solid var(--route-border);
-	background: var(--route-surface-muted);
-	color: var(--route-text);
-	border-radius: var(--route-radius-md);
-	padding: 6px 10px;
-	font-size: 0.8rem;
-	font-weight: 600;
-	font-family: var(--route-font);
-	cursor: pointer;
+.station-marker:hover .station-sign {
+	transform: translateY(-2px);
+	box-shadow: 0 4px 10px rgba(0, 0, 0, 0.35);
 }
 
-.layer-select-buttons button:hover {
-	background: var(--route-border);
-}
-
-/* ---------- Station marker icon ---------- */
-.custom-div-icon {
-	width: max-content;
-	min-width: 80px;
-}
-
-.price-label {
-	background: var(--route-surface);
-	border: 2px solid #666;
-	font-weight: bold;
-	font-size: 12px;
-	text-align: center;
-	width: fit-content;
-}
-
-.gasolinera>.price-label {
-	margin: 1em auto;
-}
-
-.price-label>img.logo {
-	width: 100% !important;
-	max-height: 4em !important;
-	padding: 5px;
-	box-sizing: border-box;
-}
-
-.icon.price-label {
-	background: linear-gradient(135deg, #666 5px, white 0);
-}
-
-.logo {
-	overflow-wrap: break-word;
-	max-width: 10em !important;
-	width: fit-content;
-	box-sizing: border-box;
-}
-
-.gasolina,
-.gasoleo,
-.logo {
+.sign-brand {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	height: 20px;
 	padding: 2px 5px;
+	background: #ffffff;
+	border-radius: 6px 6px 0 0;
+	overflow: hidden;
 }
 
-.gasolina {
-	background-color: lightgreen;
+/* Leaflet unsets max-width/max-height (and sets width: auto) on images in
+   the marker pane, so the logo gets a fixed box and is fitted inside it. */
+.leaflet-container .leaflet-marker-pane .sign-brand img {
+	display: block;
+	width: 100%;
+	height: 15px;
+	object-fit: contain;
 }
 
-.gasoleo {
-	background-color: lightgoldenrodyellow;
+.sign-name {
+	font: 700 9px/1 var(--route-font);
+	letter-spacing: 0.02em;
+	text-transform: uppercase;
+	color: var(--board);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: 100%;
 }
 
-/* ---------- Station popup ---------- */
+.sign-prices {
+	display: flex;
+	flex-direction: column;
+	padding: 3px 5px;
+	background: var(--board);
+	border-radius: 0 0 6px 6px;
+}
+
+/* The tail, pointing at the station. */
+.sign-prices::after {
+	content: "";
+	position: absolute;
+	left: 50%;
+	bottom: -6px;
+	margin-left: -6px;
+	border: 6px solid transparent;
+	border-bottom: none;
+	border-top-color: var(--board);
+}
+
+.sign-row {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	height: 16px;
+	color: var(--led);
+	font-size: 15px;
+	line-height: 16px;
+}
+
+.sign-row .fuel-chip {
+	width: 6px;
+	height: 6px;
+	box-shadow: 0 0 0 1px var(--board-line);
+}
+
+/* On the navy board, the diesel chip needs to stand out: black with a
+   light ring, as on the home page's board. */
+.sign-row.diesel .fuel-chip {
+	background: #000;
+	box-shadow: 0 0 0 1px var(--board-text);
+}
+
+.station-sign.blacklisted {
+	opacity: 0.5;
+	filter: grayscale(1);
+}
+
+.station-sign.blacklisted .digits {
+	text-decoration: line-through;
+}
+
+/* ---------- Popup ---------- */
+
+/* Leaflet sets the content's width; the close button sits in the corner. */
+.station-popup .leaflet-popup-content {
+	margin: 0;
+}
+
+.gasolinera {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 14px 14px 12px;
+}
+
+.station-head {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	/* Room for the close button. */
+	padding-right: 32px;
+	min-width: 0;
+}
+
+.station-logo {
+	flex: none;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 44px;
+	height: 44px;
+	padding: 5px;
+	border-radius: var(--route-radius-md);
+	border: 1px solid var(--route-border);
+	background: #ffffff;
+}
+
+.station-logo img {
+	max-width: 100%;
+	max-height: 100%;
+	object-fit: contain;
+}
+
+.station-logo.no-logo,
+.brand-logo.no-logo,
+.row-logo.no-logo {
+	background: var(--board);
+	border-color: var(--board);
+	color: var(--led);
+	font: 700 20px/1 var(--font-sign);
+}
+
+.station-title {
+	min-width: 0;
+}
+
 .rotulo {
-	font-size: 1.2em;
+	font-family: var(--font-sign);
+	font-size: 1.35rem;
+	font-weight: 700;
+	line-height: 1.1;
+	overflow-wrap: anywhere;
+}
+
+.station-place {
+	font-size: 0.8rem;
+	color: var(--route-text-muted);
+}
+
+.station-status {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.station-status:empty {
+	display: none;
 }
 
 .pill {
-	font-size: 12px;
-	padding: 0.5em 1em;
-	margin: 0.25em;
+	display: inline-flex;
+	align-items: center;
+	padding: 3px 10px;
 	border-radius: var(--route-radius-pill);
-	border: none;
-	outline: none;
 	background: var(--route-surface-muted);
-	display: inline-block;
-	font-family: var(--route-font);
+	font-size: 0.8rem;
+	font-weight: 600;
+	line-height: 1.4;
 }
 
-.closed {
-	background: #5f2020;
-	color: #ffffff;
+.pill.open {
+	background: #dcfce7;
+	color: #166534;
 }
 
-.closed.soon {
-	background: #e1600f;
-	color: #ffffff;
+.pill.open.soon {
+	background: #fef3c7;
+	color: #92400e;
 }
 
-.open {
-	background: var(--route-success);
-	color: #ffffff;
+.pill.closed {
+	background: #fee2e2;
+	color: #991b1b;
 }
 
-.open.soon {
-	background: #e9cc6d;
-	color: #000000;
+.pill.closed.soon {
+	background: #ffedd5;
+	color: #9a3412;
 }
 
 .pill.uncertain {
@@ -166,59 +223,338 @@
 	color: #92400e;
 }
 
-.google-maps.map-link {
-	background: #ebdaa4;
-	color: black;
+/* Prices as a small version of the home page's board. */
+.station-board {
+	padding: 4px 12px;
+	border-radius: var(--route-radius-md);
+	background: var(--board);
+	color: var(--board-text);
 }
 
-.map-link {
-	display: inline-flex;
+.station-board-row {
+	display: flex;
 	align-items: center;
-	gap: 1em;
-	background: #ebdaa4;
-	color: black;
-	font-weight: bold;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 6px 0;
 }
 
-.map-logo {
-	height: 1.2em;
-	width: auto;
+.station-board-row + .station-board-row {
+	border-top: 1px solid var(--board-line);
 }
 
-.map-text {
-	font-size: 1em;
+.fuel-name {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	color: #ffffff;
+	font-weight: 600;
+	font-size: 0.9rem;
+}
+
+.station-board .fuel-chip {
+	width: 10px;
+	height: 10px;
+	box-shadow: 0 0 0 2px var(--board-line);
+}
+
+.station-board .diesel .fuel-chip {
+	background: #000;
+}
+
+.board-price {
+	color: var(--led);
+	font-size: 2rem;
 	line-height: 1;
+	text-shadow: 0 0 14px rgba(255, 187, 51, 0.25);
+}
+
+.board-price .unit {
+	margin-left: 4px;
+	font-size: 0.45em;
+	color: var(--board-text);
+	text-shadow: none;
+}
+
+.board-price.none {
+	color: var(--board-text);
+	font-size: 1rem;
+}
+
+.station-details {
+	display: grid;
+	grid-template-columns: auto 1fr;
+	gap: 4px 10px;
+	margin: 0;
+	font-size: 0.8rem;
+}
+
+.station-details dt {
+	color: var(--route-text-muted);
+}
+
+.station-details dd {
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+
+.station-chart-head {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: space-between;
+	gap: 4px 10px;
+	margin-bottom: 4px;
+	font-size: 0.75rem;
+	font-weight: 600;
+	color: var(--route-text-muted);
+}
+
+.station-chart-legend {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	font-weight: 400;
+}
+
+.station-chart-legend .fuel-chip:not(:first-child) {
+	margin-left: 6px;
+}
+
+.chart-box {
+	position: relative;
+	height: 140px;
+	border-radius: var(--route-radius-md);
+}
+
+/* Placeholder while the history loads. */
+.chart-box:not(.loaded) {
+	background: linear-gradient(90deg, var(--route-surface-muted), #ffffff, var(--route-surface-muted)) 0 0 / 200% 100%;
+	animation: chart-loading 1.2s linear infinite;
+}
+
+.chart-box.failed {
+	animation: none;
+	background: var(--route-surface-muted);
+}
+
+.chart-box.failed::after {
+	content: "Histórico no disponible";
+	position: absolute;
+	inset: 0;
+	display: grid;
+	place-items: center;
+	font-size: 0.8rem;
+	color: var(--route-text-muted);
+}
+
+@keyframes chart-loading {
+	to {
+		background-position: -200% 0;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.chart-box:not(.loaded) {
+		animation: none;
+	}
+}
+
+/* "How to get there": three equal buttons. */
+.station-nav {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 6px;
+}
+
+.leaflet-container a.nav-link {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 4px;
+	min-height: 56px;
+	padding: 6px 4px;
+	border: 1px solid var(--route-border);
+	border-radius: var(--route-radius-md);
+	background: var(--route-surface);
+	color: var(--route-text);
+	font-size: 0.75rem;
+	font-weight: 600;
+	text-align: center;
+	text-decoration: none;
+	line-height: 1.1;
+}
+
+.leaflet-container a.nav-link:hover,
+.leaflet-container a.nav-link:active {
+	background: var(--route-surface-muted);
+}
+
+.nav-link img {
+	width: 22px;
+	height: 22px;
+	object-fit: contain;
 }
 
 /* ---------- Blacklist ---------- */
+
 .blacklist-toggle {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	min-height: 44px;
+	padding: 0 14px;
+	border-radius: var(--route-radius-md);
+	font: inherit;
+	font-size: 0.9rem;
+	font-weight: 600;
 	cursor: pointer;
-	font-weight: bold;
-	line-height: 1;
 }
 
 .blacklist-toggle.blacklist {
-	background: var(--route-danger);
-	color: #ffffff;
+	border: 1px solid #fecaca;
+	background: #fef2f2;
+	color: var(--route-danger);
 }
 
 .blacklist-toggle.unblacklist {
+	border: 1px solid var(--route-success);
 	background: var(--route-success);
 	color: #ffffff;
 }
 
 .blacklist-toggle:hover {
-	filter: brightness(0.9);
+	filter: brightness(0.95);
 }
 
-/* Grayed-out marker icon on the map */
-.price-label.icon.blacklisted {
-	opacity: 0.45;
-	filter: grayscale(1);
-}
-
-/* Grayed-out popup */
-.gasolinera.blacklisted {
+/* Grayed-out popup; the button to bring it back stays in colour. */
+.gasolinera.blacklisted > :not(.blacklist-toggle) {
 	opacity: 0.55;
 	filter: grayscale(1);
+}
+
+/* ---------- Brand filter ---------- */
+
+.brand-actions {
+	display: flex;
+	gap: 8px;
+	padding: 0 12px 8px;
+	border-bottom: 1px solid var(--route-border);
+}
+
+.brand-actions button {
+	flex: 1 1 0;
+	min-height: 40px;
+	border: 1px solid var(--route-border);
+	border-radius: var(--route-radius-md);
+	background: var(--route-surface);
+	color: var(--route-text);
+	font: inherit;
+	font-size: 0.9rem;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.brand-actions button:hover {
+	background: var(--route-surface-muted);
+}
+
+.brand-list {
+	list-style: none;
+	margin: 0;
+	padding: 4px 6px 8px;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+}
+
+.brand-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-height: 48px;
+	padding: 4px 8px;
+	border-radius: var(--route-radius-md);
+	cursor: pointer;
+}
+
+.brand-row:hover {
+	background: var(--route-surface-muted);
+}
+
+.brand-logo,
+.row-logo {
+	flex: none;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 36px;
+	height: 36px;
+	padding: 4px;
+	border-radius: 8px;
+	border: 1px solid var(--route-border);
+	background: #ffffff;
+}
+
+.brand-logo img,
+.row-logo img {
+	max-width: 100%;
+	max-height: 100%;
+	object-fit: contain;
+}
+
+.brand-logo.no-logo,
+.row-logo.no-logo {
+	font-size: 17px;
+}
+
+.brand-name {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-weight: 600;
+}
+
+.brand-count {
+	flex: none;
+	font-size: 0.8rem;
+	color: var(--route-text-muted);
+	font-variant-numeric: tabular-nums;
+}
+
+/* Checkbox drawn as a switch. */
+.switch {
+	appearance: none;
+	flex: none;
+	position: relative;
+	width: 40px;
+	height: 24px;
+	margin: 0;
+	border-radius: var(--route-radius-pill);
+	background: var(--route-border);
+	cursor: pointer;
+	transition: background 0.15s ease;
+}
+
+.switch::after {
+	content: "";
+	position: absolute;
+	top: 3px;
+	left: 3px;
+	width: 18px;
+	height: 18px;
+	border-radius: 50%;
+	background: #ffffff;
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+	transition: transform 0.15s ease;
+}
+
+.switch:checked {
+	background: var(--route-accent);
+}
+
+.switch:checked::after {
+	transform: translateX(16px);
 }

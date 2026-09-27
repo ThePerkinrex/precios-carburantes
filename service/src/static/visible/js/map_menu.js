@@ -1,4 +1,5 @@
 import { RENEW_WARNING_DAYS } from "./certs_ui.js";
+import { onlyOneOpen } from "./map_panels.js";
 import { pagesFor } from "./nav.js";
 
 const MENU_ICON = `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>`;
@@ -26,7 +27,7 @@ export function addMenuControl(map, statePromise, current = "map") {
 			L.DomEvent.disableScrollPropagation(container);
 
 			container.innerHTML = `
-				<button type="button" class="map-menu-toggle" aria-label="Menú" aria-expanded="false" aria-controls="mapMenuPanel">
+				<button type="button" class="map-button map-menu-toggle" aria-label="Menú" aria-expanded="false" aria-controls="mapMenuPanel">
 					${MENU_ICON}<span class="map-menu-badge" hidden></span>
 				</button>
 				<div id="mapMenuPanel" class="map-menu-panel" hidden>
@@ -41,8 +42,9 @@ export function addMenuControl(map, statePromise, current = "map") {
 			const setOpen = (open) => {
 				panel.hidden = !open;
 				toggle.setAttribute("aria-expanded", String(open));
-				toggle.classList.toggle("active", open);
+				if (open) panels.opened();
 			};
+			const panels = onlyOneOpen(map, "menu", () => setOpen(false));
 			toggle.addEventListener("click", () => setOpen(panel.hidden));
 			map.on("click", () => setOpen(false));
 			document.addEventListener("keydown", (e) => {

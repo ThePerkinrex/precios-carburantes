@@ -1,14 +1,4 @@
-html,
-body {
-	margin: 0;
-	padding: 0;
-	width: 100%;
-	height: 100%;
-}
-
-#map {
-	height: 100%;
-}
+/* Route page. The page shell and tokens are in map_base.css. */
 
 /* Route summary control (route_page.js)
    A small floating box in the top-right corner of the map showing the
@@ -158,14 +148,20 @@ body {
 	}
 }
 
-/* Arrival line on top of each station popup. */
+/* Arrival line on top of each station popup, beside its close button. */
 .route-eta {
-	font-size: 12px;
-	padding: 4px 8px;
-	margin-bottom: 6px;
-	border-radius: 6px;
+	margin: 12px 48px 0 14px;
+	font-size: 0.8rem;
+	line-height: 1.35;
+	padding: 6px 10px;
+	border-radius: var(--route-radius-md);
 	background: #ecfdf5;
 	color: #065f46;
+}
+
+/* The close button is beside the arrival line, not the station's name. */
+.route-eta + .gasolinera .station-head {
+	padding-right: 0;
 }
 
 /* Beats stations.css's generic .open/.closed pill colors. */

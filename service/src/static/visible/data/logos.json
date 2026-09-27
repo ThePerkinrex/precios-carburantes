@@ -1,99 +1,131 @@
 {
 	"ballenoil": {
 		"image": "/files/images/ballenoil.png",
+		"icon": "/files/images/ballenoil-icon.png",
 		"text": "Ballenoil"
 	},
 	"plenergy": {
 		"image": "/files/images/plenergy.png",
+		"icon": "/files/images/plenergy-icon.svg",
 		"text": "Plenergy"
 	},
 	"bp": {
-		"image": "/files/images/bp.svg",
+		"image": "/files/images/bp-wide.svg",
+		"icon": "/files/images/bp.svg",
 		"text": "BP",
-		"alternatives": ["b.p."]
+		"alternatives": [
+			"b.p."
+		]
 	},
 	"cepsa": {
 		"image": "/files/images/cepsa.svg",
+		"icon": "/files/images/cepsa-icon.svg",
 		"text": "Cepsa"
 	},
 	"galp": {
 		"image": "/files/images/galp.svg",
+		"icon": "/files/images/galp-icon.png",
 		"text": "Galp"
 	},
 	"moeve": {
 		"image": "/files/images/moeve.svg",
+		"icon": "/files/images/moeve-icon.svg",
 		"text": "Moeve"
 	},
 	"petroprix": {
 		"image": "/files/images/petroprix.svg",
+		"icon": "/files/images/petroprix-icon.png",
 		"text": "Petroprix"
 	},
 	"repsol": {
 		"image": "/files/images/repsol.svg",
+		"icon": "/files/images/repsol-icon.svg",
 		"text": "Repsol"
 	},
 	"alcampo": {
 		"image": "/files/images/alcampo.jpg",
+		"icon": "/files/images/alcampo-icon.png",
 		"text": "Alcampo"
 	},
 	"valcarce": {
 		"image": "/files/images/valcarce.jpg",
+		"icon": "/files/images/valcarce-icon.png",
 		"text": "Valcarce"
 	},
 	"campsa": {
 		"image": "/files/images/campsa.png",
+		"icon": "/files/images/campsa-icon.png",
 		"text": "CAMPSA"
 	},
 	"petronor": {
 		"image": "/files/images/petronor.png",
+		"icon": "/files/images/petronor-icon.png",
 		"text": "Petronor"
 	},
 	"q8": {
-		"image": "/files/images/q8.png",
-		"text": "Q8"
+		"image": "/files/images/q8.svg",
+		"icon": "/files/images/q8-icon.png",
+		"text": "Q8",
+		"alternatives": [
+			"q8easy"
+		]
 	},
 	"carrefour": {
 		"image": "/files/images/carrefour.svg",
+		"icon": "/files/images/carrefour.svg",
 		"text": "Carrefour"
 	},
 	"costco": {
 		"image": "/files/images/costco.svg",
+		"icon": "/files/images/costco-icon.png",
 		"text": "Costco"
 	},
 	"shell": {
 		"image": "/files/images/shell.svg",
+		"icon": "/files/images/shell.svg",
 		"text": "Shell"
 	},
 	"eroski": {
 		"image": "/files/images/eroski.svg",
+		"icon": "/files/images/eroski-icon.png",
 		"text": "Eroski"
 	},
 	"avia": {
 		"image": "/files/images/avia.png",
+		"icon": "/files/images/avia-icon.png",
 		"text": "AVIA"
 	},
 	"disa": {
-		"image": "/files/images/disa.svg",
+		"image": "/files/images/disa.png",
+		"icon": "/files/images/disa-icon.png",
 		"text": "Disa"
 	},
 	"eni": {
-		"image": "/files/images/eni.svg",
-		"text": "Eni"
+		"image": "/files/images/enilive.svg",
+		"icon": "/files/images/enilive-icon.svg",
+		"text": "Enilive",
+		"alternatives": [
+			"enilive"
+		]
 	},
 	"meroil": {
 		"image": "/files/images/meroil.png",
+		"icon": "/files/images/meroil-icon.png",
 		"text": "Meroil"
 	},
 	"bonarea": {
 		"image": "/files/images/bonArea.svg",
+		"icon": "/files/images/bonarea-icon.png",
 		"text": "BonArea"
 	},
 	"petrocat": {
-		"image": "/files/images/petrocat.svg",
+		"image": "/files/images/petrocat.jpg",
+		"icon": "/files/images/petrocat-icon.png",
 		"text": "Petrocat"
 	},
 	"esclatoil": {
-		"image": "/files/images/esclatoil.svg",
+		"image": "/files/images/esclatoil.png",
+		"icon": "/files/images/esclatoil-icon.png",
 		"text": "EsclatOil"
 	}
 }

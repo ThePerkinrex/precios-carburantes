@@ -56,6 +56,8 @@ function diagnosisMessage(diagnosis) {
 export function createTripAlternativesPanel(options = {}) {
 	const onStationClick = options.onStationClick || function (station) {};
 	const onPlanSelect = options.onPlanSelect || function (plan) {};
+	// Called when the user opens the sheet from its header.
+	const onExpand = options.onExpand || function () {};
 
 	const panel = document.createElement("div");
 	panel.className = "trip-alternatives-panel";
@@ -73,7 +75,7 @@ export function createTripAlternativesPanel(options = {}) {
 	const header = panel.querySelector(".trip-panel-header");
 
 	header.addEventListener("click", () => {
-		panel.classList.toggle("minimized");
+		if (!panel.classList.toggle("minimized")) onExpand();
 	});
 
 	const plansList = panel.querySelector(".trip-plans-list");

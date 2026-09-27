@@ -7,6 +7,11 @@
 // The car profile is saved on the server by the caller (onCarChange); only
 // the current fuel, which changes every drive, is kept in this browser.
 
+import { fitToScreen, onlyOneOpen } from "./map_panels.js";
+
+// Sliders: the panel holds settings (distance, departure, car).
+const OPTIONS_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h10M20 6h0M4 12h4M14 12h6M4 18h12"/><circle cx="17" cy="6" r="2"/><circle cx="11" cy="12" r="2"/><circle cx="19" cy="18" r="2"/></svg>`;
+
 const STORAGE_DISTANCE_KEY = "routeOptions:distance";
 const STORAGE_INITIAL_FUEL_KEY = "routeOptions:initialFuel";
 // Where the whole car profile was kept before it moved to the server; read
@@ -115,10 +120,12 @@ export function addRouteOptionsControl(
 	control.onAdd = function () {
 		const container = L.DomUtil.create("div", "route-options");
 
-		const toggle = L.DomUtil.create("button", "route-options-fab", container);
+		const toggle = L.DomUtil.create("button", "map-button route-options-fab", container);
 		toggle.type = "button";
 		toggle.title = "Distancia, salida y coche";
-		toggle.innerHTML = "⛽";
+		toggle.setAttribute("aria-label", "Distancia, salida y coche");
+		toggle.setAttribute("aria-expanded", "false");
+		toggle.innerHTML = OPTIONS_ICON;
 
 		const panel = L.DomUtil.create("div", "route-options-panel", container);
 		panel.style.display = "none";
@@ -193,11 +200,35 @@ export function addRouteOptionsControl(
 		L.DomEvent.disableClickPropagation(container);
 		L.DomEvent.disableScrollPropagation(container);
 
-		L.DomEvent.on(toggle, "click", () => {
-			const open = panel.style.display === "none";
+		const isOpen = () => panel.style.display !== "none";
+		const fit = () => {
+			if (isOpen()) fitToScreen(panel);
+		};
+		// The plans sheet animates its height when minimized or expanded, so
+		// the panel is fitted again once it has settled.
+		const onTransitionEnd = (e) => {
+			if (e.target.classList?.contains("trip-alternatives-panel")) fit();
+		};
+		function setOpen(open) {
+			if (open === isOpen()) return;
 			panel.style.display = open ? "block" : "none";
+			toggle.setAttribute("aria-expanded", String(open));
+			if (open) {
+				panels.opened();
+				document.addEventListener("transitionend", onTransitionEnd);
+				window.addEventListener("resize", fit);
+			} else {
+				document.removeEventListener("transitionend", onTransitionEnd);
+				window.removeEventListener("resize", fit);
+			}
 			onPanelToggle?.(open);
-		});
+			fit();
+		}
+		const panels = onlyOneOpen(map, "route-options", () => setOpen(false));
+		this._panels = panels;
+		this._close = () => setOpen(false);
+
+		L.DomEvent.on(toggle, "click", () => setOpen(!isOpen()));
 
 		// --- distance slider ---
 		const slider = panel.querySelector(".route-options-distance-slider");
@@ -214,10 +245,7 @@ export function addRouteOptionsControl(
 
 		// Every change already applies (and saves) as it's made; this just
 		// gets the panel out of the way.
-		L.DomEvent.on(panel.querySelector(".route-options-save-btn"), "click", () => {
-			panel.style.display = "none";
-			onPanelToggle?.(false);
-		});
+		L.DomEvent.on(panel.querySelector(".route-options-save-btn"), "click", () => setOpen(false));
 
 		// --- departure ---
 		const departureInput = panel.querySelector(".route-options-departure-input");
@@ -287,7 +315,13 @@ export function addRouteOptionsControl(
 		return container;
 	};
 
+	control.onRemove = function () {
+		this._close();
+		this._panels.dispose();
+	};
+
 	control.addTo(map);
+	control.close = () => control._close();
 
 	onDepartureChange?.(departure);
 	onCarChange?.(car);

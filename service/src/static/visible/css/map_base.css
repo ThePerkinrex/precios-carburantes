@@ -1,0 +1,422 @@
+/* Shared by the map pages (map/index.html, route/index.html), loaded
+   before the rest of their styles: design tokens, the page shell, and
+   Leaflet's own controls (zoom, attribution, clusters, popups).
+   Mobile first. The values follow app.css (home and dashboard), so the
+   map feels like the same app. */
+
+:root {
+	--route-paper: #eef1f5;
+	--route-accent: #2563eb;
+	--route-surface: #ffffff;
+	--route-surface-muted: #f3f4f6;
+	--route-border: #e5e7eb;
+	--route-text: #1f2937;
+	--route-text-muted: #6b7280;
+	--route-danger: #dc2626;
+	--route-success: #16a34a;
+	--route-radius-lg: 16px;
+	--route-radius-md: 10px;
+	--route-radius-pill: 999px;
+	--route-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+	--route-shadow-strong: 0 6px 20px rgba(0, 0, 0, 0.18);
+	--route-font: system-ui, -apple-system, "Segoe UI", sans-serif;
+
+	/* The price board, as on the home page. */
+	--board: #15233a;
+	--board-line: #2a3b57;
+	--board-text: #c9d3e3;
+	--led: #ffbb33;
+	--font-sign: "Barlow Condensed", "Arial Narrow", var(--route-font);
+
+	/* Pump nozzle colours: green for unleaded, black for diesel. */
+	--g95: #16a34a;
+	--diesel: #1f2937;
+}
+
+/* Only for the pieces defined here and in stations.css/map.css: the route
+   page's panels were sized without it. */
+.map-button,
+.map-dropdown-panel,
+.map-dropdown-panel *,
+.map-menu-panel,
+.station-sign,
+.station-sign *,
+.gasolinera,
+.gasolinera *,
+.location-dot {
+	box-sizing: border-box;
+}
+
+[hidden] {
+	display: none !important;
+}
+
+html,
+body {
+	margin: 0;
+	padding: 0;
+	width: 100%;
+	height: 100%;
+	height: 100dvh;
+	overflow: hidden;
+	background: var(--route-paper);
+	font-family: var(--route-font);
+	color: var(--route-text);
+	-webkit-text-size-adjust: 100%;
+}
+
+#map {
+	height: 100%;
+	background: var(--route-paper);
+	font-family: var(--route-font);
+}
+
+.leaflet-container :focus-visible {
+	outline: 3px solid var(--route-accent);
+	outline-offset: 2px;
+}
+
+/* Keep the controls clear of notches and rounded corners. */
+.leaflet-top {
+	padding-top: env(safe-area-inset-top, 0px);
+}
+
+.leaflet-bottom {
+	padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.leaflet-left {
+	padding-left: env(safe-area-inset-left, 0px);
+}
+
+.leaflet-right {
+	padding-right: env(safe-area-inset-right, 0px);
+}
+
+/* ---------- Buttons on the map (menu, brands, station list) ---------- */
+
+.map-button {
+	position: relative;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 44px;
+	height: 44px;
+	padding: 0;
+	border: 1px solid var(--route-border);
+	border-radius: var(--route-radius-lg);
+	background: var(--route-surface);
+	color: var(--route-text);
+	box-shadow: var(--route-shadow);
+	cursor: pointer;
+	transition: background 0.15s ease, color 0.15s ease;
+}
+
+.map-button:hover,
+.map-button[aria-expanded="true"] {
+	background: var(--route-accent);
+	border-color: var(--route-accent);
+	color: #fff;
+}
+
+.map-button svg {
+	width: 22px;
+	height: 22px;
+}
+
+/* Small count in the corner of a button (e.g. hidden brands). */
+.map-button-badge {
+	position: absolute;
+	top: -6px;
+	right: -6px;
+	min-width: 20px;
+	height: 20px;
+	padding: 0 5px;
+	border-radius: var(--route-radius-pill);
+	background: var(--route-accent);
+	color: #fff;
+	font: 700 11px/20px var(--route-font);
+	text-align: center;
+	box-shadow: 0 0 0 2px var(--route-surface);
+}
+
+/* ---------- Dropdown panels under those buttons ---------- */
+
+/* Above the controls after it in the same corner, so the open panel
+   covers them rather than the other way round. */
+.map-dropdown.open {
+	z-index: 801;
+}
+
+.map-dropdown-panel {
+	position: absolute;
+	top: 52px;
+	right: 0;
+	width: min(320px, calc(100vw - 24px));
+	max-height: calc(100dvh - 160px);
+	display: flex;
+	flex-direction: column;
+	background: var(--route-surface);
+	border: 1px solid var(--route-border);
+	border-radius: var(--route-radius-lg);
+	box-shadow: var(--route-shadow-strong);
+	font-family: var(--route-font);
+	font-size: 0.95rem;
+	color: var(--route-text);
+	overflow: hidden;
+}
+
+.map-panel-head {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 12px 8px 8px 16px;
+}
+
+.map-panel-head h2 {
+	margin: 0;
+	font-family: var(--font-sign);
+	font-size: 1.4rem;
+	font-weight: 700;
+	line-height: 1.1;
+}
+
+.map-panel-sub {
+	margin: 2px 0 0;
+	font-size: 0.8rem;
+	color: var(--route-text-muted);
+}
+
+.map-panel-close {
+	flex: none;
+	width: 40px;
+	height: 40px;
+	margin: -4px 0 0;
+	border: none;
+	border-radius: var(--route-radius-pill);
+	background: var(--route-surface-muted);
+	color: var(--route-text-muted);
+	font-size: 1.4rem;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.map-panel-close:hover {
+	background: var(--route-border);
+	color: var(--route-text);
+}
+
+/* A row of toggle buttons, one of them checked (as in app.css). */
+.segmented {
+	display: flex;
+	gap: 2px;
+	padding: 2px;
+	margin: 0 12px 8px;
+	border-radius: var(--route-radius-md);
+	background: var(--route-surface-muted);
+}
+
+.segmented button {
+	flex: 1 1 0;
+	min-height: 40px;
+	padding: 0 10px;
+	border: none;
+	border-radius: 8px;
+	background: none;
+	color: var(--route-text-muted);
+	font: inherit;
+	font-size: 0.9rem;
+	font-weight: 600;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.segmented button[aria-checked="true"] {
+	background: var(--route-surface);
+	color: var(--route-text);
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+/* Nozzle-colour chip before a fuel name or price. */
+.fuel-chip {
+	display: inline-block;
+	flex: none;
+	width: 8px;
+	height: 8px;
+	border-radius: 2px;
+	background: var(--chip, var(--route-text-muted));
+}
+
+.g95 {
+	--chip: var(--g95);
+}
+
+.diesel {
+	--chip: var(--diesel);
+}
+
+/* Board digits: the thousandths are set smaller, like on the signs. */
+.digits {
+	font-family: var(--font-sign);
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+.digits small {
+	font-size: 0.7em;
+	vertical-align: 0.3em;
+}
+
+/* ---------- Leaflet zoom ---------- */
+
+.leaflet-container .leaflet-control-zoom {
+	border: 1px solid var(--route-border);
+	border-radius: var(--route-radius-lg);
+	box-shadow: var(--route-shadow);
+	background: var(--route-surface);
+	overflow: hidden;
+}
+
+/* 42px + the 1px border on each side: as wide as .map-button. */
+.leaflet-container .leaflet-control-zoom a {
+	width: 42px;
+	height: 42px;
+	font: 400 22px/42px var(--route-font);
+	color: var(--route-text);
+	border: none;
+	border-radius: 0;
+}
+
+.leaflet-container .leaflet-control-zoom a + a {
+	border-top: 1px solid var(--route-border);
+}
+
+.leaflet-container .leaflet-control-zoom a:hover {
+	background: var(--route-surface-muted);
+}
+
+.leaflet-container .leaflet-control-zoom a.leaflet-disabled {
+	color: var(--route-border);
+	background: var(--route-surface);
+}
+
+/* ---------- Attribution ---------- */
+
+.leaflet-container .leaflet-control-attribution {
+	padding: 2px 8px;
+	border-radius: 8px 0 0 0;
+	background: rgba(255, 255, 255, 0.75);
+	font-size: 10px;
+	color: var(--route-text-muted);
+}
+
+.leaflet-container .leaflet-control-attribution a {
+	color: inherit;
+}
+
+/* ---------- Clusters: navy discs with amber counts, like the board ---------- */
+
+.leaflet-container .marker-cluster {
+	background: rgba(21, 35, 58, 0.18);
+}
+
+.leaflet-container .marker-cluster-medium {
+	background: rgba(21, 35, 58, 0.28);
+}
+
+.leaflet-container .marker-cluster-large {
+	background: rgba(21, 35, 58, 0.4);
+}
+
+.leaflet-container .marker-cluster div {
+	background: var(--board);
+	box-shadow: 0 0 0 2px #ffffff, 0 2px 6px rgba(0, 0, 0, 0.3);
+	color: var(--led);
+	font: 600 15px/30px var(--font-sign);
+	font-variant-numeric: tabular-nums;
+}
+
+.leaflet-container .marker-cluster span {
+	line-height: 30px;
+}
+
+/* ---------- Popups ---------- */
+
+.leaflet-container .leaflet-popup-content-wrapper {
+	padding: 0;
+	border-radius: var(--route-radius-lg);
+	box-shadow: var(--route-shadow-strong);
+}
+
+.leaflet-container .leaflet-popup-content {
+	margin: 12px 16px;
+	font-family: var(--route-font);
+	font-size: 0.9rem;
+	line-height: 1.4;
+	color: var(--route-text);
+}
+
+.leaflet-container .leaflet-popup-tip {
+	box-shadow: var(--route-shadow);
+}
+
+.leaflet-container a.leaflet-popup-close-button {
+	top: 8px;
+	right: 8px;
+	width: 32px;
+	height: 32px;
+	border-radius: var(--route-radius-pill);
+	background: var(--route-surface-muted);
+	color: var(--route-text-muted);
+	font: 400 22px/32px var(--route-font);
+	z-index: 1;
+}
+
+.leaflet-container a.leaflet-popup-close-button:hover {
+	background: var(--route-border);
+	color: var(--route-text);
+}
+
+/* ---------- "You are here" ---------- */
+
+.location-dot {
+	position: relative;
+	width: 20px;
+	height: 20px;
+	border-radius: 50%;
+	background: var(--route-accent);
+	border: 3px solid #ffffff;
+	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+
+.location-dot::after {
+	content: "";
+	position: absolute;
+	inset: -3px;
+	border-radius: 50%;
+	background: var(--route-accent);
+	opacity: 0.35;
+	animation: location-pulse 2s ease-out infinite;
+	z-index: -1;
+}
+
+@keyframes location-pulse {
+	from {
+		transform: scale(1);
+		opacity: 0.35;
+	}
+
+	to {
+		transform: scale(2.6);
+		opacity: 0;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.location-dot::after {
+		animation: none;
+		opacity: 0;
+	}
+}

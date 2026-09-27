@@ -1,50 +1,19 @@
-/* Shared design tokens — same values as route.css/map.css/stations.css so
-   every control reads from one palette. Falling back to literal values
-   means this file doesn't depend on load order. */
-:root {
-	--route-accent: #2563eb;
-	--route-surface: #ffffff;
-	--route-surface-muted: #f3f4f6;
-	--route-border: #e5e7eb;
-	--route-text: #1f2937;
-	--route-text-muted: #6b7280;
-	--route-danger: #dc2626;
-	--route-success: #16a34a;
-	--route-radius-lg: 16px;
-	--route-radius-md: 10px;
-	--route-radius-pill: 999px;
-	--route-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-	--route-font: system-ui, -apple-system, "Segoe UI", sans-serif;
-}
+/* Route page: distance and car options (route_options.js). Tokens are in
+   map_base.css. */
 
 .route-options {
 	font-family: var(--route-font);
 	color: var(--route-text);
 }
 
-/* Round toggle button, same treatment as .route-fab / .stations-header */
-.route-options-fab {
-	min-height: 44px;
-	min-width: 44px;
-	border: none;
-	border-radius: var(--route-radius-pill);
-	background: var(--route-surface);
-	box-shadow: var(--route-shadow);
-	font-size: 1.2rem;
-	line-height: 1;
-	cursor: pointer;
-	transition: background 0.15s ease, color 0.15s ease;
-}
+/* The toggle is a .map-button (map_base.css). */
 
-.route-options-fab:hover {
-	background: var(--route-accent);
-}
-
-/* Panel card — same surface/border/shadow/radius as .route-panel / .custom-stations-list */
+/* Panel card — same surface/border/shadow/radius as .route-panel / .map-dropdown-panel */
 .route-options-panel {
 	margin-top: 8px;
 	width: 240px;
-	max-height: 70vh;
+	max-height: calc(100dvh - 160px);
+	overscroll-behavior: contain;
 	overflow-y: auto;
 	background-color: var(--route-surface);
 	border-radius: var(--route-radius-lg);

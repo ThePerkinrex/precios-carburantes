@@ -1,17 +1,5 @@
-:root {
-	--route-accent: #2563eb;
-	--route-surface: #ffffff;
-	--route-surface-muted: #f3f4f6;
-	--route-border: #e5e7eb;
-	--route-text: #1f2937;
-	--route-text-muted: #6b7280;
-	--route-danger: #dc2626;
-	--route-success: #16a34a;
-	--route-radius-lg: 16px;
-	--route-radius-md: 10px;
-	--route-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-	--route-font: system-ui, -apple-system, "Segoe UI", sans-serif;
-}
+/* Route page: fuel plans sheet (trip_alternatives.js). Tokens are in
+   map_base.css. */
 
 .trip-alternatives-panel {
 	position: fixed;
@@ -211,8 +199,8 @@
 	margin: 0 0 6px;
 }
 
-/* Numbered rings on the map around the selected plan's stops. The marker
-   is a 44px tap target; the visible ring is centered inside it. */
+/* Numbered badges on the corner of the selected plan's stops' price signs.
+   The marker is a 44px tap target; the visible badge is centered inside it. */
 .trip-stop-marker {
 	display: flex;
 	align-items: center;
@@ -221,15 +209,17 @@
 	height: 44px;
 }
 
+/* Several stops in one cluster: a pill ("1·2"). */
 .trip-stop-marker span {
-	width: 34px;
-	height: 34px;
+	min-width: 30px;
+	height: 30px;
+	padding: 0 7px;
 	box-sizing: border-box;
-	border-radius: 50%;
-	border: 3px solid var(--route-accent);
-	background: #ffffff;
-	color: var(--route-accent);
-	font: 700 15px/28px var(--route-font);
+	border-radius: 15px;
+	border: 2px solid #ffffff;
+	background: var(--route-accent);
+	color: #ffffff;
+	font: 700 15px/26px var(--route-font);
 	text-align: center;
-	box-shadow: var(--route-shadow);
+	box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
 }

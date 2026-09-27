@@ -1,27 +1,138 @@
 import { formatDateTime, parseFecha } from "./dates.js";
 import { getStatus, formatOpenCloseDate } from "./schedules.js";
 import { updateFilter } from "./api.js";
+import { fitToScreen, onlyOneOpen } from "./map_panels.js";
+
+// Same colours as the --g95 / --diesel tokens (map_base.css), for Chart.js.
+const G95_COLOR = "#16a34a";
+const DIESEL_COLOR = "#1f2937";
 
 // Prices always show 3 decimal places (e.g. 1.5 -> "1.500").
 function formatPrice(price) {
 	return price.toFixed(3);
 }
 
+/**
+ * A price as board digits: "1.45<small>9</small>", the thousandths set
+ * smaller like on the signs. Wrap it in an element with class "digits".
+ */
+export function priceDigits(price) {
+	const text = formatPrice(price);
+	return `${text.slice(0, -1)}<small>${text.slice(-1)}</small>`;
+}
+
+export function escapeHtml(text) {
+	return String(text ?? "").replace(
+		/[&<>"']/g,
+		(c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c],
+	);
+}
+
+// Square brand logo URL of each station record (null: no known brand),
+// filled in by createStationsLayer so the popup and the station list can
+// show it.
+const stationLogos = new WeakMap();
+
+export function stationLogo(eess) {
+	return stationLogos.get(eess) ?? null;
+}
+
+/**
+ * The brand's logo in a small box, or the station's initial when the brand
+ * has no logo. `className` is the box's class.
+ */
+export function logoBadge(image, name, className) {
+	return image
+		? `<span class="${className}"><img src="${image}" alt=""></span>`
+		: `<span class="${className} no-logo" aria-hidden="true">${escapeHtml(String(name ?? "?").trim().charAt(0).toUpperCase())}</span>`;
+}
+
 // ---------------------------------------------------------------------------
 // Popup content
 // ---------------------------------------------------------------------------
 
+function blacklistButtonContent(blacklisted) {
+	return blacklisted
+		? `<span aria-hidden="true">&#10003;</span> Volver a incluir`
+		: `<span aria-hidden="true">&#10005;</span> Excluir`;
+}
+
+function blacklistButtonTitle(blacklisted) {
+	return blacklisted ? "Quitar de la lista negra" : "Añadir a la lista negra";
+}
+
 /**
- * Renders the X / tick button shown in a station popup so the user can add
- * or remove that station from the blacklist. Returns "" when no blacklist
- * is in use (feature is fully optional).
+ * Renders the button shown in a station popup so the user can add or remove
+ * that station from the blacklist. Returns "" when no blacklist is in use
+ * (feature is fully optional).
  */
 function buildBlacklistToggle(eess, blacklist) {
 	if (!blacklist) return "";
 	const blacklisted = blacklist.has(eess.id);
-	return blacklisted
-		? `<button type="button" class="blacklist-toggle pill unblacklist" title="Quitar de la lista negra">&#10003;</button>`
-		: `<button type="button" class="blacklist-toggle pill blacklist" title="Añadir a la lista negra">&#10005;</button>`;
+	return `<button type="button" class="blacklist-toggle ${blacklisted ? "unblacklist" : "blacklist"}" title="${blacklistButtonTitle(blacklisted)}">${blacklistButtonContent(blacklisted)}</button>`;
+}
+
+function statusPills(eess) {
+	const status = getStatus(eess.horario, new Date());
+	const closeText = (d) => (d ? `cierra ${formatOpenCloseDate(d)}` : "24 h");
+	let pill = "";
+	if (status.status == "open") {
+		pill = `<span class="pill open">Abierto · ${closeText(status.nextClose)}</span>`;
+	} else if (status.status == "opensSoon") {
+		pill = `<span class="pill open soon">Abre pronto · ${formatOpenCloseDate(status.nextOpen)}</span>`;
+	} else if (status.status == "closed") {
+		pill = status.nextOpen
+			? `<span class="pill closed">Cerrado · abre ${formatOpenCloseDate(status.nextOpen)}</span>`
+			: `<span class="pill closed">Cerrado</span>`;
+	} else if (status.status == "closesSoon") {
+		pill = `<span class="pill closed soon">Cierra pronto · ${closeText(status.nextClose)}</span>`;
+	}
+	if (status.uncertain) {
+		pill += `<span class="pill uncertain" title="El horario publicado solo indica el lunes; se asume el mismo horario todos los días">Horario dudoso</span>`;
+	}
+	return pill;
+}
+
+function navigationLinks(eess) {
+	const where = `${eess.latitud},${eess.longitud}`;
+	const links = [
+		{
+			// https://www.google.com/maps/search/?api=1&query=47.5951518%2C-122.3316393
+			href: `https://www.google.com/maps/search/?${new URLSearchParams({ api: "1", query: where })}`,
+			icon: "/files/images/google_maps.svg",
+			text: "Google Maps",
+		},
+		{
+			// https://waze.com/ul?ll=<lat>,<lng>
+			href: `https://waze.com/ul?${new URLSearchParams({ ll: where })}`,
+			icon: "/files/images/waze.svg",
+			text: "Waze",
+		},
+		{
+			// https://maps.apple.com/?daddr=<lat>,<lng>
+			href: `https://maps.apple.com/?${new URLSearchParams({ daddr: where })}`,
+			icon: "/files/images/apple_maps.png",
+			text: "Apple Maps",
+		},
+	];
+	return links
+		.map(
+			(l) =>
+				`<a class="nav-link" href="${l.href}" target="_blank" rel="noopener noreferrer"><img src="${l.icon}" alt=""><span>${l.text}</span></a>`,
+		)
+		.join("");
+}
+
+function boardLine(name, className, price) {
+	return `
+		<div class="station-board-row ${className}">
+			<span class="fuel-name"><span class="fuel-chip"></span>${name}</span>
+			${
+				price != null
+					? `<span class="board-price digits">${priceDigits(price)}<span class="unit">€/l</span></span>`
+					: `<span class="board-price none">—</span>`
+			}
+		</div>`;
 }
 
 /**
@@ -34,72 +145,43 @@ function buildBlacklistToggle(eess, blacklist) {
  */
 export function buildDefaultPopupContent(eess, blacklist = null) {
 	const blacklisted = blacklist ? blacklist.has(eess.id) : false;
-	const blacklistToggle = buildBlacklistToggle(eess, blacklist);
-
-	let gasolina_long =
-		eess.gasolina_95 != null
-			? `<div class="gasolina">Gasolina 95: <b>${formatPrice(eess.gasolina_95)}€</b></div>`
-			: "";
-	let gasoleo_long =
-		eess.gasoleo_a != null
-			? `<div class="gasoleo">Gasoleo A: <b>${formatPrice(eess.gasoleo_a)}€</b></div>`
-			: "";
-
-	let status = getStatus(eess.horario, new Date());
-	const closeText = (d) => (d ? `Cierre ${formatOpenCloseDate(d)}` : "24 h");
-	let pill = "";
-	if (status.status == "open") {
-		pill = `<div class="pill open">Abierto; ${closeText(status.nextClose)}</div>`;
-	} else if (status.status == "opensSoon") {
-		pill = `<div class="pill open soon">Abre pronto; Apertura ${formatOpenCloseDate(status.nextOpen)}</div>`;
-	} else if (status.status == "closed") {
-		pill = status.nextOpen
-			? `<div class="pill closed">Cerrado; Apertura ${formatOpenCloseDate(status.nextOpen)}</div>`
-			: `<div class="pill closed">Cerrado</div>`;
-	} else if (status.status == "closesSoon") {
-		pill = `<div class="pill closed soon">Cierra pronto; ${closeText(status.nextClose)}</div>`;
-	}
-	if (status.uncertain) {
-		pill += `<div class="pill uncertain" title="El horario publicado solo indica el lunes; se asume el mismo horario todos los días">Horario dudoso (solo lunes)</div>`;
-	}
-
-	// https://www.google.com/maps/search/?api=1&query=47.5951518%2C-122.3316393
-	const google_maps_url = `https://www.google.com/maps/search/?${new URLSearchParams({
-		api: "1",
-		query: `${eess.latitud},${eess.longitud}`,
-	})}`;
-	// https://waze.com/ul?ll=<lat>,<lng>
-	const waze_url = `https://waze.com/ul?${new URLSearchParams({
-		ll: `${eess.latitud},${eess.longitud}`,
-	})}`;
-	// https://maps.apple.com/?daddr=<lat>,<lng>
-	const apple_maps_url = `https://maps.apple.com/?${new URLSearchParams({
-		daddr: `${eess.latitud},${eess.longitud}`,
-	})}`;
-
-	let location_pills = `
-	<a href="${google_maps_url}" target="_blank" rel="noopener noreferrer"><div class="google-maps map-link pill"><img src="/files/images/google_maps.svg" class="map-logo"><span class="map-text">Google Maps</span></div></a>
-	<a href="${waze_url}" target="_blank" rel="noopener noreferrer"><div class="waze map-link pill"><img src="/files/images/waze.svg" class="map-logo"><span class="map-text">Waze</span></div></a>
-	<a href="${apple_maps_url}" target="_blank" rel="noopener noreferrer"><div class="apple-maps map-link pill"><img src="/files/images/apple_maps.png" class="map-logo"><span class="map-text">Apple Maps</span></div></a>
-	`;
+	const place = [eess.localidad, eess.provincia].filter(Boolean).map(escapeHtml).join(" · ");
 
 	return `
 	<div class="gasolinera${blacklisted ? " blacklisted" : ""}" id="gasolinera-${eess.id}">
-		<div class="rotulo"><b>${eess.rotulo}</b></div>
-		<div class="direccion">
-			${eess.direccion}, margen ${eess.margen}<br>
-			${eess.localidad}, ${eess.municipio} ${eess.cp}<br>
-			<i>${eess.provincia}</i><br>
-			Horario: ${eess.horario}<br>
-			${pill}${blacklistToggle}<br>
-			${location_pills}
+		<header class="station-head">
+			${logoBadge(stationLogo(eess), eess.rotulo, "station-logo")}
+			<div class="station-title">
+				<div class="rotulo">${escapeHtml(eess.rotulo)}</div>
+				<div class="station-place">${place}</div>
+			</div>
+		</header>
+
+		<div class="station-status">${statusPills(eess)}</div>
+
+		<div class="station-board">
+			${boardLine("Gasolina 95", "g95", eess.gasolina_95)}
+			${boardLine("Gasóleo A", "diesel", eess.gasoleo_a)}
 		</div>
 
-		<div class="price-label">
-			${gasoleo_long}
-			${gasolina_long}
+		<dl class="station-details">
+			<dt>Dirección</dt>
+			<dd>${escapeHtml(eess.direccion)} (margen ${escapeHtml(eess.margen)})<br>${escapeHtml(eess.cp)} ${escapeHtml(eess.municipio)}</dd>
+			<dt>Horario</dt>
+			<dd>${escapeHtml(eess.horario)}</dd>
+		</dl>
+
+		<div class="station-chart">
+			<div class="station-chart-head">
+				<span>Últimos 7 días</span>
+				<span class="station-chart-legend"><span class="fuel-chip g95"></span>G95 <span class="fuel-chip diesel"></span>Gasóleo A</span>
+			</div>
+			<div class="chart-box"><canvas class="chart"></canvas></div>
 		</div>
-		<canvas class="chart"></canvas>
+
+		<nav class="station-nav" aria-label="Cómo llegar">${navigationLinks(eess)}</nav>
+
+		${buildBlacklistToggle(eess, blacklist)}
 	</div>`;
 }
 
@@ -134,40 +216,90 @@ async function drawHistoryChart(eess) {
 	const popup = document.getElementById(`gasolinera-${eess.id}`);
 	const chart = popup?.getElementsByClassName("chart")[0];
 	if (!chart) return;
+	const box = chart.parentElement;
 
 	const from = new Date(new Date().setDate(new Date().getDate() - 7));
-	const { snapshots, changes } = await fetch(
-		`/api/${eess.id}/history?` +
-			new URLSearchParams({ from: from.toISOString() }).toString(),
-	).then((x) => x.json());
-	const history = rebuildHistory(snapshots, changes);
+	let history;
+	try {
+		const { snapshots, changes } = await fetch(
+			`/api/${eess.id}/history?` +
+				new URLSearchParams({ from: from.toISOString() }).toString(),
+		).then((x) => x.json());
+		history = rebuildHistory(snapshots, changes);
+	} catch (e) {
+		console.error("No se pudo cargar el histórico", e);
+		box.classList.add("failed");
+		return;
+	}
+	if (!chart.isConnected) return; // the popup was closed meanwhile
+
+	const line = (label, key, color) => ({
+		label,
+		data: history.map((x) => x[key]),
+		borderColor: color,
+		backgroundColor: color,
+		borderWidth: 2,
+		pointRadius: 0,
+		pointHoverRadius: 4,
+		stepped: true,
+		fill: false,
+	});
 
 	new Chart(chart, {
 		type: "line",
 		data: {
 			labels: history.map((x) => formatDateTime(parseFecha(x.fecha))),
 			datasets: [
-				{
-					label: "Gasolina 95",
-					data: history.map((x) => x.gasolina_95),
-					fill: false,
-					borderColor: "green",
-					tension: 0.1,
-				},
-				{
-					label: "Gasoleo A",
-					data: history.map((x) => x.gasoleo_a),
-					fill: false,
-					borderColor: "black",
-					tension: 0.1,
-				},
+				line("Gasolina 95", "gasolina_95", G95_COLOR),
+				line("Gasóleo A", "gasoleo_a", DIESEL_COLOR),
 			],
 		},
+		options: {
+			responsive: true,
+			maintainAspectRatio: false,
+			animation: false,
+			interaction: { mode: "index", intersect: false },
+			plugins: {
+				legend: { display: false },
+				tooltip: {
+					callbacks: {
+						label: (ctx) =>
+							ctx.parsed.y == null ? null : `${ctx.dataset.label}: ${formatPrice(ctx.parsed.y)} €`,
+					},
+				},
+			},
+			scales: {
+				x: {
+					grid: { display: false },
+					ticks: {
+						maxTicksLimit: 4,
+						maxRotation: 0,
+						color: "#6b7280",
+						font: { size: 10 },
+						// Just the day; the tooltip has the time.
+						callback(value) {
+							return this.getLabelForValue(value).split(" ")[0].replace(/\/\d{4}$/, "");
+						},
+					},
+				},
+				y: {
+					grid: { color: "#e5e7eb" },
+					border: { display: false },
+					ticks: {
+						maxTicksLimit: 4,
+						color: "#6b7280",
+						font: { size: 10 },
+						callback: (v) => v.toFixed(3),
+					},
+				},
+			},
+		},
 	});
+	box.classList.add("loaded");
 }
 
 /**
- * Wires up the X/tick button rendered by buildBlacklistToggle inside a
+ * Wires up the button rendered by buildBlacklistToggle inside a
  * currently-open popup. No-ops if there's no blacklist in use, or if the
  * popup doesn't contain a .blacklist-toggle button (so custom popup
  * builders are free to drop the feature). Updates the popup's gray-out
@@ -195,11 +327,11 @@ function attachBlacklistToggle(eess, blacklist, marker, logos, logos_sorted, onB
 		// Gray out (or restore) the popup itself.
 		container.classList.toggle("blacklisted", isBlacklisted);
 
-		// Flip the button between X (add) and tick (remove).
+		// Flip the button between "Excluir" and "Volver a incluir".
 		btn.classList.toggle("blacklist", !isBlacklisted);
 		btn.classList.toggle("unblacklist", isBlacklisted);
-		btn.innerHTML = isBlacklisted ? "&#10003;" : "&#10005;";
-		btn.title = isBlacklisted ? "Quitar de la lista negra" : "Añadir a la lista negra";
+		btn.innerHTML = blacklistButtonContent(isBlacklisted);
+		btn.title = blacklistButtonTitle(isBlacklisted);
 
 		// Gray out (or restore) the marker icon shown on the map.
 		const { icon } = buildMarkerIcon(eess, logos, logos_sorted, blacklist);
@@ -213,109 +345,226 @@ export function sortLogos(logos) {
 	return Object.keys(logos).sort((a, b) => b.length - a.length);
 }
 
+// Whether `word` is in `text` as a whole word, so short brand names don't
+// match inside others: "eni" isn't in "BP BENIDORM", nor "avia" in
+// "BP LA GAVIA". Punctuation counts as a separator ("E.S. REPSOL-2").
+function containsWord(text, word) {
+	let from = 0;
+	for (let i; (i = text.indexOf(word, from)) !== -1; from = i + 1) {
+		const before = text[i - 1];
+		const after = text[i + word.length];
+		if (!isWordChar(before) && !isWordChar(after)) return true;
+	}
+	return false;
+}
+
+const isWordChar = (c) => c !== undefined && /[\p{L}\p{N}]/u.test(c);
+
 export function getLogoKey(eess, logos, logos_sorted = undefined) {
 	if (logos_sorted === undefined) {
 		logos_sorted = sortLogos(logos);
 	}
-	let logo = `<div class="logo"><b>${eess.rotulo}</b></div>`;
+	let logo = `<div class="logo"><b>${escapeHtml(eess.rotulo)}</b></div>`;
 	let logoKey = "other";
+	let image = null;
+	let squareImage = null;
 	const lower_eess = eess.rotulo.toLowerCase();
 	for (let name of logos_sorted) {
 		if (
-			lower_eess.includes(name) ||
+			containsWord(lower_eess, name) ||
 			("alternatives" in logos[name] &&
-				logos[name].alternatives.some((x) => lower_eess.includes(x)))
+				logos[name].alternatives.some((x) => containsWord(lower_eess, x)))
 		) {
 			logo = `<img class="logo" src="${logos[name].image}"/>`;
 			logoKey = name;
+			image = logos[name].image;
+			squareImage = logos[name].icon ?? image;
 			break;
 		}
 	}
 	return {
 		logo,
-		logoKey
+		logoKey,
+		// The long logo, for the marker, and the square one (logos.json's
+		// "icon"), for lists and the popup.
+		image,
+		squareImage,
 	}
 }
 
 // ---------------------------------------------------------------------------
-// Marker icon (the little price-tag icon shown on the map, not the popup)
+// Marker icon: a mini price sign (brand strip + navy board), with a tail
+// pointing at the station. Sizes match .station-sign in stations.css.
 // ---------------------------------------------------------------------------
 
-function buildMarkerIcon(eess, logos, logos_sorted, blacklist = null) {
-	let {logo, logoKey} = getLogoKey(eess, logos, logos_sorted);
+const SIGN_WIDTH = 60;
+const SIGN_BRAND_HEIGHT = 20;
+const SIGN_ROW_HEIGHT = 16;
+const SIGN_PADDING = 6; // top + bottom of the price rows
+const SIGN_TAIL = 6;
 
-	let gasolina_short =
-		eess.gasolina_95 != null
-			? `<div class="gasolina">${formatPrice(eess.gasolina_95)}€</div>`
-			: "";
-	let gasoleo_short =
-		eess.gasoleo_a != null
-			? `<div class="gasoleo">${formatPrice(eess.gasoleo_a)}€</div>`
-			: "";
+function buildMarkerIcon(eess, logos, logos_sorted, blacklist = null) {
+	const { logoKey, image, squareImage } = getLogoKey(eess, logos, logos_sorted);
+
+	const rows = [];
+	if (eess.gasolina_95 != null)
+		rows.push(`<span class="sign-row g95"><span class="fuel-chip"></span><span class="digits">${priceDigits(eess.gasolina_95)}</span></span>`);
+	if (eess.gasoleo_a != null)
+		rows.push(`<span class="sign-row diesel"><span class="fuel-chip"></span><span class="digits">${priceDigits(eess.gasoleo_a)}</span></span>`);
+	if (rows.length === 0) rows.push(`<span class="sign-row"><span class="digits">—</span></span>`);
+
+	const brand = image
+		? `<img src="${image}" alt="">`
+		: `<span class="sign-name">${escapeHtml(eess.rotulo)}</span>`;
 
 	const blacklisted = blacklist ? blacklist.has(eess.id) : false;
+	const height = SIGN_BRAND_HEIGHT + SIGN_PADDING + rows.length * SIGN_ROW_HEIGHT + SIGN_TAIL;
 
 	const icon = L.divIcon({
-		className: "custom-div-icon",
-		html: `	<div class="price-label icon${blacklisted ? " blacklisted" : ""}">
-					${logo}
-					${gasoleo_short}
-					${gasolina_short}
-				</div>`,
+		className: "station-marker",
+		html: `<div class="station-sign${blacklisted ? " blacklisted" : ""}">
+				<span class="sign-brand">${brand}</span>
+				<span class="sign-prices">${rows.join("")}</span>
+			</div>`,
+		iconSize: [SIGN_WIDTH, height],
+		iconAnchor: [SIGN_WIDTH / 2, height],
+		popupAnchor: [0, -height],
 	});
 
-	return { icon, logoKey };
+	return { icon, logoKey, squareImage };
 }
 
 // ---------------------------------------------------------------------------
-// Layer control ("Otras", brand overlays) + the All/None buttons above it
+// Brand filter: button + dropdown with a switch per brand
 // ---------------------------------------------------------------------------
 
-function addSelectAllButtons(layerControl, overlays, map) {
-	const container = layerControl.getContainer();
-	const form = container.querySelector("section.leaflet-control-layers-list");
+const FILTER_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18l-7 8.5V19l-4 2v-7.5z"/></svg>`;
 
-	const buttonWrapper = document.createElement("div");
-	buttonWrapper.className = "layer-select-buttons";
-	buttonWrapper.innerHTML = `
-        <button class="selectAll">All</button>
-        <button class="unselectAll">None</button>
-    `;
+let brandFilterCount = 0;
 
-	L.DomEvent.disableClickPropagation(buttonWrapper);
-	form.prepend(buttonWrapper);
+/**
+ * @param {Array<{name: string, text: string, image: string|null, subgroup: L.Layer, count: number}>} brands
+ */
+function createBrandFilterControl(brands) {
+	const panelId = `brandPanel${++brandFilterCount}`;
 
-	// --- GHOST CLICK PREVENTION ---
-	let ignoreClicks = false;
-	container.addEventListener(
-		"touchstart",
-		() => {
-			if (!container.classList.contains("leaflet-control-layers-expanded")) {
-				ignoreClicks = true;
-				setTimeout(() => {
-					ignoreClicks = false;
-				}, 400);
-			}
+	const BrandFilterControl = L.Control.extend({
+		options: { position: "topright" },
+
+		onAdd(map) {
+			const container = L.DomUtil.create("div", "leaflet-control map-dropdown brand-filter");
+			L.DomEvent.disableClickPropagation(container);
+			L.DomEvent.disableScrollPropagation(container);
+
+			container.innerHTML = `
+				<button type="button" class="map-button" aria-label="Filtrar marcas" aria-expanded="false" aria-controls="${panelId}">
+					${FILTER_ICON}<span class="map-button-badge" hidden></span>
+				</button>
+				<section id="${panelId}" class="map-dropdown-panel brand-panel" aria-label="Marcas" hidden>
+					<div class="map-panel-head">
+						<div>
+							<h2>Marcas</h2>
+							<p class="map-panel-sub"></p>
+						</div>
+						<button type="button" class="map-panel-close" aria-label="Cerrar">&times;</button>
+					</div>
+					<div class="brand-actions">
+						<button type="button" data-select="all">Todas</button>
+						<button type="button" data-select="none">Ninguna</button>
+					</div>
+					<ul class="brand-list">
+						${brands
+							.map(
+								(b, i) => `
+							<li>
+								<label class="brand-row">
+									${logoBadge(b.image, b.text, "brand-logo")}
+									<span class="brand-name">${escapeHtml(b.text)}</span>
+									<span class="brand-count">${b.count}</span>
+									<input type="checkbox" class="switch" data-index="${i}">
+								</label>
+							</li>`,
+							)
+							.join("")}
+					</ul>
+				</section>
+			`;
+
+			const toggle = container.querySelector(".map-button");
+			const panel = container.querySelector(".brand-panel");
+			const badge = container.querySelector(".map-button-badge");
+			const sub = container.querySelector(".map-panel-sub");
+			const checks = [...container.querySelectorAll(".switch")];
+
+			const sync = () => {
+				let shown = 0;
+				brands.forEach((b, i) => {
+					const on = map.hasLayer(b.subgroup);
+					checks[i].checked = on;
+					if (on) shown++;
+				});
+				const hidden = brands.length - shown;
+				badge.hidden = hidden === 0;
+				badge.textContent = String(hidden);
+				toggle.setAttribute(
+					"aria-label",
+					hidden === 0 ? "Filtrar marcas" : `Filtrar marcas (${hidden} ocultas)`,
+				);
+				sub.textContent = `${shown} de ${brands.length} visibles`;
+			};
+
+			const setOpen = (open) => {
+				panel.hidden = !open;
+				container.classList.toggle("open", open);
+				toggle.setAttribute("aria-expanded", String(open));
+				if (open) {
+					this._panels.opened();
+					fitToScreen(panel);
+				}
+			};
+			this._panels = onlyOneOpen(map, panelId, () => setOpen(false));
+			this._close = () => setOpen(false);
+			this._onKey = (e) => {
+				if (e.key === "Escape" && !panel.hidden) {
+					setOpen(false);
+					toggle.focus();
+				}
+			};
+
+			toggle.addEventListener("click", () => setOpen(panel.hidden));
+			container.querySelector(".map-panel-close").addEventListener("click", () => setOpen(false));
+			map.on("click", this._close);
+			document.addEventListener("keydown", this._onKey);
+
+			checks.forEach((check, i) => {
+				check.addEventListener("change", () => {
+					if (check.checked) map.addLayer(brands[i].subgroup);
+					else map.removeLayer(brands[i].subgroup);
+				});
+			});
+			container.querySelector('[data-select="all"]').addEventListener("click", () => {
+				for (const b of brands) map.addLayer(b.subgroup);
+			});
+			container.querySelector('[data-select="none"]').addEventListener("click", () => {
+				for (const b of brands) if (map.hasLayer(b.subgroup)) map.removeLayer(b.subgroup);
+			});
+
+			this._sync = sync;
+			for (const b of brands) b.subgroup.on("add remove", sync);
+			sync();
+
+			return container;
 		},
-		{ passive: true },
-	);
-	// ------------------------------
 
-	const selectAllBtn = buttonWrapper.querySelector(".selectAll");
-	L.DomEvent.on(selectAllBtn, "click", (ev) => {
-		L.DomEvent.stop(ev);
-		if (ignoreClicks) return;
-		for (let overlay of overlays) map.addLayer(overlay);
+		onRemove(map) {
+			this._panels.dispose();
+			map.off("click", this._close);
+			document.removeEventListener("keydown", this._onKey);
+			for (const b of brands) b.subgroup.off("add remove", this._sync);
+		},
 	});
 
-	const unselectAllBtn = buttonWrapper.querySelector(".unselectAll");
-	L.DomEvent.on(unselectAllBtn, "click", (ev) => {
-		L.DomEvent.stop(ev);
-		if (ignoreClicks) return;
-		for (let overlay of overlays) {
-			if (map.hasLayer(overlay)) map.removeLayer(overlay);
-		}
-	});
+	return new BrandFilterControl();
 }
 
 export class StationBlacklist {
@@ -372,9 +621,86 @@ export class StationBlacklist {
 // Public entry point
 // ---------------------------------------------------------------------------
 
+// Popups fit the screen's width (320px phones included).
+function popupOptions() {
+	const width = Math.min(340, window.innerWidth - 32);
+	return { className: "station-popup", minWidth: width, maxWidth: width };
+}
+
+// Things fixed over the map on its right (wide screens) or bottom (phones)
+// that an open popup must stay clear of.
+const POPUP_OBSTACLES = ".route-fab, .route-panel:not(.hidden), .trip-alternatives-panel";
+// Upper bound of a minimized bottom sheet's height (trip_alternatives.css).
+const MINIMIZED_SHEET = 100;
+
+/**
+ * When a popup opens, the map scrolls it clear of the controls in the top
+ * corners and of what's fixed over the map (the route button, the plans
+ * sheet), instead of Leaflet's default 5px margin, and the popup scrolls
+ * inside when it's taller than the room left. Measured each time, since
+ * the controls differ between pages.
+ */
+function fitPopup(map, popup) {
+	const mapRect = map.getContainer().getBoundingClientRect();
+	const column = (selector) => {
+		let bottom = 0;
+		let width = 0;
+		for (const c of map.getContainer().querySelectorAll(`${selector} > .leaflet-control`)) {
+			const r = c.getBoundingClientRect();
+			bottom = Math.max(bottom, r.bottom - mapRect.top);
+			width = Math.max(width, selector.includes("left") ? r.right - mapRect.left : mapRect.right - r.left);
+		}
+		return { bottom, width };
+	};
+	const left = column(".leaflet-top.leaflet-left");
+	const right = column(".leaflet-top.leaflet-right");
+
+	let bottom = 16;
+	let rightSide = 0;
+	for (const el of document.querySelectorAll(POPUP_OBSTACLES)) {
+		const r = el.getBoundingClientRect();
+		if (r.height === 0) continue;
+		// A sheet being minimized is still animating: count its final size.
+		if (el.classList.contains("minimized")) {
+			bottom = Math.max(bottom, MINIMIZED_SHEET + 8);
+			continue;
+		}
+		if (r.left - mapRect.left < mapRect.width / 2) {
+			// Spans the width (a phone's bottom sheet): keep above it.
+			bottom = Math.max(bottom, mapRect.bottom - r.top + 8);
+		} else if (r.bottom > mapRect.bottom - 100 && r.height < 100) {
+			// A button in the bottom-right corner.
+			bottom = Math.max(bottom, mapRect.bottom - r.top + 8);
+		} else {
+			// A side card on the right.
+			rightSide = Math.max(rightSide, mapRect.right - r.left + 8);
+		}
+	}
+
+	const width = popup.options.maxWidth;
+	const wide = mapRect.width >= width + left.width + Math.max(right.width, rightSide) + 32;
+	let topLeft, bottomRight, top;
+	if (wide) {
+		// Room between the left and right columns: keep it there.
+		topLeft = [left.width + 8, 10];
+		bottomRight = [Math.max(right.width, rightSide) + 8, bottom];
+		top = 10;
+	} else {
+		// Phones: the popup spans the width, so it goes below the controls.
+		top = Math.max(left.bottom, right.bottom) + 8;
+		topLeft = [10, top];
+		bottomRight = [10, bottom];
+	}
+	popup.options.autoPanPaddingTopLeft = L.point(topLeft);
+	popup.options.autoPanPaddingBottomRight = L.point(bottomRight);
+	// 24px for the popup's tip below it.
+	popup.options.maxHeight = Math.max(200, mapRect.height - top - bottom - 24);
+	popup.update();
+}
+
 /**
  * Builds the gas-station markers (clustered, grouped by brand) and the
- * associated Leaflet layer control, and attaches everything to `map`.
+ * associated brand filter control, and attaches everything to `map`.
  *
  * @param {L.Map} map                 an already-created Leaflet map
  * @param {object[]} stations         the station records to render (caller decides which ones)
@@ -384,29 +710,21 @@ export class StationBlacklist {
  * @param {(eess: object) => string} [options.buildPopupContent]
  *        builds the popup HTML for a station. Defaults to buildDefaultPopupContent.
  *        Use this to show different/extra info per station without touching the
- *        clustering/layer-control logic.
+ *        clustering/brand-filter logic.
  * @param {(filter: Set<string>) => any} [options.onFilterChange]
- *        called with the updated brand-filter Set whenever the user toggles an
- *        overlay on/off. Defaults to persisting it via api.js's updateFilter.
+ *        called with the updated brand-filter Set whenever the user toggles a
+ *        brand on/off. Defaults to persisting it via api.js's updateFilter.
  * @param {StationBlacklist} [options.blacklist]
  *        if provided (an instance of StationBlacklist), every station popup gets
- *        an X/tick button to add/remove that station from the blacklist, and
+ *        a button to add/remove that station from the blacklist, and
  *        blacklisted stations (both their map icon and their popup) render
  *        grayed out. Left as null, the feature is fully disabled.
  * @param {(eess: object, blacklisted: boolean, blacklist: StationBlacklist) => any} [options.onBlacklistChange]
  *        called whenever a station is added to/removed from the blacklist via
  *        the popup button. No-op by default; use it to persist the blacklist.
  *
- * @returns {{markers: L.MarkerClusterGroup, control: L.Control.Layers, subgroups: Array, allMarkers: L.Marker[], markersById: Map<number, L.Marker>}}
+ * @returns {{markers: L.MarkerClusterGroup, control: L.Control, subgroups: Array, allMarkers: L.Marker[], markersById: Map<number, L.Marker>}}
  */
-// When a popup opens, the map scrolls it clear of the menu button and route
-// summary at the top, and of a minimized bottom sheet on phones, instead of
-// Leaflet's default 5px margin (which leaves its first lines under them).
-const POPUP_OPTIONS = {
-	autoPanPaddingTopLeft: [10, 64],
-	autoPanPaddingBottomRight: [10, 76],
-};
-
 export function createStationsLayer(
 	map,
 	stations,
@@ -419,8 +737,7 @@ export function createStationsLayer(
 		onBlacklistChange = null,
 	} = {},
 ) {
-	const markers = L.markerClusterGroup();
-	const control = L.control.layers(null, null, { collapsed: true });
+	const markers = L.markerClusterGroup({ showCoverageOnHover: false });
 	map.addLayer(markers);
 
 	let subgroupLayers = Object.fromEntries(Object.keys(logos).map((k) => [k, []]));
@@ -429,15 +746,19 @@ export function createStationsLayer(
 	const logos_sorted = sortLogos(logos);
 	const allMarkers = [];
 	const markersById = new Map();
+	const popup = popupOptions();
 
 	for (let eess of stations) {
-		const { icon, logoKey } = buildMarkerIcon(eess, logos, logos_sorted, blacklist);
+		const { icon, logoKey, squareImage } = buildMarkerIcon(eess, logos, logos_sorted, blacklist);
+		stationLogos.set(eess, squareImage);
 
-		const marker = L.marker([eess.latitud, eess.longitud], { icon }).bindPopup(
-			() => buildPopupContent(eess, blacklist),
-			POPUP_OPTIONS,
-		);
-		marker.on("popupopen", () => {
+		const marker = L.marker([eess.latitud, eess.longitud], {
+			icon,
+			riseOnHover: true,
+			title: eess.rotulo,
+		}).bindPopup(() => buildPopupContent(eess, blacklist), popup);
+		marker.on("popupopen", (e) => {
+			fitPopup(map, e.popup);
 			drawHistoryChart(eess);
 			attachBlacklistToggle(eess, blacklist, marker, logos, logos_sorted, onBlacklistChange);
 		});
@@ -459,7 +780,6 @@ export function createStationsLayer(
 		);
 
 	for (let [name, subgroup] of subgroups) {
-		control.addOverlay(subgroup, name == "other" ? "Otras" : logos[name].text);
 		if (filter.has(name)) subgroup.addTo(map);
 		subgroup.on("add", () => {
 			filter.add(name);
@@ -470,9 +790,19 @@ export function createStationsLayer(
 			onFilterChange(filter);
 		});
 	}
+
+	const control = createBrandFilterControl(
+		subgroups
+			.filter(([, , count]) => count > 0)
+			.map(([name, subgroup, count]) => ({
+				name,
+				text: name == "other" ? "Otras" : logos[name].text,
+				image: name == "other" ? null : (logos[name].icon ?? logos[name].image),
+				subgroup,
+				count,
+			})),
+	);
 	control.addTo(map);
-	addSelectAllButtons(control, subgroups.map((x) => x[1]), map);
 
 	return { markers, control, subgroups, allMarkers, markersById };
 }
-

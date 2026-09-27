@@ -34,13 +34,33 @@ window.addEventListener("pageshow", (event) => {
 	}
 });
 
+// "You are here": a blue dot (map_base.css) and a faint accuracy circle.
+const LOCATION_ICON = L.divIcon({
+	className: "",
+	html: `<div class="location-dot"></div>`,
+	iconSize: [20, 20],
+	iconAnchor: [10, 10],
+});
+
 function onLocationFound(map, e) {
 	const radius = e.accuracy;
 
 	if (marker === undefined) {
 		marker = {
-			marker: L.marker(e.latlng),
-			circle: L.circle(e.latlng, radius),
+			marker: L.marker(e.latlng, {
+				icon: LOCATION_ICON,
+				interactive: false,
+				keyboard: false,
+				zIndexOffset: -1000,
+			}),
+			circle: L.circle(e.latlng, {
+				radius,
+				color: "#2563eb",
+				weight: 1,
+				opacity: 0.4,
+				fillOpacity: 0.08,
+				interactive: false,
+			}),
 		};
 		marker.marker.addTo(map);
 		marker.circle.addTo(map);
@@ -93,7 +113,7 @@ async function load() {
 	state = await state;
 
 	// Everything about rendering the stations themselves (markers, popups,
-	// clustering, and the brand layer control) lives in stations.js now.
+	// clustering, and the brand filter) lives in stations.js now.
 	// `data` is the full list of stations to render — filter it before
 	// calling this if you only want a subset shown.
 	const { markers, allMarkers } = createStationsLayer(map, data, logos, {

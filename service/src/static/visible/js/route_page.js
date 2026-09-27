@@ -155,6 +155,7 @@ async function load() {
 	let carSettings = null;
 	let departure = new Date();
 	let distance = null;
+	let routeOptions = null;
 	let price_data = null; // null until the first fetch lands
 
 	let station_filter = state.filter;
@@ -163,12 +164,22 @@ async function load() {
 	const alternativesPanel = createTripAlternativesPanel({
 		onStationClick: focusStation,
 		onPlanSelect: showPlan,
+		// Phones: the open sheet would cover the car panel.
+		onExpand: () => {
+			if (isPhone()) routeOptions?.close();
+		},
 	});
 	const tripControl = addTripControl();
 
 	// Phones: the bottom sheet covers half the map, so it gets out of the way
 	// when something on the map (a station popup, the car panel) needs room.
 	const isPhone = () => matchMedia("(max-width: 639px)").matches;
+
+	// Phones: a station's popup needs the room the open sheet takes. The map
+	// fires this before the popup pans into view (stations.js).
+	map.on("popupopen", () => {
+		if (isPhone()) alternativesPanel.minimize();
+	});
 
 	blacklist.on("add", (stationId) => {
 		if (trip?.owned) addTripBlacklist(trip.id, stationId).catch(tripControl.showError);
@@ -192,26 +203,64 @@ async function load() {
 		}
 	}
 
-	// Numbered rings over the selected plan's stops, above the clusters.
+	// Numbered rings over the selected plan's stops, above the clusters, on
+	// the top-right corner of the station's price sign (stations.js: 32px
+	// plus 16px per price row tall, 60px wide) so they don't hide its prices.
+	// A stop gathered into a cluster gets its ring on the cluster's bubble
+	// instead, with the numbers of all the stops inside it.
 	const planLayer = L.layerGroup().addTo(map);
+	let shownStops = [];
 	function showPlan(plan) {
-		planLayer.clearLayers();
-		plan?.stops.forEach((s, i) => {
-			L.marker([s.station.latitud, s.station.longitud], {
-				icon: L.divIcon({
-					className: "",
-					html: `<div class="trip-stop-marker"><span>${i + 1}</span></div>`,
-					iconSize: [44, 44],
-					iconAnchor: [22, 22],
-				}),
-				zIndexOffset: 1000,
-				title: s.station.rotulo,
-			})
-				.on("click", () => focusStation(s.station))
-				.addTo(planLayer);
-		});
+		shownStops = plan?.stops ?? [];
+		placeStopBadges();
 	}
 
+	function placeStopBadges() {
+		planLayer.clearLayers();
+		const badges = new Map();
+		shownStops.forEach((s, i) => {
+			const marker = stationsLayer?.markersById?.get(s.station.id);
+			// null when off screen: then it goes by the sign, as if unclustered.
+			const shown = marker && stationsLayer.markers.getVisibleParent?.(marker);
+			if (shown && shown !== marker) {
+				const badge = badges.get(shown) ?? { latlng: shown.getLatLng(), stops: [], cluster: shown };
+				badge.stops.push({ s, n: i + 1 });
+				badges.set(shown, badge);
+			} else {
+				badges.set(s.station.id, { latlng: [s.station.latitud, s.station.longitud], stops: [{ s, n: i + 1 }] });
+			}
+		});
+
+		for (const { latlng, stops, cluster } of badges.values()) {
+			let dx, dy;
+			if (cluster) {
+				// On the bubble's top-right edge (it's centred on the point).
+				const r = (cluster._icon?.offsetWidth || 40) / 2;
+				dx = r - 2;
+				dy = -(r - 2);
+			} else {
+				const st = stops[0].s.station;
+				const rows = Math.max(1, (st.gasolina_95 != null) + (st.gasoleo_a != null));
+				dx = 28;
+				dy = -(32 + 16 * rows - 4);
+			}
+			const width = 44 + 14 * (stops.length - 1);
+			L.marker(latlng, {
+				icon: L.divIcon({
+					className: "",
+					html: `<div class="trip-stop-marker"><span>${stops.map((x) => x.n).join("·")}</span></div>`,
+					iconSize: [width, 44],
+					iconAnchor: [width / 2 - dx, 22 - dy],
+				}),
+				zIndexOffset: 1000,
+				title: stops.map((x) => x.s.station.rotulo).join(", "),
+			})
+				.on("click", () => focusStation(stops[0].s.station))
+				.addTo(planLayer);
+		}
+	}
+	// Clusters split and merge as the map zooms, and appear as it pans.
+	map.on("moveend", placeStopBadges);
 
 	// The default popup, plus when we'd get there and whether it's open then.
 	function buildPopupContent(eess, blacklist) {
@@ -254,6 +303,7 @@ async function load() {
 			blacklist,
 			buildPopupContent,
 		});
+		stationsLayer.markers.on("animationend", placeStopBadges);
 	}
 
 	function reloadStops() {
@@ -288,7 +338,7 @@ async function load() {
 	});
 	let savedCar = JSON.stringify(state.car);
 
-	addRouteOptionsControl(map, {
+	routeOptions = addRouteOptionsControl(map, {
 		position: "topleft",
 		initialDistance: trip?.max_distance ?? undefined,
 		initialCar: {
