@@ -1,6 +1,7 @@
 // Shared bits for the account and admin pages.
 
 import { formatUnixDate } from "./dates.js";
+import { t, tn } from "./i18n.js";
 
 const DAY = 24 * 60 * 60;
 export const RENEW_WARNING_DAYS = 30;
@@ -12,8 +13,8 @@ export function expiryWarning(notAfter) {
 	const days = Math.floor((notAfter - Date.now() / 1000) / DAY);
 	if (days > RENEW_WARNING_DAYS) return null;
 	return days <= 0
-		? "Your certificate for this device expires today."
-		: `Your certificate for this device expires in ${days} day${days === 1 ? "" : "s"}.`;
+		? t("Your certificate for this device expires today.")
+		: tn(days, "Your certificate for this device expires in {n} day.", "Your certificate for this device expires in {n} days.");
 }
 
 export function showError(element, e) {
@@ -73,23 +74,25 @@ export function listItem({ title, tags = [], lines = [], action = null }) {
 	return li;
 }
 
+const STATUS = { active: t("active"), expired: t("expired"), revoked: t("revoked") };
+
 // A list item for one cert: label, status, expiry, serial, and a revoke
 // button while it's active.
 export function certItem(cert, { note, onRevoke }) {
 	const tags = [];
 	if (note) tags.push(tag(note));
-	tags.push(tag(cert.status, `pill status-${cert.status}`));
+	tags.push(tag(STATUS[cert.status] ?? cert.status, `pill status-${cert.status}`));
 
 	const when =
 		cert.status === "revoked"
-			? `Revoked ${formatDate(cert.revoked_at)}`
-			: `${cert.status === "expired" ? "Expired" : "Expires"} ${formatDate(cert.not_after)}`;
+			? t("Revoked {date}", { date: formatDate(cert.revoked_at) })
+			: t(cert.status === "expired" ? "Expired {date}" : "Expires {date}", { date: formatDate(cert.not_after) });
 
 	return listItem({
 		title: cert.label,
 		tags,
 		lines: [{ text: when }, { text: cert.serial, className: "serial" }],
-		action: cert.status === "active" ? actionButton("Revoke", onRevoke) : null,
+		action: cert.status === "active" ? actionButton(t("Revoke"), onRevoke) : null,
 	});
 }
 
@@ -101,13 +104,13 @@ export function certLists(certs, item) {
 
 	const list = document.createElement("ul");
 	list.className = "list";
-	fillList(list, active.map(item), "No active certificates.");
+	fillList(list, active.map(item), t("No active certificates."));
 	if (!old.length) return [list];
 
 	const details = document.createElement("details");
 	details.className = "fold";
 	const summary = document.createElement("summary");
-	summary.textContent = `${old.length} expired or revoked`;
+	summary.textContent = t("{n} expired or revoked", { n: old.length });
 	const oldList = document.createElement("ul");
 	oldList.className = "list";
 	oldList.append(...old.map(item));

@@ -1,4 +1,5 @@
 import { formatDate } from "./dates.js";
+import { LOCALE, t } from "./i18n.js";
 
 const DAYS = {
 	L: 1, // lunes
@@ -26,7 +27,7 @@ function parseTime(text) {
 // ("22:00-06:00", "06:00-00:00") runs past midnight into the next day.
 function parseWindow(text) {
 	if (text === "24H") return [0, DAY_MINUTES];
-	const [open, close] = text.split("-").map((t) => parseTime(t.trim()));
+	const [open, close] = text.split("-").map((part) => parseTime(part.trim()));
 	if (open == null || close == null) return null;
 	return [open, close <= open ? close + DAY_MINUTES : close];
 }
@@ -128,7 +129,7 @@ export function getStatus(scheduleText, date, soonMinutes = 30) {
 }
 
 export function formatOpenCloseDate(targetDate, now = new Date()) {
-	const time = targetDate.toLocaleTimeString("es-ES", {
+	const time = targetDate.toLocaleTimeString(LOCALE, {
 		hour: "2-digit",
 		minute: "2-digit",
 		hour12: false,
@@ -144,11 +145,11 @@ export function formatOpenCloseDate(targetDate, now = new Date()) {
 	targetDay.setHours(0, 0, 0, 0);
 
 	if (targetDay.getTime() === today.getTime()) {
-		return `Hoy - ${time}`;
+		return `${t("Today")} - ${time}`;
 	}
 
 	if (targetDay.getTime() === tomorrow.getTime()) {
-		return `Mañana - ${time}`;
+		return `${t("Tomorrow")} - ${time}`;
 	}
 
 	const date = formatDate(targetDate);

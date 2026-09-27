@@ -1,3 +1,4 @@
+import { t } from "./i18n.js";
 import { fitToScreen, onlyOneOpen } from "./map_panels.js";
 import { escapeHtml, logoBadge, priceDigits, stationLogo } from "./stations.js";
 
@@ -31,16 +32,16 @@ export function addVisibleStationsControl(map, clusterGroup, allMarkers) {
 			this._currentSort = "gasolina_95";
 
 			container.innerHTML = `
-				<button type="button" class="map-button" aria-label="Gasolineras en pantalla" aria-expanded="false" aria-controls="stationsPanel">${PUMP_ICON}</button>
-				<section id="stationsPanel" class="map-dropdown-panel stations-panel" aria-label="Gasolineras en pantalla" hidden>
+				<button type="button" class="map-button" aria-label="${t("Stations on screen")}" aria-expanded="false" aria-controls="stationsPanel">${PUMP_ICON}</button>
+				<section id="stationsPanel" class="map-dropdown-panel stations-panel" aria-label="${t("Stations on screen")}" hidden>
 					<div class="map-panel-head">
 						<div>
-							<h2>Gasolineras en pantalla</h2>
+							<h2>${t("Stations on screen")}</h2>
 							<p class="map-panel-sub"></p>
 						</div>
-						<button type="button" class="map-panel-close" aria-label="Cerrar">&times;</button>
+						<button type="button" class="map-panel-close" aria-label="${t("Close")}">&times;</button>
 					</div>
-					<div class="segmented" role="radiogroup" aria-label="Ordenar por precio de">
+					<div class="segmented" role="radiogroup" aria-label="${t("Sort by the price of")}">
 						${FUELS.map(
 							(f) =>
 								`<button type="button" role="radio" data-fuel="${f.key}" aria-checked="${f.key === this._currentSort}">${f.name}</button>`,
@@ -127,13 +128,13 @@ export function addVisibleStationsControl(map, clusterGroup, allMarkers) {
 			this._shown = visible.slice(0, MAX_ROWS);
 			count.textContent =
 				visible.length === 0
-					? "Ninguna a la vista"
+					? t("None in view")
 					: visible.length > MAX_ROWS
-						? `Las ${MAX_ROWS} más baratas de ${visible.length}. Acércate para ver el resto.`
-						: `${visible.length} a la vista, de más barata a más cara`;
+						? t("The {max} cheapest of {n}. Zoom in to see the rest.", { max: MAX_ROWS, n: visible.length })
+						: t("{n} in view, cheapest first", { n: visible.length });
 
 			if (visible.length === 0) {
-				list.innerHTML = `<li class="stations-empty">Mueve el mapa o activa más marcas para ver gasolineras.</li>`;
+				list.innerHTML = `<li class="stations-empty">${t("Move the map or turn on more brands to see stations.")}</li>`;
 				return;
 			}
 

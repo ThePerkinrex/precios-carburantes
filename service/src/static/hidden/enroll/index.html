@@ -9,7 +9,18 @@
     <link rel="icon" href="/files/images/favicon.ico" sizes="32x32">
     <link rel="apple-touch-icon" href="/files/images/apple-touch-icon.png">
     <!-- Everything is inline: this page is served to clients without a
-         certificate, and nginx only lets /enroll/ through for them. -->
+         certificate, and nginx only lets /enroll/ through for them. That
+         includes the translations: this is a copy of js/lang.js, and the
+         Spanish text is in ES below. -->
+    <script>
+        (() => {
+            const root = document.documentElement;
+            const languages = navigator.languages?.length ? navigator.languages : [navigator.language ?? "en"];
+            const lang = languages.map((l) => l.toLowerCase().split("-")[0]).find((l) => l === "es" || l === "en") ?? "en";
+            root.lang = lang;
+            if (lang === "es") root.style.visibility = "hidden";
+        })();
+    </script>
     <style>
         /* Colours from app.css, which this page can't load. */
         :root { --bg: #eef1f5; --card: #fff; --primary: #1f2937; --accent: #2563eb; --muted: #6b7280; --line: #e5e7eb; --bad: #dc2626; }
@@ -82,6 +93,50 @@
     </div>
 
     <script>
+        const ES = {
+            "Get your certificate": "Consigue tu certificado",
+            "Checking your invite…": "Comprobando tu invitación…",
+            "This installs a certificate that lets this device open Carburantes. Choose a password for the certificate file. You only need it once, when you import the file.":
+                "Esto instala un certificado que permite a este dispositivo abrir Carburantes. Elige una contraseña para el archivo del certificado. Solo la necesitarás una vez, al importar el archivo.",
+            "Password": "Contraseña",
+            "Repeat password": "Repite la contraseña",
+            "Download certificate": "Descargar certificado",
+            "The link works only once. If the download fails, ask for a new one.": "El enlace solo funciona una vez. Si la descarga falla, pide uno nuevo.",
+            "has been downloaded. Import it with the password you just chose:": "se ha descargado. Impórtalo con la contraseña que acabas de elegir:",
+            "Settings → Security → Encryption & credentials → Install a certificate → VPN & app user certificate.":
+                "Ajustes → Seguridad → Cifrado y credenciales → Instalar un certificado → Certificado de usuario de VPN y aplicaciones.",
+            "Pick the downloaded file and enter the password.": "Elige el archivo descargado e introduce la contraseña.",
+            "Open the downloaded file from Files. It gets added as a profile.": "Abre el archivo descargado desde Archivos. Se añade como perfil.",
+            "Settings → General → VPN & Device Management → install the profile and enter the password.":
+                "Ajustes → General → VPN y gestión de dispositivos → instala el perfil e introduce la contraseña.",
+            "Double-click the file and follow the import wizard (on macOS it goes into the login keychain).":
+                "Haz doble clic en el archivo y sigue el asistente de importación (en macOS va al llavero de inicio de sesión).",
+            "Settings → Privacy & Security → Certificates → View Certificates → Your Certificates → Import.":
+                "Ajustes → Privacidad y seguridad → Certificados → Ver certificados → Sus certificados → Importar.",
+            "Then restart the browser and open": "Después reinicia el navegador y abre",
+            ". When the browser asks, pick this certificate.": ". Cuando el navegador lo pida, elige este certificado.",
+            "Something went wrong (HTTP {status}).": "Algo ha fallado (HTTP {status}).",
+            "Certificate for {user}, device \"{label}\".": "Certificado para {user}, dispositivo \"{label}\".",
+            // The server's messages.
+            "Passwords don't match": "Las contraseñas no coinciden",
+            "This invite link is invalid, expired or has already been used": "Este enlace de invitación no es válido, ha caducado o ya se ha usado",
+        };
+        const DICT = document.documentElement.lang === "es" ? ES : {};
+        const t = (text, params = {}) => (DICT[text] ?? text).replace(/\{(\w+)\}/g, (m, k) => (k in params ? params[k] : m));
+
+        // Same as translatePage() in js/i18n.js.
+        const walker = document.createTreeWalker(document, NodeFilter.SHOW_TEXT, {
+            acceptNode: (node) =>
+                node.parentElement?.closest("script, style") ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT,
+        });
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+            const key = node.data.trim().replace(/\s+/g, " ");
+            if (!(key in DICT)) continue;
+            const [, before, after] = /^(\s*)[\s\S]*?(\s*)$/.exec(node.data);
+            node.data = before + DICT[key] + after;
+        }
+        document.documentElement.style.visibility = "";
+
         const base = location.pathname.replace(/\/+$/, "");
         const status = document.getElementById("status");
 
@@ -96,7 +151,8 @@
         document.querySelector(`details[data-platform="${platform()}"]`).open = true;
 
         async function errorText(response) {
-            return (await response.text()) || `Something went wrong (HTTP ${response.status}).`;
+            const text = await response.text();
+            return text ? t(text) : t("Something went wrong (HTTP {status}).", { status: response.status });
         }
 
         async function load() {
@@ -107,7 +163,7 @@
                 return;
             }
             const info = await response.json();
-            status.textContent = `Certificate for ${info.cn}, device "${info.label}".`;
+            status.textContent = t("Certificate for {user}, device \"{label}\".", { user: info.cn, label: info.label });
             document.getElementById("enroll").hidden = false;
         }
 

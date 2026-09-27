@@ -32,12 +32,13 @@ import { addMenuControl } from "./map_menu.js";
 import { getLogos } from "./logos.js";
 import { createTripAlternativesPanel } from "./trip_alternatives.js";
 import { arrivalTime, planStops, statusAt } from "./fuel_planner.js";
+import { LOCALE, t } from "./i18n.js";
 
 const STATUS_TEXT = {
-	open: "abierta",
-	closesSoon: "cierra pronto",
-	closed: "cerrada",
-	unknown: "horario desconocido",
+	open: t("open"),
+	closesSoon: t("closes soon"),
+	closed: t("closed"),
+	unknown: t("unknown hours"),
 };
 
 // The saved trip for this route, if any: the one in ?trip=, or else the
@@ -47,12 +48,12 @@ async function findTrip(hash, routeIdx, tripId) {
 		try {
 			return { trip: await getTrip(tripId) };
 		} catch {
-			return { trip: null, error: "Este viaje no existe o no tienes acceso a él." };
+			return { trip: null, error: t("This trip doesn't exist or you don't have access to it.") };
 		}
 	}
 	try {
 		const { saved } = await getTrips();
-		const mine = saved.find((t) => t.hash === hash && t.route_idx === routeIdx);
+		const mine = saved.find((s) => s.hash === hash && s.route_idx === routeIdx);
 		return { trip: mine ? await getTrip(mine.id) : null };
 	} catch {
 		return { trip: null };
@@ -114,7 +115,7 @@ async function load() {
 			icon: waypointDivIcon(i, i === 0, i === last && last > 0),
 		})
 			.addTo(map)
-			.bindPopup(wp.name || `Punto ${i + 1}`);
+			.bindPopup(wp.name || t("Point {n}", { n: i + 1 }));
 	});
 
 	map.fitBounds(routeLine.getBounds(), { padding: [40, 40] });
@@ -265,14 +266,14 @@ async function load() {
 	// The default popup, plus when we'd get there and whether it's open then.
 	function buildPopupContent(eess, blacklist) {
 		const eta = arrivalTime(eess, departure);
-		const time = eta.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit", hour12: false });
+		const time = eta.toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit", hour12: false });
 		const status = statusAt(eess, eta);
 		const detourKm = (2 * (eess.distance_from_route ?? 0)) / 1000;
 		return `
 			<div class="route-eta ${status}">
-				Llegada ~${time}: <b>${STATUS_TEXT[status]}</b>
+				${t("Arriving ~{time}", { time })}: <b>${STATUS_TEXT[status]}</b>
 				• km ${(eess.distance_along_route / 1000).toFixed(1)}
-				${detourKm >= 0.1 ? `• ~${detourKm.toFixed(1)} km desvío` : ""}
+				${detourKm >= 0.1 ? `• ${t("~{km} km detour", { km: detourKm.toFixed(1) })}` : ""}
 			</div>
 			${buildDefaultPopupContent(eess, blacklist)}`;
 	}
@@ -391,11 +392,11 @@ async function load() {
 		function defaultName() {
 			const from = waypoints[0]?.name;
 			const to = waypoints[last]?.name;
-			return from && to ? `${from} → ${to}` : "Mi viaje";
+			return from && to ? `${from} → ${to}` : t("My trip");
 		}
 
 		async function save() {
-			const name = prompt("Nombre del viaje", trip?.name ?? defaultName())?.trim();
+			const name = prompt(t("Trip name"), trip?.name ?? defaultName())?.trim();
 			if (!name) return;
 			try {
 				const { id } = await createTrip({
@@ -416,7 +417,7 @@ async function load() {
 		}
 
 		async function rename() {
-			const name = prompt("Nombre del viaje", trip.name)?.trim();
+			const name = prompt(t("Trip name"), trip.name)?.trim();
 			if (!name || name === trip.name) return;
 			try {
 				await updateTrip(trip.id, { name });
@@ -433,7 +434,7 @@ async function load() {
 				message = "";
 				render();
 				await navigator.clipboard?.writeText(shareUrl);
-				message = "Enlace copiado.";
+				message = t("Link copied.");
 				render();
 			} catch (e) {
 				if (shareUrl) render(); // clipboard refused: the link is still shown
@@ -458,19 +459,19 @@ async function load() {
 			actions.className = "trip-control-actions";
 
 			if (!trip) {
-				title.textContent = "Viaje sin guardar";
-				actions.append(button("Guardar viaje", save));
+				title.textContent = t("Unsaved trip");
+				actions.append(button(t("Save trip"), save));
 			} else if (trip.owned) {
 				title.textContent = trip.name;
-				actions.append(button("Renombrar", rename), button("Compartir", share));
+				actions.append(button(t("Rename"), rename), button(t("Share"), share));
 			} else {
-				title.textContent = `${trip.name} · de ${trip.owner}`;
+				title.textContent = `${trip.name} · ${t("from {user}", { user: trip.owner })}`;
 				const note = document.createElement("div");
 				note.className = "trip-control-note";
 				note.textContent =
-					"Compartido contigo: los cambios en la lista negra no se guardan hasta que guardes una copia.";
+					t("Shared with you: changes to the excluded stations aren't saved until you save a copy.");
 				box.append(title, note);
-				actions.append(button("Guardar copia", save));
+				actions.append(button(t("Save a copy"), save));
 			}
 			if (!box.contains(title)) box.append(title);
 			box.append(actions);
@@ -485,8 +486,8 @@ async function load() {
 				const note = document.createElement("div");
 				note.className = "trip-control-note";
 				note.textContent =
-					"Solo sirve para una persona: la primera que lo abra. Caduca en 7 días si nadie lo usa.";
-				const close = button("Cerrar", () => {
+					t("Works for one person only: the first to open it. It expires in 7 days if nobody uses it.");
+				const close = button(t("Close"), () => {
 					shareUrl = null;
 					message = "";
 					render();
@@ -506,7 +507,7 @@ async function load() {
 
 		function showError(e) {
 			console.error(e);
-			message = `Error: ${e.message}`;
+			message = t("Error: {error}", { error: e.message });
 			render();
 		}
 

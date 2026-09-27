@@ -8,6 +8,7 @@ import {
 } from "./api.js";
 import { formatDateTime } from "./dates.js";
 import { actionButton, certItem, certLists, fillList, formatDate, listItem, showError } from "./certs_ui.js";
+import { t } from "./i18n.js";
 import { renderNav } from "./nav.js";
 
 async function loadInvites() {
@@ -21,8 +22,8 @@ async function loadInvites() {
 			invites.map((invite) =>
 				listItem({
 					title: `${invite.cn} · ${invite.label}`,
-					lines: [{ text: `By ${invite.created_by}, expires ${formatDate(invite.expires_at)}` }],
-					action: actionButton("Cancel", async () => {
+					lines: [{ text: t("By {user}, expires {date}", { user: invite.created_by, date: formatDate(invite.expires_at) }) }],
+					action: actionButton(t("Cancel"), async () => {
 						try {
 							await adminCancelInvite(invite.id);
 							await loadInvites();
@@ -32,7 +33,7 @@ async function loadInvites() {
 					}),
 				}),
 			),
-			"No pending invites.",
+			t("No pending invites."),
 		);
 	} catch (e) {
 		showError(message, e);
@@ -66,7 +67,7 @@ async function loadUsers() {
 				const item = (cert) =>
 					certItem(cert, {
 						onRevoke: async () => {
-							if (!confirm(`Revoke ${user.cn}'s "${cert.label}" certificate? This can't be undone.`)) return;
+							if (!confirm(t("Revoke {user}'s \"{label}\" certificate? This can't be undone.", { user: user.cn, label: cert.label }))) return;
 							try {
 								await adminRevokeCert(cert.serial, "cessation_of_operation");
 								await loadUsers();
@@ -104,9 +105,13 @@ function setupInviteForm() {
 		try {
 			const invite = await adminCreateInvite(form.cn.value, form.label.value, form.admin.checked);
 			url.value = invite.url;
-			copy.textContent = "Copy";
+			copy.textContent = t("Copy");
 			result.hidden = false;
-			message.textContent = `Link for ${form.cn.value} (${form.label.value}), valid until ${formatDateTime(new Date(invite.expires_at * 1000))}. It won't be shown again.`;
+			message.textContent = t("Link for {user} ({label}), valid until {date}. It won't be shown again.", {
+				user: form.cn.value,
+				label: form.label.value,
+				date: formatDateTime(new Date(invite.expires_at * 1000)),
+			});
 			message.className = "";
 			form.reset();
 			await loadInvites();
@@ -119,12 +124,12 @@ function setupInviteForm() {
 
 	copy.addEventListener("click", async () => {
 		await navigator.clipboard.writeText(url.value);
-		copy.textContent = "Copied";
+		copy.textContent = t("Copied");
 	});
 
 	share.addEventListener("click", async () => {
 		try {
-			await navigator.share({ title: "Carburantes invite", url: url.value });
+			await navigator.share({ title: t("Carburantes invite"), url: url.value });
 		} catch {
 			// Dismissed the share sheet.
 		}

@@ -1,17 +1,9 @@
-import { RENEW_WARNING_DAYS } from "./certs_ui.js";
+import { expiryWarning } from "./certs_ui.js";
+import { t } from "./i18n.js";
 import { onlyOneOpen } from "./map_panels.js";
 import { pagesFor } from "./nav.js";
 
 const MENU_ICON = `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>`;
-
-// "Your cert expires soon" in Spanish, or null. Same threshold as the account page.
-function expiryWarning(notAfter) {
-	const days = Math.floor((notAfter * 1000 - Date.now()) / (24 * 60 * 60 * 1000));
-	if (days > RENEW_WARNING_DAYS) return null;
-	return days <= 0
-		? "El certificado de este dispositivo caduca hoy."
-		: `El certificado de este dispositivo caduca en ${days} día${days === 1 ? "" : "s"}.`;
-}
 
 // Menu button in the top-left corner with links to the other pages.
 // `statePromise` resolves to getUserState(); the button works before that,
@@ -27,7 +19,7 @@ export function addMenuControl(map, statePromise, current = "map") {
 			L.DomEvent.disableScrollPropagation(container);
 
 			container.innerHTML = `
-				<button type="button" class="map-button map-menu-toggle" aria-label="Menú" aria-expanded="false" aria-controls="mapMenuPanel">
+				<button type="button" class="map-button map-menu-toggle" aria-label="${t("Menu")}" aria-expanded="false" aria-controls="mapMenuPanel">
 					${MENU_ICON}<span class="map-menu-badge" hidden></span>
 				</button>
 				<div id="mapMenuPanel" class="map-menu-panel" hidden>
@@ -72,7 +64,7 @@ function fill(container, state, current) {
 				const li = document.createElement("li");
 				const link = document.createElement("a");
 				link.href = page.href;
-				link.textContent = page.es;
+				link.textContent = page.label;
 				li.append(link);
 				return li;
 			}),
@@ -82,7 +74,7 @@ function fill(container, state, current) {
 	if (warning) {
 		const p = container.querySelector(".map-menu-warning");
 		p.textContent = `${warning} `;
-		const link = Object.assign(document.createElement("a"), { href: "/files/account", textContent: "Renovar" });
+		const link = Object.assign(document.createElement("a"), { href: "/files/account", textContent: t("Renew") });
 		p.append(link);
 		p.hidden = false;
 		container.querySelector(".map-menu-badge").hidden = false;

@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 	<meta charset="UTF-8">
+	<script src="/files/js/lang.js"></script>
 	<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 	<meta name="theme-color" content="#15233a">
 	<title>Carburantes</title>
@@ -41,19 +42,20 @@
 	<script type="module">
 		import { getUserState } from "/files/js/api.js";
 		import { expiryWarning } from "/files/js/certs_ui.js";
+		import { t } from "/files/js/i18n.js";
 		import { pagesFor } from "/files/js/nav.js";
 		import { getPriceHistory, renderBoard } from "/files/js/price_board.js";
 
 		const board = document.getElementById("board");
 		// The board compares with a week ago, so a little over a week is enough.
 		getPriceHistory({ from: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000) })
-			.then((history) => renderBoard(board, history, "Spain"))
+			.then((history) => renderBoard(board, history, t("Spain")))
 			.catch((e) => {
 				board.querySelector(".board-empty").textContent = e.message;
 			});
 
 		const state = await getUserState();
-		document.getElementById("greeting").textContent = `Signed in as ${state.display_name || state.username}`;
+		document.getElementById("greeting").textContent = t("Signed in as {name}", { name: state.display_name || state.username });
 
 		document.getElementById("links").replaceChildren(
 			...pagesFor(state)
@@ -71,7 +73,8 @@
 		const warning = state.cert && expiryWarning(state.cert.not_after);
 		if (warning) {
 			const banner = document.getElementById("expiryBanner");
-			banner.innerHTML = `${warning} <a href="/files/account">Renew it</a>.`;
+			const link = Object.assign(document.createElement("a"), { href: "/files/account", textContent: t("Renew it") });
+			banner.append(`${warning} `, link, ".");
 			banner.hidden = false;
 		}
 	</script>

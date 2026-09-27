@@ -1,4 +1,5 @@
 import { createRoute, getRoutes, routePageUrl } from "./api.js";
+import { t } from "./i18n.js";
 import { onlyOneOpen } from "./map_panels.js";
 
 // Colors used to distinguish alternative routes on the map and in the tabs.
@@ -65,22 +66,22 @@ export function addRouteControl(map) {
 	const fab = document.createElement("button");
 	fab.type = "button";
 	fab.className = "route-fab";
-	fab.setAttribute("aria-label", "Buscar ruta");
+	fab.setAttribute("aria-label", t("Find a route"));
 	fab.innerHTML = FAB_ICON;
 
 	const panel = document.createElement("div");
 	panel.className = "route-panel hidden";
 	panel.innerHTML = `
 		<div class="route-panel-header">
-			<span>Ruta</span>
-			<button type="button" class="route-close" aria-label="Cerrar">&times;</button>
+			<span>${t("Route")}</span>
+			<button type="button" class="route-close" aria-label="${t("Close")}">&times;</button>
 		</div>
-		<div class="route-hint">Toca el mapa para añadir puntos de ruta</div>
+		<div class="route-hint">${t("Tap the map to add route points")}</div>
 		<ul class="route-waypoint-list"></ul>
 		<div class="route-summary hidden"></div>
 		<div class="route-actions">
-			<button type="button" class="route-clear" disabled>Vaciar</button>
-			<button type="button" class="route-calc" disabled>Calcular ruta</button>
+			<button type="button" class="route-clear" disabled>${t("Clear")}</button>
+			<button type="button" class="route-calc" disabled>${t("Calculate route")}</button>
 		</div>
 	`;
 
@@ -107,10 +108,10 @@ export function addRouteControl(map) {
 			const li = document.createElement("li");
 			li.className = "route-waypoint-item";
 			li.innerHTML = `
-				<button type="button" class="route-waypoint-handle" aria-label="Arrastrar para reordenar el punto ${i + 1}">${HANDLE_ICON}</button>
+				<button type="button" class="route-waypoint-handle" aria-label="${t("Drag to reorder point {n}", { n: i + 1 })}">${HANDLE_ICON}</button>
 				<span class="route-waypoint-index">${i + 1}</span>
 				<span class="route-waypoint-coords">${wp.latlng.lat.toFixed(5)}, ${wp.latlng.lng.toFixed(5)}</span>
-				<button type="button" class="route-waypoint-remove" aria-label="Eliminar punto ${i + 1}">&times;</button>
+				<button type="button" class="route-waypoint-remove" aria-label="${t("Remove point {n}", { n: i + 1 })}">&times;</button>
 			`;
 			li.querySelector(".route-waypoint-remove").addEventListener("click", () => removeWaypoint(i));
 			attachDragHandlers(li);
@@ -305,7 +306,7 @@ export function addRouteControl(map) {
 				tab.type = "button";
 				tab.className = "route-tab" + (i === state.selectedRouteIndex ? " selected" : "");
 				tab.style.setProperty("--route-color", ROUTE_COLORS[i % ROUTE_COLORS.length]);
-				tab.textContent = `Ruta ${i + 1}`;
+				tab.textContent = t("Route {n}", { n: i + 1 });
 				tab.addEventListener("click", () => selectRoute(i));
 				tabs.appendChild(tab);
 			});
@@ -324,7 +325,7 @@ export function addRouteControl(map) {
 		const planLink = document.createElement("a");
 		planLink.className = "route-plan-link";
 		planLink.href = routePageUrl(state.hash, state.selectedRouteIndex);
-		planLink.textContent = "Planificar repostaje";
+		planLink.textContent = t("Plan fuel stops");
 		summaryEl.appendChild(planLink);
 	}
 
@@ -334,7 +335,7 @@ export function addRouteControl(map) {
 		state.loading = true;
 		calcBtn.disabled = true;
 		clearBtn.disabled = true;
-		calcBtn.textContent = "Calculando...";
+		calcBtn.textContent = t("Calculating…");
 		clearRouteLayers();
 
 		try {
@@ -352,12 +353,12 @@ export function addRouteControl(map) {
 			drawRoutes();
 			renderSummary();
 		} catch (err) {
-			console.error("Error calculando la ruta", err);
+			console.error("Couldn't calculate the route", err);
 			summaryEl.classList.remove("hidden");
-			summaryEl.innerHTML = `<div class="route-error">No se pudo calcular la ruta. Inténtalo de nuevo.</div>`;
+			summaryEl.innerHTML = `<div class="route-error">${t("Couldn't calculate the route. Try again.")}</div>`;
 		} finally {
 			state.loading = false;
-			calcBtn.textContent = "Calcular ruta";
+			calcBtn.textContent = t("Calculate route");
 			renderList();
 		}
 	}

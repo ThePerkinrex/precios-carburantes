@@ -7,6 +7,7 @@
 // The car profile is saved on the server by the caller (onCarChange); only
 // the current fuel, which changes every drive, is kept in this browser.
 
+import { t } from "./i18n.js";
 import { fitToScreen, onlyOneOpen } from "./map_panels.js";
 
 // Sliders: the panel holds settings (distance, departure, car).
@@ -122,8 +123,8 @@ export function addRouteOptionsControl(
 
 		const toggle = L.DomUtil.create("button", "map-button route-options-fab", container);
 		toggle.type = "button";
-		toggle.title = "Distancia, salida y coche";
-		toggle.setAttribute("aria-label", "Distancia, salida y coche");
+		toggle.title = t("Distance, departure and car");
+		toggle.setAttribute("aria-label", t("Distance, departure and car"));
 		toggle.setAttribute("aria-expanded", "false");
 		toggle.innerHTML = OPTIONS_ICON;
 
@@ -131,7 +132,7 @@ export function addRouteOptionsControl(
 		panel.style.display = "none";
 		panel.innerHTML = `
 			<div class="route-options-content">
-				<div class="route-options-section-title">Distancia a la ruta</div>
+				<div class="route-options-section-title">${t("Distance from the route")}</div>
 				<div class="route-options-distance">
 					<input
 						type="range"
@@ -145,54 +146,54 @@ export function addRouteOptionsControl(
 				</div>
 
 				<div class="route-options-section-title route-options-departure-title">
-					Salida
-					<button type="button" class="route-options-now-btn">Ahora</button>
+					${t("Departure")}
+					<button type="button" class="route-options-now-btn">${t("Now")}</button>
 				</div>
 				<input type="datetime-local" class="route-options-departure-input" value="${toLocalInputValue(departure)}">
 
-				<div class="route-options-section-title">Mi coche</div>
+				<div class="route-options-section-title">${t("My car")}</div>
 				<div class="route-options-fuel">
 					<label>
 						<input type="radio" name="route-options-fuel" value="diesel" ${car.fuel === "diesel" ? "checked" : ""}>
-						Diésel
+						${t("Diesel")}
 					</label>
 					<label>
 						<input type="radio" name="route-options-fuel" value="gasolina" ${car.fuel === "gasolina" ? "checked" : ""}>
-						Gasolina
+						${t("Petrol")}
 					</label>
 				</div>
 
 				<label class="route-options-field">
-					<span>Consumo (L/100km)</span>
+					<span>${t("Consumption (L/100km)")}</span>
 					<input type="number" class="route-options-consumption" min="0" step="0.1" value="${car.consumption}">
 				</label>
 				<label class="route-options-field">
-					<span>Depósito (L)</span>
+					<span>${t("Tank (L)")}</span>
 					<input type="number" class="route-options-tank-size" min="0" step="1" value="${car.tankSize}">
 				</label>
 				<label class="route-options-field">
-					<span>Combustible actual (L)</span>
+					<span>${t("Fuel now (L)")}</span>
 					<input type="number" class="route-options-initial-fuel" min="0" step="1" value="${car.initialFuel}">
 					<span class="route-options-range-info route-options-initial-km"></span>
 				</label>
 
-				<div class="route-options-section-title">Repostar cuando quede entre</div>
-				<div class="route-options-hint">Nunca se baja del mínimo, tampoco al llegar al destino.</div>
+				<div class="route-options-section-title">${t("Fill up when there's between")}</div>
+				<div class="route-options-hint">${t("It never drops below the minimum, not even on arrival.")}</div>
 				<div class="route-options-stop-range">
 					<label class="route-options-field">
-						<span>Mínimo (L)</span>
+						<span>${t("Minimum (L)")}</span>
 						<input type="number" class="route-options-stop-min" min="0" step="1" value="${car.stopMin}">
 						<span class="route-options-range-info route-options-min-km"></span>
 					</label>
 					<label class="route-options-field">
-						<span>Máximo (L)</span>
+						<span>${t("Maximum (L)")}</span>
 						<input type="number" class="route-options-stop-max" min="0" step="1" value="${car.stopMax}">
 						<span class="route-options-range-info route-options-max-km"></span>
 					</label>
 				</div>
 
 				<div class="route-options-actions">
-					<button type="button" class="route-options-save-btn">Listo</button>
+					<button type="button" class="route-options-save-btn">${t("Done")}</button>
 				</div>
 			</div>
 		`;
@@ -274,7 +275,7 @@ export function addRouteOptionsControl(
 			const minKm = fuelToKm(currentCar.stopMin, currentCar.consumption);
 			const maxKm = fuelToKm(currentCar.stopMax, currentCar.consumption);
 
-			initialKmSpan.textContent = `~${initialKm} km restantes`;
+			initialKmSpan.textContent = t("~{km} km left", { km: initialKm });
 			minKmSpan.textContent = `~${minKm} km`;
 			maxKmSpan.textContent = `~${maxKm} km`;
 		}

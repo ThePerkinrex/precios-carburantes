@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <script src="/files/js/lang.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#15233a">
     <!-- The token is in this page's URL: don't pass it on to other sites. -->
@@ -31,6 +32,7 @@
     </div>
     <script type="module">
         import { claimTripShare, getUserState, routePageUrl } from "/files/js/api.js";
+        import { t } from "/files/js/i18n.js";
         import { renderNav } from "/files/js/nav.js";
 
         getUserState().then((state) => renderNav(document.getElementById("nav"), state, null));
@@ -44,8 +46,8 @@
         } catch (e) {
             const message = document.getElementById("message");
             message.textContent = e.status === 404
-                ? "This link is invalid, has expired, or was already opened by someone else. Share links only work for one person: ask for a new one."
-                : `Couldn't open the trip: ${e.message}`;
+                ? t("This link is invalid, has expired, or was already opened by someone else. Share links only work for one person: ask for a new one.")
+                : t("Couldn't open the trip: {error}", { error: e.message });
             message.className = "error";
         }
     </script>

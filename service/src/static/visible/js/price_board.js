@@ -2,6 +2,7 @@
 // like the price signs outside petrol stations.
 
 import { formatDate, formatDateTime, parseFecha } from "./dates.js";
+import { LOCALE, t } from "./i18n.js";
 
 const FUELS = [
 	{ key: "gasolina_95", name: "Gasolina 95", className: "g95" },
@@ -17,29 +18,36 @@ export async function getPriceHistory({ ccaa, provincia, from } = {}) {
 	if (provincia) params.set("provincia_id", provincia);
 	if (from) params.set("from", from.toISOString());
 	const response = await fetch(`/api/prices/history?${params}`);
-	if (!response.ok) throw new Error(`Couldn't load prices (HTTP ${response.status}).`);
+	if (!response.ok) throw new Error(t("Couldn't load prices (HTTP {status}).", { status: response.status }));
 	return (await response.json()).map((point) => ({ ...point, date: parseFecha(point.fecha) }));
 }
 
 // 1.629 -> "1,62<small>9</small>": the last digit smaller, as on the signs.
 function priceHtml(value) {
-	const [whole, thousandths] = value.toLocaleString("es-ES", { minimumFractionDigits: 3, maximumFractionDigits: 3 }).split(/(\d)$/);
+	const [whole, thousandths] = value.toLocaleString(LOCALE, { minimumFractionDigits: 3, maximumFractionDigits: 3 }).split(/(\d)$/);
 	return `${whole}<small>${thousandths}</small><span class="unit">€/L</span>`;
 }
 
 // The change between two prices in euro cents.
 function deltaText(now, before) {
 	const cents = (now - before) * 100;
-	if (Math.abs(cents) < 0.05) return { text: "No change", className: "" };
-	const amount = Math.abs(cents).toLocaleString("es-ES", { maximumFractionDigits: 1, minimumFractionDigits: 1 });
+	if (Math.abs(cents) < 0.05) return { text: t("No change"), className: "" };
+	const amount = Math.abs(cents).toLocaleString(LOCALE, { maximumFractionDigits: 1, minimumFractionDigits: 1 });
 	return cents > 0
-		? { text: `▲ ${amount} cents`, className: "up" }
-		: { text: `▼ ${amount} cents`, className: "down" };
+		? { text: `▲ ${t("{amount} cents", { amount })}`, className: "up" }
+		: { text: `▼ ${t("{amount} cents", { amount })}`, className: "down" };
 }
 
 // 0.123 -> "12,3 cents"
 function centsText(euros) {
-	return `${(euros * 100).toLocaleString("es-ES", { maximumFractionDigits: 1, minimumFractionDigits: 1 })} cents`;
+	const amount = (euros * 100).toLocaleString(LOCALE, { maximumFractionDigits: 1, minimumFractionDigits: 1 });
+	return t("{amount} cents", { amount });
+}
+
+function boardHead(board, where) {
+	board.innerHTML = `<div class="board-head"><span></span><strong></strong></div>`;
+	board.querySelector("span").textContent = t("Average price");
+	board.querySelector("strong").textContent = where;
 }
 
 // Fills `board` with the last point of `history`, compared with the last
@@ -48,9 +56,11 @@ function centsText(euros) {
 export function renderBoard(board, history, where, { baseline = "week" } = {}) {
 	const latest = history.at(-1);
 	if (!latest) {
-		board.innerHTML = `<div class="board-head"><span>Average price</span><strong></strong></div>
-			<p class="board-empty">No prices recorded for this area yet.</p>`;
-		board.querySelector("strong").textContent = where;
+		boardHead(board, where);
+		const empty = document.createElement("p");
+		empty.className = "board-empty";
+		empty.textContent = t("No prices recorded for this area yet.");
+		board.append(empty);
 		return;
 	}
 	const cutoff = latest.date.getTime() - WEEK_MS;
@@ -59,8 +69,7 @@ export function renderBoard(board, history, where, { baseline = "week" } = {}) {
 		: (history.findLast((p) => p.date.getTime() <= cutoff) ?? history[0]);
 	const compare = before !== latest;
 
-	board.innerHTML = `<div class="board-head"><span>Average price</span><strong></strong></div>`;
-	board.querySelector("strong").textContent = where;
+	boardHead(board, where);
 	for (const fuel of FUELS) {
 		const value = latest[fuel.key];
 		if (value == null) continue;
@@ -80,12 +89,14 @@ export function renderBoard(board, history, where, { baseline = "week" } = {}) {
 		const spread = latest.gasolina_95 - latest.gasoleo_a;
 		const row = document.createElement("p");
 		row.className = "board-spread";
-		row.textContent = `Diesel is ${centsText(Math.abs(spread))} ${spread >= 0 ? "cheaper" : "dearer"} than Gasolina 95`;
+		row.textContent = t(spread >= 0 ? "Diesel is {amount} cheaper than Gasolina 95" : "Diesel is {amount} dearer than Gasolina 95", {
+			amount: centsText(Math.abs(spread)),
+		});
 		board.append(row);
 	}
 	const foot = document.createElement("p");
 	foot.className = "board-foot";
-	foot.textContent = `Updated ${formatDateTime(latest.date)}`;
-	if (compare) foot.textContent += `. Change since ${formatDate(before.date)}.`;
+	foot.textContent = t("Updated {date}", { date: formatDateTime(latest.date) });
+	if (compare) foot.textContent += `. ${t("Change since {date}.", { date: formatDate(before.date) })}`;
 	board.append(foot);
 }

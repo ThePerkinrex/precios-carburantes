@@ -2,6 +2,7 @@ import { formatDateTime, parseFecha } from "./dates.js";
 import { getStatus, formatOpenCloseDate } from "./schedules.js";
 import { updateFilter } from "./api.js";
 import { fitToScreen, onlyOneOpen } from "./map_panels.js";
+import { t } from "./i18n.js";
 
 // Same colours as the --g95 / --diesel tokens (map_base.css), for Chart.js.
 const G95_COLOR = "#16a34a";
@@ -53,12 +54,12 @@ export function logoBadge(image, name, className) {
 
 function blacklistButtonContent(blacklisted) {
 	return blacklisted
-		? `<span aria-hidden="true">&#10003;</span> Volver a incluir`
-		: `<span aria-hidden="true">&#10005;</span> Excluir`;
+		? `<span aria-hidden="true">&#10003;</span> ${t("Include again")}`
+		: `<span aria-hidden="true">&#10005;</span> ${t("Exclude")}`;
 }
 
 function blacklistButtonTitle(blacklisted) {
-	return blacklisted ? "Quitar de la lista negra" : "Añadir a la lista negra";
+	return t(blacklisted ? "Remove from the excluded stations" : "Add to the excluded stations");
 }
 
 /**
@@ -74,21 +75,21 @@ function buildBlacklistToggle(eess, blacklist) {
 
 function statusPills(eess) {
 	const status = getStatus(eess.horario, new Date());
-	const closeText = (d) => (d ? `cierra ${formatOpenCloseDate(d)}` : "24 h");
+	const closeText = (d) => (d ? t("closes {when}", { when: formatOpenCloseDate(d) }) : "24 h");
 	let pill = "";
 	if (status.status == "open") {
-		pill = `<span class="pill open">Abierto · ${closeText(status.nextClose)}</span>`;
+		pill = `<span class="pill open">${t("Open")} · ${closeText(status.nextClose)}</span>`;
 	} else if (status.status == "opensSoon") {
-		pill = `<span class="pill open soon">Abre pronto · ${formatOpenCloseDate(status.nextOpen)}</span>`;
+		pill = `<span class="pill open soon">${t("Opens soon")} · ${formatOpenCloseDate(status.nextOpen)}</span>`;
 	} else if (status.status == "closed") {
 		pill = status.nextOpen
-			? `<span class="pill closed">Cerrado · abre ${formatOpenCloseDate(status.nextOpen)}</span>`
-			: `<span class="pill closed">Cerrado</span>`;
+			? `<span class="pill closed">${t("Closed")} · ${t("opens {when}", { when: formatOpenCloseDate(status.nextOpen) })}</span>`
+			: `<span class="pill closed">${t("Closed")}</span>`;
 	} else if (status.status == "closesSoon") {
-		pill = `<span class="pill closed soon">Cierra pronto · ${closeText(status.nextClose)}</span>`;
+		pill = `<span class="pill closed soon">${t("Closes soon")} · ${closeText(status.nextClose)}</span>`;
 	}
 	if (status.uncertain) {
-		pill += `<span class="pill uncertain" title="El horario publicado solo indica el lunes; se asume el mismo horario todos los días">Horario dudoso</span>`;
+		pill += `<span class="pill uncertain" title="${t("The published hours only cover Monday; the same hours are assumed every day")}">${t("Uncertain hours")}</span>`;
 	}
 	return pill;
 }
@@ -121,6 +122,13 @@ function navigationLinks(eess) {
 				`<a class="nav-link" href="${l.href}" target="_blank" rel="noopener noreferrer"><img src="${l.icon}" alt=""><span>${l.text}</span></a>`,
 		)
 		.join("");
+}
+
+// The dataset's "margen": which side of the road the station is on.
+function roadSide(margen) {
+	if (margen === "D") return t("right-hand side");
+	if (margen === "I") return t("left-hand side");
+	return t("side {side}", { side: escapeHtml(margen) });
 }
 
 function boardLine(name, className, price) {
@@ -165,21 +173,21 @@ export function buildDefaultPopupContent(eess, blacklist = null) {
 		</div>
 
 		<dl class="station-details">
-			<dt>Dirección</dt>
-			<dd>${escapeHtml(eess.direccion)} (margen ${escapeHtml(eess.margen)})<br>${escapeHtml(eess.cp)} ${escapeHtml(eess.municipio)}</dd>
-			<dt>Horario</dt>
+			<dt>${t("Address")}</dt>
+			<dd>${escapeHtml(eess.direccion)} (${roadSide(eess.margen)})<br>${escapeHtml(eess.cp)} ${escapeHtml(eess.municipio)}</dd>
+			<dt>${t("Opening hours")}</dt>
 			<dd>${escapeHtml(eess.horario)}</dd>
 		</dl>
 
 		<div class="station-chart">
 			<div class="station-chart-head">
-				<span>Últimos 7 días</span>
+				<span>${t("Last 7 days")}</span>
 				<span class="station-chart-legend"><span class="fuel-chip g95"></span>G95 <span class="fuel-chip diesel"></span>Gasóleo A</span>
 			</div>
 			<div class="chart-box"><canvas class="chart"></canvas></div>
 		</div>
 
-		<nav class="station-nav" aria-label="Cómo llegar">${navigationLinks(eess)}</nav>
+		<nav class="station-nav" aria-label="${t("Directions")}">${navigationLinks(eess)}</nav>
 
 		${buildBlacklistToggle(eess, blacklist)}
 	</div>`;
@@ -227,7 +235,7 @@ async function drawHistoryChart(eess) {
 		).then((x) => x.json());
 		history = rebuildHistory(snapshots, changes);
 	} catch (e) {
-		console.error("No se pudo cargar el histórico", e);
+		console.error("Couldn't load the price history", e);
 		box.classList.add("failed");
 		return;
 	}
@@ -327,7 +335,7 @@ function attachBlacklistToggle(eess, blacklist, marker, logos, logos_sorted, onB
 		// Gray out (or restore) the popup itself.
 		container.classList.toggle("blacklisted", isBlacklisted);
 
-		// Flip the button between "Excluir" and "Volver a incluir".
+		// Flip the button between "Exclude" and "Include again".
 		btn.classList.toggle("blacklist", !isBlacklisted);
 		btn.classList.toggle("unblacklist", isBlacklisted);
 		btn.innerHTML = blacklistButtonContent(isBlacklisted);
@@ -457,20 +465,20 @@ function createBrandFilterControl(brands) {
 			L.DomEvent.disableScrollPropagation(container);
 
 			container.innerHTML = `
-				<button type="button" class="map-button" aria-label="Filtrar marcas" aria-expanded="false" aria-controls="${panelId}">
+				<button type="button" class="map-button" aria-label="${t("Filter brands")}" aria-expanded="false" aria-controls="${panelId}">
 					${FILTER_ICON}<span class="map-button-badge" hidden></span>
 				</button>
-				<section id="${panelId}" class="map-dropdown-panel brand-panel" aria-label="Marcas" hidden>
+				<section id="${panelId}" class="map-dropdown-panel brand-panel" aria-label="${t("Brands")}" hidden>
 					<div class="map-panel-head">
 						<div>
-							<h2>Marcas</h2>
+							<h2>${t("Brands")}</h2>
 							<p class="map-panel-sub"></p>
 						</div>
-						<button type="button" class="map-panel-close" aria-label="Cerrar">&times;</button>
+						<button type="button" class="map-panel-close" aria-label="${t("Close")}">&times;</button>
 					</div>
 					<div class="brand-actions">
-						<button type="button" data-select="all">Todas</button>
-						<button type="button" data-select="none">Ninguna</button>
+						<button type="button" data-select="all">${t("All brands")}</button>
+						<button type="button" data-select="none">${t("None")}</button>
 					</div>
 					<ul class="brand-list">
 						${brands
@@ -508,9 +516,9 @@ function createBrandFilterControl(brands) {
 				badge.textContent = String(hidden);
 				toggle.setAttribute(
 					"aria-label",
-					hidden === 0 ? "Filtrar marcas" : `Filtrar marcas (${hidden} ocultas)`,
+					hidden === 0 ? t("Filter brands") : t("Filter brands ({n} hidden)", { n: hidden }),
 				);
-				sub.textContent = `${shown} de ${brands.length} visibles`;
+				sub.textContent = t("{shown} of {total} shown", { shown, total: brands.length });
 			};
 
 			const setOpen = (open) => {
@@ -796,7 +804,7 @@ export function createStationsLayer(
 			.filter(([, , count]) => count > 0)
 			.map(([name, subgroup, count]) => ({
 				name,
-				text: name == "other" ? "Otras" : logos[name].text,
+				text: name == "other" ? t("Others") : logos[name].text,
 				image: name == "other" ? null : (logos[name].icon ?? logos[name].image),
 				subgroup,
 				count,

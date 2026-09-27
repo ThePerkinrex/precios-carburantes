@@ -12,6 +12,7 @@ import {
 	updateTrip,
 } from "./api.js";
 import { actionButton, formatDate, showError } from "./certs_ui.js";
+import { t } from "./i18n.js";
 import { renderNav } from "./nav.js";
 import { formatDistance, formatDuration } from "./route.js";
 
@@ -32,7 +33,7 @@ function button(text, onClick, className = "secondary") {
 
 // "Calle A → Calle B · 72.1 km · 55 min"
 function routeLine(route) {
-	if (!route) return "Route no longer available";
+	if (!route) return t("Route no longer available");
 	const ends = route.from && route.to ? `${route.from} → ${route.to} · ` : "";
 	return `${ends}${formatDistance(route.distance)} · ${formatDuration(route.duration)}`;
 }
@@ -61,7 +62,7 @@ function empty(text) {
 }
 
 async function saveAs(hash, route_idx, suggestedName, blacklist = [], max_distance = null) {
-	const name = prompt("Trip name", suggestedName)?.trim();
+	const name = prompt(t("Trip name"), suggestedName)?.trim();
 	if (!name) return;
 	const { id } = await createTrip({ hash, route_idx, name, blacklist, max_distance });
 	location.assign(routePageUrl(hash, route_idx, id));
@@ -70,23 +71,23 @@ async function saveAs(hash, route_idx, suggestedName, blacklist = [], max_distan
 // Who a trip is shared with, and making/revoking links. Loaded on demand.
 function sharesPanel(trip) {
 	const details = el("details", "fold shares");
-	details.append(el("summary", null, "Sharing"));
+	details.append(el("summary", null, t("Sharing")));
 	const body = el("div");
 	details.append(body);
 
 	async function refresh() {
 		const shares = await getTripShares(trip.id);
 		const list = el("ul", "list");
-		if (!shares.length) list.append(empty("Not shared with anyone."));
+		if (!shares.length) list.append(empty(t("Not shared with anyone.")));
 		for (const share of shares) {
 			const li = el("li", "item");
 			const head = el("div", "item-head");
 			const who = share.claimed_by
-				? `Shared with ${share.claimed_by}`
-				: `Unused link, expires ${formatDate(share.expires_at)}`;
+				? t("Shared with {user}", { user: share.claimed_by })
+				: t("Unused link, expires {date}", { date: formatDate(share.expires_at) });
 			head.append(
 				el("div", "item-title", who),
-				actionButton(share.claimed_by ? "Revoke" : "Cancel", async () => {
+				actionButton(t(share.claimed_by ? "Revoke" : "Cancel"), async () => {
 					try {
 						await revokeTripShare(trip.id, share.id);
 						await refresh();
@@ -101,7 +102,7 @@ function sharesPanel(trip) {
 
 		const newLink = el("div", "invite-link");
 		const create = button(
-			"New share link",
+			t("New share link"),
 			async () => {
 				try {
 					const { url } = await createTripShare(trip.id);
@@ -109,9 +110,9 @@ function sharesPanel(trip) {
 					input.type = "text";
 					input.readOnly = true;
 					input.value = url;
-					const copy = button("Copy", async () => {
+					const copy = button(t("Copy"), async () => {
 						await navigator.clipboard?.writeText(url);
-						copy.textContent = "Copied";
+						copy.textContent = t("Copied");
 					});
 					newLink.replaceChildren(
 						input,
@@ -119,7 +120,7 @@ function sharesPanel(trip) {
 						el(
 							"p",
 							"muted",
-							"Works for one person only: the first to open it gets access, nobody else. It expires in 7 days if unused. The link isn't shown again.",
+							t("Works for one person only: the first to open it gets access, nobody else. It expires in 7 days if unused. The link isn't shown again."),
 						),
 					);
 					input.select();
@@ -145,10 +146,10 @@ function savedItem(trip) {
 	return item({
 		title: trip.name,
 		href: routePageUrl(trip.hash, trip.route_idx, trip.id),
-		lines: [routeLine(trip.route), `Last opened ${formatDate(trip.last_used_at)}`],
+		lines: [routeLine(trip.route), t("Last opened {date}", { date: formatDate(trip.last_used_at) })],
 		actions: [
-			button("Rename", async () => {
-				const name = prompt("Trip name", trip.name)?.trim();
+			button(t("Rename"), async () => {
+				const name = prompt(t("Trip name"), trip.name)?.trim();
 				if (!name || name === trip.name) return;
 				try {
 					await updateTrip(trip.id, { name });
@@ -157,8 +158,8 @@ function savedItem(trip) {
 					showError(message, e);
 				}
 			}),
-			actionButton("Delete", async () => {
-				if (!confirm(`Delete "${trip.name}"? Its excluded stations and share links go with it.`)) return;
+			actionButton(t("Delete"), async () => {
+				if (!confirm(t("Delete \"{name}\"? Its excluded stations and share links go with it.", { name: trip.name }))) return;
 				try {
 					await deleteTrip(trip.id);
 					await refresh();
@@ -175,9 +176,9 @@ function sharedItem(trip) {
 	return item({
 		title: trip.name,
 		href: routePageUrl(trip.hash, trip.route_idx, trip.id),
-		lines: [routeLine(trip.route), `From ${trip.owner}`],
+		lines: [routeLine(trip.route), t("From {user}", { user: trip.owner })],
 		actions: [
-			button("Save a copy", async () => {
+			button(t("Save a copy"), async () => {
 				try {
 					const full = await getTrip(trip.id);
 					await saveAs(trip.hash, trip.route_idx, trip.name, full.blacklist, full.max_distance);
@@ -191,14 +192,14 @@ function sharedItem(trip) {
 
 function searchItem(search) {
 	const first = search.alternatives[0];
-	const title = first?.from && first?.to ? `${first.from} → ${first.to}` : "Route";
+	const title = first?.from && first?.to ? `${first.from} → ${first.to}` : t("Route");
 	const li = el("li", "item");
 
 	const head = el("div", "item-head");
 	head.append(
 		el("div", "item-title", title),
-		actionButton("Remove", async () => {
-			if (!confirm(`Remove "${title}" from your searches?`)) return;
+		actionButton(t("Remove"), async () => {
+			if (!confirm(t("Remove \"{title}\" from your searches?", { title }))) return;
 			try {
 				await forgetSearch(search.hash);
 				await refresh();
@@ -207,7 +208,7 @@ function searchItem(search) {
 			}
 		}),
 	);
-	li.append(head, el("div", "item-meta", `Searched ${formatDate(search.searched_at)}`));
+	li.append(head, el("div", "item-meta", t("Searched {date}", { date: formatDate(search.searched_at) })));
 
 	// One line per alternative: open it in the planner, or save it as a trip.
 	const alternatives = el("ul", "alternatives");
@@ -216,13 +217,13 @@ function searchItem(search) {
 		const link = el(
 			"a",
 			"trip-link",
-			`Route ${idx + 1} · ${formatDistance(route.distance)} · ${formatDuration(route.duration)}`,
+			`${t("Route {n}", { n: idx + 1 })} · ${formatDistance(route.distance)} · ${formatDuration(route.duration)}`,
 		);
 		link.href = routePageUrl(search.hash, idx);
 		row.append(link);
-		if (idx === search.last_route_idx) row.append(el("span", "tag", "last opened"));
+		if (idx === search.last_route_idx) row.append(el("span", "tag", t("last opened")));
 		row.append(
-			button("Save as trip", async () => {
+			button(t("Save as trip"), async () => {
 				try {
 					await saveAs(search.hash, idx, title);
 				} catch (e) {
@@ -243,7 +244,7 @@ async function refresh() {
 
 		document
 			.getElementById("saved")
-			.replaceChildren(...(saved.length ? saved.map(savedItem) : [empty("No saved trips yet. Save one from a route's page.")]));
+			.replaceChildren(...(saved.length ? saved.map(savedItem) : [empty(t("No saved trips yet. Save one from a route's page."))]));
 
 		document.getElementById("sharedCard").hidden = !shared_with_me.length;
 		document.getElementById("shared").replaceChildren(...shared_with_me.map(sharedItem));
@@ -253,7 +254,7 @@ async function refresh() {
 			.replaceChildren(
 				...(searches.length
 					? searches.map(searchItem)
-					: [empty("No searches yet. Use the route button on the map to make one.")]),
+					: [empty(t("No searches yet. Use the route button on the map to make one."))]),
 			);
 	} catch (e) {
 		showError(message, e);

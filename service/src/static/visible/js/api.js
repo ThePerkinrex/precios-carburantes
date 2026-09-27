@@ -1,4 +1,5 @@
 import { mapFilterToArray, mapFilterToString } from "./filter.js";
+import { t } from "./i18n.js";
 
 export const API_LOCATION = "/api";
 
@@ -164,11 +165,29 @@ export function routePageUrl(hash, routeIdx, tripId = null) {
 // Client certificates
 // ---------------------------------------------------------------------------
 
+// The server's error messages are in English; these are the ones with
+// something filled in, so t() can't match them whole.
+const SERVER_ERRORS = [
+	[/^Password must be (\d+)-(\d+) characters$/, "Password must be {1}-{2} characters"],
+	[/^Trip names must be 1-(\d+) characters$/, "Trip names must be 1-{1} characters"],
+	[/^invalid name "(.*)": use 1-32 of a-z, 0-9, '-' and '_'$/, "Invalid name \"{1}\": use 1-32 of a-z, 0-9, '-' and '_'"],
+	[/^(.*) already has an active cert labelled "(.*)"$/, "{1} already has an active certificate named \"{2}\""],
+];
+
+function serverErrorText(text) {
+	for (const [pattern, key] of SERVER_ERRORS) {
+		const match = pattern.exec(text);
+		if (match) return t(key, { ...match });
+	}
+	return t(text);
+}
+
 async function checkOk(response) {
 	if (!response.ok) {
 		// A 404 comes back as the HTML "not found" page; don't show that as text.
 		const isHtml = response.headers.get("Content-Type")?.includes("text/html");
-		const error = new Error((!isHtml && (await response.text())) || `HTTP ${response.status}`);
+		const text = !isHtml && (await response.text());
+		const error = new Error(text ? serverErrorText(text) : t("Request failed (HTTP {status})", { status: response.status }));
 		error.status = response.status;
 		throw error;
 	}

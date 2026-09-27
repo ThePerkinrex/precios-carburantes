@@ -1,4 +1,5 @@
 import { getUserState } from "./api.js";
+import { LOCALE, t } from "./i18n.js";
 import { renderNav } from "./nav.js";
 import { formatDate, formatDateTime } from "./dates.js";
 import { getPriceHistory, renderBoard } from "./price_board.js";
@@ -28,11 +29,14 @@ const FUELS = {
 	gasoleo_a: { name: "Gasóleo A", value: (p) => p.gasoleo_a },
 	// Gasoline minus diesel, in cents.
 	spread: {
-		name: "Spread",
+		name: t("Spread"),
 		value: (p) => (p.gasolina_95 == null || p.gasoleo_a == null ? null : (p.gasolina_95 - p.gasoleo_a) * 100),
 	},
 };
-const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+// Monday first. 2024-01-01 was a Monday.
+const WEEKDAYS = [0, 1, 2, 3, 4, 5, 6].map((d) =>
+	new Date(2024, 0, 1 + d).toLocaleDateString(LOCALE, { weekday: "short" }),
+);
 
 // Same colours as the board's nozzle chips (see app.css); compared areas
 // take the --series-* colours, one per slot.
@@ -69,7 +73,7 @@ function areaQuery(key) {
 function areaName(key) {
 	if (key.startsWith("c:")) return geoData.ccaa.find((c) => c.id === key.slice(2))?.name;
 	if (key.startsWith("p:")) return geoData.provincias.find((p) => p.id === key.slice(2))?.name;
-	return "Spain";
+	return t("Spain");
 }
 
 // The region an area is in, or "" for Spain.
@@ -146,7 +150,7 @@ async function loadFilters() {
 
 // All provinces, or only those of the selected region.
 function populateProvincias(ccaaId) {
-	provSelect.replaceChildren(new Option("All provinces", ""));
+	provSelect.replaceChildren(new Option(t("All provinces"), ""));
 	for (const p of geoData.provincias) {
 		if (!ccaaId || p.ccaa === ccaaId) provSelect.add(new Option(p.name, p.id));
 	}
@@ -176,7 +180,7 @@ function renderChips() {
 				update();
 			});
 			const remove = li.querySelector(".chip-remove");
-			remove.setAttribute("aria-label", `Stop comparing ${areaName(area.key)}`);
+			remove.setAttribute("aria-label", t("Stop comparing {area}", { area: areaName(area.key) }));
 			remove.addEventListener("click", () => {
 				state.areas.splice(i, 1);
 				if (state.active >= i) state.active = Math.max(0, state.active - 1);
@@ -216,7 +220,7 @@ function fetchRanking(ccaa) {
 		const params = new URLSearchParams();
 		if (ccaa) params.set("ccaa_id", ccaa);
 		const request = fetch(`/api/prices/provinces?${params}`).then((response) => {
-			if (!response.ok) throw new Error(`Couldn't load provinces (HTTP ${response.status}).`);
+			if (!response.ok) throw new Error(t("Couldn't load provinces (HTTP {status}).", { status: response.status }));
 			return response.json();
 		});
 		request.catch(() => rankingCache.delete(ccaa));
@@ -262,7 +266,7 @@ function snapshotLabels(histories) {
 	return [...byFecha].sort((a, b) => a[1] - b[1]);
 }
 
-const unitFor = (fuel) => (fuel === "spread" ? "cents" : "€/L");
+const unitFor = (fuel) => (fuel === "spread" ? t("cents") : "€/L");
 const formatValue = (v, fuel) => (fuel === "spread" ? `${v.toFixed(1)} c` : `${v.toFixed(3)} €/L`);
 
 function renderChart(histories) {
@@ -292,18 +296,20 @@ function renderChart(histories) {
 	if (comparing()) {
 		datasets = state.areas.map((a, i) => line(areaName(a.key), histories[i], FUELS[fuel].value, SERIES[a.slot]));
 		chartTitle.textContent = fuel === "spread"
-			? "Gasolina 95 minus Gasóleo A, by area"
-			: `${FUELS[fuel].name}, by area`;
+			? t("Gasolina 95 minus Gasóleo A, by area")
+			: t("{fuel}, by area", { fuel: FUELS[fuel].name });
 	} else if (fuel === "both") {
 		datasets = [
 			line("Gasolina 95", histories[0], FUELS.gasolina_95.value, G95),
 			line("Gasóleo A", histories[0], FUELS.gasoleo_a.value, DIESEL),
 		];
-		chartTitle.textContent = "Average price over time";
+		chartTitle.textContent = t("Average price over time");
 	} else {
 		const color = { gasolina_95: G95, gasoleo_a: DIESEL, spread: INK }[fuel];
 		datasets = [line(FUELS[fuel].name, histories[0], FUELS[fuel].value, color)];
-		chartTitle.textContent = fuel === "spread" ? "Gasolina 95 minus Gasóleo A" : `${FUELS[fuel].name} over time`;
+		chartTitle.textContent = fuel === "spread"
+			? t("Gasolina 95 minus Gasóleo A")
+			: t("{fuel} over time", { fuel: FUELS[fuel].name });
 	}
 	const valueFuel = fuel === "spread" ? "spread" : "price";
 
@@ -346,12 +352,12 @@ function renderTable(histories) {
 	const fuel = chartFuel();
 	const value = FUELS[fuel].value;
 	const toUnit = (v) => (fuel === "spread" ? v : v * 100);
-	const cents = (v) => `${v > 0 ? "+" : ""}${v.toLocaleString("es-ES", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} c`;
+	const cents = (v) => `${v > 0 ? "+" : ""}${v.toLocaleString(LOCALE, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} c`;
 	const latest = (history) => history.findLast((p) => value(p) != null);
 	const first = histories[0] && latest(histories[0]);
 
-	compareTable.tHead.rows[0].cells[1].textContent = `Now (${unitFor(fuel)})`;
-	compareTable.tHead.rows[0].cells[3].textContent = `vs ${areaName(state.areas[0].key)}`;
+	compareTable.tHead.rows[0].cells[1].textContent = t("Now ({unit})", { unit: unitFor(fuel) });
+	compareTable.tHead.rows[0].cells[3].textContent = t("vs {area}", { area: areaName(state.areas[0].key) });
 	compareTable.tBodies[0].replaceChildren(
 		...state.areas.map((area, i) => {
 			const history = histories[i];
@@ -364,11 +370,11 @@ function renderTable(histories) {
 			if (now) {
 				row.cells[1].textContent = fuel === "spread"
 					? value(now).toFixed(1)
-					: value(now).toLocaleString("es-ES", { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+					: value(now).toLocaleString(LOCALE, { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 				row.cells[2].textContent = start !== now ? cents(toUnit(value(now) - value(start))) : "–";
 				row.cells[3].textContent = i > 0 && first ? cents(toUnit(value(now) - value(first))) : "–";
 			} else {
-				row.cells[1].textContent = "No data";
+				row.cells[1].textContent = t("No data");
 			}
 			return row;
 		}),
@@ -378,15 +384,16 @@ function renderTable(histories) {
 function renderRanking(rows, region) {
 	const fuel = chartFuel() === "both" ? "gasolina_95" : chartFuel();
 	const value = FUELS[fuel].value;
-	const where = region ? geoData.ccaa.find((c) => c.id === region)?.name : "Spain";
-	rankingTitle.textContent = `${FUELS[fuel].name} by province, ${where}`;
+	const where = region ? geoData.ccaa.find((c) => c.id === region)?.name : t("Spain");
+	rankingTitle.textContent = t("{fuel} by province, {where}", { fuel: FUELS[fuel].name, where });
 	rankingNote.textContent = fuel === "spread"
-		? "Gasolina 95 minus Gasóleo A, lowest first. Tap one to compare it."
-		: "Cheapest first. Tap one to compare it.";
+		? t("Gasolina 95 minus Gasóleo A, lowest first. Tap one to compare it.")
+		: t("Cheapest first. Tap one to compare it.");
 
 	const ranked = rows.filter((r) => value(r) != null).sort((a, b) => value(a) - value(b));
 	if (!ranked.length) {
-		rankingList.innerHTML = `<li class="card-note">No prices right now.</li>`;
+		rankingList.innerHTML = `<li class="card-note"></li>`;
+		rankingList.firstChild.textContent = t("No prices right now.");
 		return;
 	}
 	const min = value(ranked[0]);
@@ -402,9 +409,9 @@ function renderRanking(rows, region) {
 			button.querySelector(".name").textContent = areaName(key) ?? r.id_provincia;
 			button.querySelector(".value").textContent = fuel === "spread"
 				? `${value(r).toFixed(1)} c`
-				: value(r).toLocaleString("es-ES", { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+				: value(r).toLocaleString(LOCALE, { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 			button.querySelector(".bar").style.setProperty("--fill", `${8 + (92 * (value(r) - min)) / spanOf}%`);
-			button.title = `${r.estaciones} stations`;
+			button.title = t("{n} stations", { n: r.estaciones });
 			if (compared.has(key)) button.setAttribute("aria-current", "true");
 			button.addEventListener("click", () => {
 				addArea(key);
@@ -454,8 +461,8 @@ function renderWeekdays(history) {
 	const tooShort = RANGES[state.range] !== null && RANGES[state.range] < 90;
 	weekdayBox.hidden = tooShort;
 	weekdayNote.textContent = tooShort
-		? "Choose 3M or longer to see which weekdays are cheaper."
-		: "Price on each weekday compared with the average of the week around it. Below zero is cheaper.";
+		? t("Choose 3M or longer to see which weekdays are cheaper.")
+		: t("Price on each weekday compared with the average of the week around it. Below zero is cheaper.");
 	if (tooShort) return;
 
 	const fuel = chartFuel();
@@ -491,7 +498,8 @@ function renderWeekdays(history) {
 				},
 				tooltip: {
 					callbacks: {
-						label: (item) => `${item.dataset.label}: ${item.parsed.y > 0 ? "+" : ""}${item.parsed.y.toFixed(2)} cents`,
+						label: (item) =>
+							`${item.dataset.label}: ${t("{amount} cents", { amount: `${item.parsed.y > 0 ? "+" : ""}${item.parsed.y.toFixed(2)}` })}`,
 					},
 				},
 			},

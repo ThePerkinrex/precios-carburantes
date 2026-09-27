@@ -1,12 +1,13 @@
 // The app's pages, shared by the index, the other pages' nav and the map menu.
-// `es` labels are for the map, whose UI is in Spanish.
+
+import { t } from "./i18n.js";
 
 export const PAGES = [
-	{ id: "map", href: "/files/map", label: "Map", es: "Mapa", hint: "Stations and prices near you" },
-	{ id: "trips", href: "/files/trips", label: "My trips", es: "Mis viajes", hint: "Saved routes and their fuel stops" },
-	{ id: "dashboard", href: "/files/dashboard", label: "Price trends", es: "Evolución de precios", hint: "Average prices over time, by region" },
-	{ id: "account", href: "/files/account", label: "My devices", es: "Mis dispositivos", hint: "Renew or revoke your certificates" },
-	{ id: "admin", href: "/files/admin", label: "Users", es: "Usuarios", hint: "Invite people and manage access", role: "admin_users" },
+	{ id: "map", href: "/files/map", label: t("Map"), hint: t("Stations and prices near you") },
+	{ id: "trips", href: "/files/trips", label: t("My trips"), hint: t("Saved routes and their fuel stops") },
+	{ id: "dashboard", href: "/files/dashboard", label: t("Price trends"), hint: t("Average prices over time, by region") },
+	{ id: "account", href: "/files/account", label: t("My devices"), hint: t("Renew or revoke your certificates") },
+	{ id: "admin", href: "/files/admin", label: t("Users"), hint: t("Invite people and manage access"), role: "admin_users" },
 ];
 
 // The pages `state` (from getUserState) can open.

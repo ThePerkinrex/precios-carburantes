@@ -1,9 +1,11 @@
 // Bottom panel listing the fuel-stop plans from fuel_planner.js. One plan is
 // selected at a time (the first by default); the page highlights its stops.
 
+import { LOCALE, t, tn } from "./i18n.js";
+
 const STATUS_FLAGS = {
-	closesSoon: { text: "cierra pronto", className: "warn" },
-	unknown: { text: "horario desconocido", className: "warn" },
+	closesSoon: { text: t("closes soon"), className: "warn" },
+	unknown: { text: t("unknown hours"), className: "warn" },
 };
 
 function formatKm(km) {
@@ -11,39 +13,46 @@ function formatKm(km) {
 }
 
 function formatTime(date, departure) {
-	const time = date.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit", hour12: false });
+	const time = date.toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit", hour12: false });
 	const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
 	const days = Math.round((startOfDay(date) - startOfDay(departure)) / 86400000);
-	return days > 0 ? `${time} (+${days}d)` : time;
+	return days > 0 ? `${time} (${t("+{n}d", { n: days })})` : time;
 }
 
 // Why there's no plan, in words, with what the user can change about it.
 function diagnosisMessage(diagnosis) {
 	switch (diagnosis?.reason) {
 		case "loading":
-			return ["Cargando gasolineras…"];
+			return [t("Loading stations…")];
 		case "error":
-			return ["No se pudieron cargar las gasolineras de la ruta. Recarga la página para intentarlo de nuevo."];
+			return [t("Couldn't load the stations along the route. Reload the page to try again.")];
 		case "no_car":
-			return ["Configura el consumo y el depósito de tu coche (⛽) para calcular las paradas."];
+			return [t("Set your car's consumption and tank size (⛽) to work out the stops.")];
 		case "bad_range":
-			return ["El rango de repostaje no es válido: el mínimo tiene que ser menor que el máximo y que el depósito (⛽)."];
+			return [t("The fill-up range isn't valid: the minimum has to be less than the maximum and the tank size (⛽).")];
 		case "low_start":
-			return ["Sales con menos combustible que el mínimo de repostaje. Revisa el combustible actual (⛽)."];
+			return [t("You're setting off with less fuel than the fill-up minimum. Check the fuel now (⛽).")];
 		case "gap": {
 			const lines = [
-				`No hay ninguna gasolinera válida entre el km ${formatKm(diagnosis.fromKm)} y el km ${formatKm(diagnosis.toKm)}, que es donde tocaría repostar.`,
-				"Prueba a ampliar la distancia a la ruta o el rango de repostaje (⛽), a mostrar más marcas, o a quitar alguna gasolinera de la lista negra.",
+				t("There's no usable station between km {from} and km {to}, which is where you'd need to fill up.", {
+					from: formatKm(diagnosis.fromKm),
+					to: formatKm(diagnosis.toKm),
+				}),
+				t("Try a larger distance from the route or fill-up range (⛽), showing more brands, or including some excluded stations again."),
 			];
 			if (diagnosis.closedCount) {
 				lines.push(
-					`${diagnosis.closedCount} gasolinera${diagnosis.closedCount === 1 ? "" : "s"} descartada${diagnosis.closedCount === 1 ? "" : "s"} por estar cerrada${diagnosis.closedCount === 1 ? "" : "s"} a tu hora de llegada.`,
+					tn(
+						diagnosis.closedCount,
+						"{n} station left out for being closed when you'd arrive.",
+						"{n} stations left out for being closed when you'd arrive.",
+					),
 				);
 			}
 			return lines;
 		}
 		default:
-			return ["No se ha encontrado ningún plan."];
+			return [t("No plan found.")];
 	}
 }
 
@@ -62,9 +71,9 @@ export function createTripAlternativesPanel(options = {}) {
 	const panel = document.createElement("div");
 	panel.className = "trip-alternatives-panel";
 	panel.innerHTML = `
-		<div class="trip-panel-header" title="Alternar panel">
-			<span>Alternativas de viaje</span>
-			<button class="trip-panel-toggle" aria-label="Minimizar panel">&#9650;</button>
+		<div class="trip-panel-header" title="${t("Show or hide the panel")}">
+			<span>${t("Trip options")}</span>
+			<button class="trip-panel-toggle" aria-label="${t("Minimize panel")}">&#9650;</button>
 		</div>
 		<div class="trip-panel-trip"></div>
 		<div class="trip-plans-list"></div>
@@ -97,12 +106,15 @@ export function createTripAlternativesPanel(options = {}) {
 		}
 
 		const km = (s.station.distance_along_route / 1000).toFixed(1);
-		const detour = s.detourM >= 100 ? ` • ~${(s.detourM / 1000).toFixed(1)} km desvío` : "";
+		const detour = s.detourM >= 100 ? ` • ${t("~{km} km detour", { km: (s.detourM / 1000).toFixed(1) })}` : "";
 		const details = document.createElement("div");
 		details.className = "trip-stop-details";
 		details.innerHTML = `
 			km ${km} • ${formatTime(s.eta, departure)}${detour}<br>
-			Llegada: ${s.arrivalFuel.toFixed(1)} L • Reposta: ${s.litersBought.toFixed(1)} L (${s.pricePerLiter.toFixed(3)} €/L) = <strong>${s.cost.toFixed(2)} €</strong>
+			${t("Arriving with: {liters} L", { liters: s.arrivalFuel.toFixed(1) })} • ${t("Fill up: {liters} L ({price} €/L)", {
+				liters: s.litersBought.toFixed(1),
+				price: s.pricePerLiter.toFixed(3),
+			})} = <strong>${s.cost.toFixed(2)} €</strong>
 		`;
 
 		li.append(name, details);
@@ -123,8 +135,8 @@ export function createTripAlternativesPanel(options = {}) {
 		cardTitle.className = "trip-plan-title";
 		cardTitle.textContent =
 			plan.totalStops === 0
-				? `Opción ${planIdx + 1} (sin paradas)`
-				: `Opción ${planIdx + 1} (${plan.totalStops} parada${plan.totalStops !== 1 ? "s" : ""})`;
+				? t("Option {i} (no stops)", { i: planIdx + 1 })
+				: tn(plan.totalStops, "Option {i} ({n} stop)", "Option {i} ({n} stops)", { i: planIdx + 1 });
 		card.appendChild(cardTitle);
 
 		const stopsUl = document.createElement("ul");
@@ -133,7 +145,7 @@ export function createTripAlternativesPanel(options = {}) {
 		if (plan.stops.length === 0) {
 			const emptyLi = document.createElement("li");
 			emptyLi.className = "trip-stop-item empty";
-			emptyLi.textContent = "Llegas sin repostar por el camino";
+			emptyLi.textContent = t("You get there without filling up on the way");
 			stopsUl.appendChild(emptyLi);
 		} else {
 			plan.stops.forEach((s, i) => stopsUl.appendChild(renderStop(s, i, departure)));
@@ -142,15 +154,19 @@ export function createTripAlternativesPanel(options = {}) {
 
 		const destPriceInfo =
 			plan.destPricePerLiter != null
-				? `Repostar al llegar (${plan.destRefillLiters.toFixed(1)} L a ${plan.destPricePerLiter.toFixed(3)} €/L): ${plan.destRefillCost.toFixed(2)} €`
-				: "Sin precio estimado de destino";
+				? t("Fill up on arrival ({liters} L at {price} €/L): {cost} €", {
+						liters: plan.destRefillLiters.toFixed(1),
+						price: plan.destPricePerLiter.toFixed(3),
+						cost: plan.destRefillCost.toFixed(2),
+					})
+				: t("No estimated price at the destination");
 
 		const summaryDiv = document.createElement("div");
 		summaryDiv.className = "trip-plan-summary";
 		summaryDiv.innerHTML = `
-			<div>Coste en ruta: ${onTripCost.toFixed(2)} €</div>
-			<div>Destino (${plan.finalArrivalFuel.toFixed(1)} L rest.): ${destPriceInfo}</div>
-			<div class="trip-plan-total">Coste total est.: ${plan.totalCost.toFixed(2)} €</div>
+			<div>${t("Cost on the road: {cost} €", { cost: onTripCost.toFixed(2) })}</div>
+			<div>${t("Destination ({liters} L left)", { liters: plan.finalArrivalFuel.toFixed(1) })}: ${destPriceInfo}</div>
+			<div class="trip-plan-total">${t("Estimated total cost: {cost} €", { cost: plan.totalCost.toFixed(2) })}</div>
 		`;
 		card.appendChild(summaryDiv);
 		return card;
