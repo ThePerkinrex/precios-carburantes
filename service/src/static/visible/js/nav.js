@@ -1,4 +1,4 @@
-// The app's pages, shared by the index, the dashboard nav and the map menu.
+// The app's pages, shared by the index, the other pages' nav and the map menu.
 // `es` labels are for the map, whose UI is in Spanish.
 
 export const PAGES = [

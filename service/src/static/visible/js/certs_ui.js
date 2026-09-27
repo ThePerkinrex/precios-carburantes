@@ -7,18 +7,6 @@ export const RENEW_WARNING_DAYS = 30;
 
 export const formatDate = formatUnixDate;
 
-// "‹ Back" returns to the page you came from (usually the map). Its href,
-// the index, is only the fallback for when the page was opened directly.
-export function setupBackLink() {
-	document.querySelector("a.back")?.addEventListener("click", (e) => {
-		const fromHere = document.referrer && new URL(document.referrer).origin === location.origin;
-		if (fromHere && history.length > 1) {
-			e.preventDefault();
-			history.back();
-		}
-	});
-}
-
 // A message if a cert expiring at `notAfter` should be renewed soon, else null.
 export function expiryWarning(notAfter) {
 	const days = Math.floor((notAfter - Date.now() / 1000) / DAY);

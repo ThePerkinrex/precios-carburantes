@@ -4,9 +4,11 @@ import {
 	adminListInvites,
 	adminListUsers,
 	adminRevokeCert,
+	getUserState,
 } from "./api.js";
 import { formatDateTime } from "./dates.js";
-import { actionButton, certItem, certLists, fillList, formatDate, listItem, setupBackLink, showError } from "./certs_ui.js";
+import { actionButton, certItem, certLists, fillList, formatDate, listItem, showError } from "./certs_ui.js";
+import { renderNav } from "./nav.js";
 
 async function loadInvites() {
 	const list = document.getElementById("inviteList");
@@ -129,7 +131,7 @@ function setupInviteForm() {
 	});
 }
 
-setupBackLink();
+getUserState().then((state) => renderNav(document.getElementById("nav"), state, "admin"));
 setupInviteForm();
 loadInvites();
 loadUsers();

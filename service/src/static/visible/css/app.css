@@ -1,5 +1,6 @@
-/* Index and dashboard. Mobile first: base rules are for phones, the
-   min-width queries at the end lay things out for wider screens.
+/* Every page but the map (account.css and trips.css build on it). Mobile
+   first: base rules are for phones, the min-width queries at the end lay
+   things out for wider screens.
    Colours follow the map (map.css / route.css) so the pages feel like one app. */
 
 :root {
@@ -322,7 +323,8 @@ a {
 
 /* ---------- Dashboard ---------- */
 
-/* Page links as a scrollable row of pills, like the map's tabs. */
+/* Page links as a scrollable row of pills, like the map's tabs. Every page
+   but the index and the map has one. */
 .nav {
 	display: flex;
 	gap: 8px;

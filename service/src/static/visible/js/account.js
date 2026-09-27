@@ -1,5 +1,6 @@
 import { getMyCerts, getUserState, renewMyCert, revokeMyCert } from "./api.js";
-import { certItem, certLists, expiryWarning, formatDate, setupBackLink, showError } from "./certs_ui.js";
+import { certItem, certLists, expiryWarning, formatDate, showError } from "./certs_ui.js";
+import { renderNav } from "./nav.js";
 
 let state;
 
@@ -35,6 +36,7 @@ async function loadCerts() {
 
 async function load() {
 	state = await getUserState();
+	renderNav(document.getElementById("nav"), state, "account");
 	const current = document.getElementById("currentCert");
 	const renew = document.getElementById("renew");
 	const form = document.getElementById("renewForm");
@@ -78,5 +80,4 @@ async function load() {
 	await loadCerts();
 }
 
-setupBackLink();
 load();
