@@ -13,6 +13,8 @@ export default {
 	"Average prices over time, by region": "Precios medios a lo largo del tiempo, por región",
 	"Renew or revoke your certificates": "Renueva o revoca tus certificados",
 	"Invite people and manage access": "Invita a gente y gestiona el acceso",
+	"Settings": "Ajustes",
+	"Language and your car": "Idioma y tu coche",
 	"Pages": "Páginas",
 
 	// ---------- Server errors (api.js) ----------
@@ -384,4 +386,14 @@ export default {
 		"En negrita, por encima del {threshold} % que activa la rebaja mayor.",
 	"Couldn't reach INE, so only the figures already known are shown.":
 		"No se pudo contactar con el INE, así que solo se muestran las cifras ya conocidas.",
+
+	// ---------- Settings ----------
+	"Language": "Idioma",
+	"Applies on every device you use.": "Se aplica en todos los dispositivos que uses.",
+	"Same as the browser": "El mismo que el navegador",
+	"The route planner uses it to work out where to fill up.": "El planificador de rutas lo usa para decidir dónde repostar.",
+	"Save": "Guardar",
+	"Saved.": "Guardado.",
+	"The minimum has to be below the tank size.": "El mínimo tiene que ser menor que el depósito.",
+	"The maximum can't be below the minimum.": "El máximo no puede ser menor que el mínimo.",
 };

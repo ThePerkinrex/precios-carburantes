@@ -16,6 +16,28 @@ export function t(text, params = {}) {
 	return translated.replace(/\{(\w+)\}/g, (match, key) => (key in params ? params[key] : match));
 }
 
+// The language chosen in Settings is kept on the server; this browser keeps
+// a copy for lang.js, which has to pick before anything loads.
+const LANG_KEY = "lang";
+
+// Makes this browser follow `language` ("es" | "en" | null for the
+// browser's), reloading if that changes what this page is in.
+export function useLanguage(language) {
+	let stored = null;
+	try {
+		stored = localStorage.getItem(LANG_KEY);
+		if (language) localStorage.setItem(LANG_KEY, language);
+		else localStorage.removeItem(LANG_KEY);
+	} catch {
+		return;
+	}
+	if ((stored ?? null) === (language ?? null)) return;
+	const browser = (navigator.languages?.length ? navigator.languages : [navigator.language ?? "en"])
+		.map((l) => l.toLowerCase().split("-")[0])
+		.find((l) => l === "es" || l === "en") ?? "en";
+	if ((language ?? browser) !== LANG) location.reload();
+}
+
 // t with a count: `one` when n is 1, `other` otherwise, with {n} filled in.
 export function tn(n, one, other, params = {}) {
 	return t(n === 1 ? one : other, { n, ...params });

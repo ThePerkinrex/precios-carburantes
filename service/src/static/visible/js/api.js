@@ -1,5 +1,5 @@
 import { mapFilterToArray, mapFilterToString } from "./filter.js";
-import { t } from "./i18n.js";
+import { t, useLanguage } from "./i18n.js";
 
 export const API_LOCATION = "/api";
 
@@ -7,13 +7,24 @@ export async function getLatestPrices() {
 	return await fetch(API_LOCATION + "/prices").then((x) => x.json());
 }
 
+// Every page asks for this, so it's also where this browser picks up a
+// language chosen on another device.
 export async function getUserState() {
 	return await fetch(API_LOCATION + "/user/state")
 		.then((x) => x.json())
-		.then(async (x) => ({
-			...x,
-			filter: await mapFilterToArray(x.filter),
-		}));
+		.then(async (x) => {
+			useLanguage(x.language);
+			return { ...x, filter: await mapFilterToArray(x.filter) };
+		});
+}
+
+// "es" | "en" | null to follow the browser.
+export async function updateLanguage(language) {
+	await fetch(API_LOCATION + "/user/language", {
+		method: "PUT",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ language }),
+	}).then(checkOk);
 }
 
 export async function updateDisplayName(newDisplayName) {

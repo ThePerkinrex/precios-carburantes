@@ -26,6 +26,8 @@ pub struct UserState {
     filter: String,
     roles: Vec<String>,
     car: CarProfile,
+    /// "es" | "en"; `None` follows the browser.
+    language: Option<String>,
     /// The cert this request came in with; `None` in dev mode.
     cert: Option<CurrentCert>,
 }
@@ -67,7 +69,8 @@ fn get_user_state(
             avg_consumption,
             tank_maximum,
             stop_min,
-            stop_max
+            stop_max,
+            language
         FROM user_configs
         WHERE username = ?1
 
@@ -77,7 +80,7 @@ fn get_user_state(
             ?1 AS username,
             ?1 AS display_name,
             'all' AS last_filter,
-            NULL, NULL, NULL, NULL, NULL
+            NULL, NULL, NULL, NULL, NULL, NULL
         WHERE NOT EXISTS (
             SELECT 1 FROM user_configs WHERE username = ?1
         )
@@ -97,6 +100,7 @@ fn get_user_state(
                     stop_min: row.get(6)?,
                     stop_max: row.get(7)?,
                 },
+                language: row.get(8)?,
                 cert: None,
             })
         },
@@ -138,6 +142,24 @@ fn update_user_car(conn: &Connection, username: &str, car: &CarProfile) -> rusql
             car.stop_min,
             car.stop_max
         ],
+    )?;
+
+    Ok(())
+}
+
+fn update_user_language(
+    conn: &Connection,
+    username: &str,
+    language: Option<&str>,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "
+        INSERT INTO user_configs (username, display_name, last_filter, language)
+        VALUES (?1, ?1, 'all', ?2)
+        ON CONFLICT(username) DO UPDATE
+        SET language = excluded.language
+        ",
+        params![username, language],
     )?;
 
     Ok(())
@@ -233,6 +255,31 @@ async fn set_car(
     Ok(StatusCode::OK)
 }
 
+#[derive(Debug, Deserialize)]
+struct PutLanguage {
+    /// "es" | "en", or null to follow the browser.
+    language: Option<String>,
+}
+
+async fn set_language(
+    State(pool): State<DbPool>,
+    auth: ClientAuth,
+    Json(params): Json<PutLanguage>,
+) -> Result<StatusCode, AppError> {
+    if params
+        .language
+        .as_deref()
+        .is_some_and(|l| l != "es" && l != "en")
+    {
+        return Err(AppError::BadRequest(
+            "language must be \"es\", \"en\" or null".into(),
+        ));
+    }
+    let conn = pool.get()?;
+    update_user_language(&conn, &auth.username, params.language.as_deref())?;
+    Ok(StatusCode::OK)
+}
+
 #[derive(Serialize)]
 struct MyCert {
     #[serde(flatten)]
@@ -321,4 +368,5 @@ pub fn get_router() -> Router<DbPool> {
         .route("/name/display", put(set_user_display_name))
         .route("/filter", put(set_filter))
         .route("/car", put(set_car))
+        .route("/language", put(set_language))
 }

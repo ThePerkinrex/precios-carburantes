@@ -7,6 +7,7 @@
 // The car profile is saved on the server by the caller (onCarChange); only
 // the current fuel, which changes every drive, is kept in this browser.
 
+import { DEFAULT_CAR } from "./car.js";
 import { t } from "./i18n.js";
 import { fitToScreen, onlyOneOpen } from "./map_panels.js";
 
@@ -18,15 +19,6 @@ const STORAGE_INITIAL_FUEL_KEY = "routeOptions:initialFuel";
 // Where the whole car profile was kept before it moved to the server; read
 // once so nobody has to type theirs in again.
 const LEGACY_STORAGE_CAR_KEY = "routeOptions:car";
-
-const DEFAULT_CAR = {
-	fuel: "diesel", // "diesel" | "gasolina"
-	consumption: 6, // L/100km
-	tankSize: 50, // L
-	initialFuel: 40, // L currently in the tank
-	stopMin: 5, // L — don't let the tank drop below this without a stop
-	stopMax: 20, // L — happy to stop early if it's convenient and we're under this
-};
 
 function formatDistanceLabel(meters) {
 	if (meters >= 1000) {

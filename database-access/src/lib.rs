@@ -215,6 +215,8 @@ const MIGRATIONS: &[&[&str]] = &[
         "ALTER TABLE user_configs ADD COLUMN stop_min REAL",
         "ALTER TABLE user_configs ADD COLUMN stop_max REAL",
     ],
+    // The UI language the user picked ("es" | "en"); NULL follows the browser.
+    &["ALTER TABLE user_configs ADD COLUMN language TEXT"],
 ];
 
 pub const DEFAULT_DB_PATH: &str = "precios_carburantes.db";
