@@ -5,12 +5,15 @@ use std::{collections::HashMap, error::Error, time::Instant};
 
 use database_access::{DEFAULT_DB_PATH, get_connection_manager};
 
+mod backfill;
+
 // --- Modelos de Datos ---
 
+// Shared by the live and historical endpoints, which return the same format.
 #[derive(Debug, Deserialize)]
 struct ApiResponse {
     #[serde(rename = "Fecha")]
-    _fecha: String,
+    fecha: String,
     #[serde(rename = "ListaEESSPrecio")]
     lista_eess: Vec<EstacionRaw>,
 }
@@ -21,13 +24,14 @@ struct EstacionRaw {
     id_eess: String,
     #[serde(rename = "Rótulo")]
     rotulo: String,
+    // Empty for a few stations that have closed.
     #[serde(
         rename = "Longitud (WGS84)",
-        deserialize_with = "parse_spanish_float_forced"
+        deserialize_with = "parse_spanish_float_maybe"
     )]
-    longitud: f64,
-    #[serde(rename = "Latitud", deserialize_with = "parse_spanish_float_forced")]
-    latitud: f64,
+    longitud: Option<f64>,
+    #[serde(rename = "Latitud", deserialize_with = "parse_spanish_float_maybe")]
+    latitud: Option<f64>,
     #[serde(rename = "Dirección")]
     direccion: String,
     #[serde(rename = "Margen")]
@@ -75,15 +79,37 @@ where
         .map_err(serde::de::Error::custom)
 }
 
-fn parse_spanish_float_forced<'de, D>(deserializer: D) -> Result<f64, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    parse_spanish_float_maybe(deserializer)
-        .and_then(|x| x.ok_or_else(|| serde::de::Error::custom("Unexpected empty float")))
+// --- Lógica Principal ---
+
+fn client() -> reqwest::Result<reqwest::blocking::Client> {
+    reqwest::blocking::Client::builder()
+        .user_agent("PrecioCarburantes/1.0.0")
+        .http1_only()
+        .timeout(std::time::Duration::from_secs(120))
+        .build()
 }
 
-// --- Lógica Principal ---
+fn fetch(client: &reqwest::blocking::Client, url: &str) -> reqwest::Result<ApiResponse> {
+    client
+        .get(url)
+        .header(reqwest::header::ACCEPT, "application/json")
+        .send()?
+        .error_for_status()?
+        .json()
+}
+
+/// Records that station `id` had brand `rotulo` at `fecha` (unix seconds).
+fn upsert_rotulo(tx: &rusqlite::Transaction, id: i32, rotulo: &str, fecha: i64) -> Result<()> {
+    tx.prepare_cached(
+        "INSERT INTO estaciones_rotulos (id_estacion, rotulo, first_seen, last_seen)
+            VALUES (?1, ?2, ?3, ?3)
+            ON CONFLICT DO UPDATE SET
+                first_seen = MIN(first_seen, excluded.first_seen),
+                last_seen = MAX(last_seen, excluded.last_seen)",
+    )?
+    .execute(params![id, rotulo, fecha])?;
+    Ok(())
+}
 
 fn main_internal() -> Result<(), Box<dyn Error>> {
     let manager = get_connection_manager(DEFAULT_DB_PATH)?;
@@ -96,18 +122,7 @@ fn main_internal() -> Result<(), Box<dyn Error>> {
     println!("Descargando datos de la API...");
     let url = "https://sedeaplicaciones.minetur.gob.es/ServiciosRESTCarburantes/PreciosCarburantes/EstacionesTerrestres/";
 
-    // Creamos un cliente con un User-Agent de un navegador moderno
-    let client = reqwest::blocking::Client::builder()
-        .user_agent("PrecioCarburantes/1.0.0")
-        .http1_only()
-        .build()?;
-
-    // Usamos el cliente para la petición
-    let resp: ApiResponse = client
-        .get(url)
-        .header(reqwest::header::ACCEPT, "application/json")
-        .send()?
-        .json()?;
+    let resp = fetch(&client()?, url)?;
 
     let num_estaciones = resp.lista_eess.len();
     if num_estaciones == 0 {
@@ -156,6 +171,8 @@ fn main_internal() -> Result<(), Box<dyn Error>> {
                 rotulo = excluded.rotulo,
                 direccion = excluded.direccion,
                 horario = excluded.horario,
+                longitud = COALESCE(longitud, excluded.longitud),
+                latitud = COALESCE(latitud, excluded.latitud),
                 last_seen = excluded.last_seen",
             params![
                 id,
@@ -175,6 +192,8 @@ fn main_internal() -> Result<(), Box<dyn Error>> {
                 ahora
             ],
         )?;
+
+        upsert_rotulo(&tx, id, &est.rotulo, fecha)?;
 
         // Guardar el precio solo si la estación es nueva, vuelve a aparecer o ha cambiado
         let precios = (est.precio_gasoleo_a, est.precio_gasolina_95);
@@ -230,7 +249,12 @@ fn main_internal() -> Result<(), Box<dyn Error>> {
 
 fn main() -> Result<(), Box<dyn Error>> {
     let start = Instant::now();
-    let res = main_internal();
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let res = match args.first().map(String::as_str) {
+        None => main_internal(),
+        Some("backfill") => backfill::run(&args[1..]),
+        Some(other) => Err(format!("Comando desconocido: {other}. Uso: downloader [backfill <desde> <hasta> [segundos entre peticiones]]").into()),
+    };
     println!(
         "Completado con resultado {res:?} en {:.2}s",
         start.elapsed().as_secs_f32()

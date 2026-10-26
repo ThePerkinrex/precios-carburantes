@@ -217,6 +217,28 @@ const MIGRATIONS: &[&[&str]] = &[
     ],
     // The UI language the user picked ("es" | "en"); NULL follows the browser.
     &["ALTER TABLE user_configs ADD COLUMN language TEXT"],
+    // History from the Ministry's historical endpoint (`downloader backfill`).
+    //
+    // - snapshots.backfill = 1: a day's closing prices, stored at 23:59:59 local time of that
+    //   day. There is one per day, and they only list public stations (no cooperatives or
+    //   fleet-only ones), about 6% fewer than the live downloads.
+    // - estaciones_rotulos: every brand a station has had, and when it was first and last seen
+    //   with it (unix seconds), since an ID can change owner or brand. Only live downloads write
+    //   it: the historical endpoint returns every station's current brand, whatever the day.
+    &[
+        "ALTER TABLE snapshots ADD COLUMN backfill INTEGER NOT NULL DEFAULT 0",
+        "CREATE TABLE estaciones_rotulos (
+            id_estacion INTEGER NOT NULL REFERENCES estaciones(id),
+            rotulo TEXT NOT NULL,
+            first_seen INTEGER NOT NULL,
+            last_seen INTEGER NOT NULL,
+            PRIMARY KEY (id_estacion, rotulo)
+        ) WITHOUT ROWID",
+        "INSERT INTO estaciones_rotulos
+            SELECT id, rotulo, CAST(strftime('%s', first_seen, 'utc') AS INTEGER),
+                CAST(strftime('%s', last_seen, 'utc') AS INTEGER)
+            FROM estaciones WHERE rotulo IS NOT NULL",
+    ],
 ];
 
 pub const DEFAULT_DB_PATH: &str = "precios_carburantes.db";
