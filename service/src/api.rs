@@ -104,6 +104,18 @@ struct PricePoint {
     fecha: String,
     gasoleo_a: Option<f64>,
     gasolina_95: Option<f64>,
+    taxed: TaxedAverages,
+}
+
+/// The averages over only the stations under Spain's general IVA and hydrocarbon tax (all but
+/// Canarias, Ceuta and Melilla), and the share of the area's stations they are, so the frontend
+/// can undo temporary tax cuts.
+#[derive(Serialize)]
+struct TaxedAverages {
+    gasoleo_a: Option<f64>,
+    gasolina_95: Option<f64>,
+    share_gasoleo_a: Option<f64>,
+    share_gasolina_95: Option<f64>,
 }
 
 #[derive(Serialize)]
@@ -186,7 +198,14 @@ async fn price_history(
             SELECT
                 fecha,
                 SUM(suma_gasoleo_a) / SUM(n_gasoleo_a) AS avg_gasoleo,
-                SUM(suma_gasolina_95) / SUM(n_gasolina_95) AS avg_gasolina
+                SUM(suma_gasolina_95) / SUM(n_gasolina_95) AS avg_gasolina,
+                -- Canarias (05), Ceuta (18) and Melilla (19) have their own fuel taxes.
+                SUM(suma_gasoleo_a) FILTER (WHERE id_ccaa NOT IN ('05', '18', '19'))
+                    / SUM(n_gasoleo_a) FILTER (WHERE id_ccaa NOT IN ('05', '18', '19')),
+                SUM(suma_gasolina_95) FILTER (WHERE id_ccaa NOT IN ('05', '18', '19'))
+                    / SUM(n_gasolina_95) FILTER (WHERE id_ccaa NOT IN ('05', '18', '19')),
+                1.0 * SUM(n_gasoleo_a) FILTER (WHERE id_ccaa NOT IN ('05', '18', '19')) / SUM(n_gasoleo_a),
+                1.0 * SUM(n_gasolina_95) FILTER (WHERE id_ccaa NOT IN ('05', '18', '19')) / SUM(n_gasolina_95)
             FROM precios_provincia
             WHERE (?1 IS NULL OR id_ccaa = ?1)
               AND (?2 IS NULL OR id_provincia = ?2)
@@ -200,6 +219,12 @@ async fn price_history(
                 fecha: format_fecha(row.get(0)?),
                 gasoleo_a: row.get(1)?,
                 gasolina_95: row.get(2)?,
+                taxed: TaxedAverages {
+                    gasoleo_a: row.get(3)?,
+                    gasolina_95: row.get(4)?,
+                    share_gasoleo_a: row.get(5)?,
+                    share_gasolina_95: row.get(6)?,
+                },
             })
         })?
         .collect::<Result<_, _>>()?;

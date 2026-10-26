@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<script src="/files/js/lang.js"></script>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+	<meta name="theme-color" content="#15233a">
+	<title>Fuel tax cuts</title>
+	<link rel="icon" href="/files/images/favicon.svg" type="image/svg+xml">
+	<link rel="icon" href="/files/images/favicon.ico" sizes="32x32">
+	<link rel="apple-touch-icon" href="/files/images/apple-touch-icon.png">
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&display=swap">
+	<link rel="stylesheet" href="/files/css/app.css">
+</head>
+<body>
+	<div class="page">
+		<nav id="nav" class="nav" aria-label="Pages">
+			<a href="/files/map">Map</a>
+			<a href="/files/dashboard">Price trends</a>
+		</nav>
+
+		<header class="page-head">
+			<h1>Fuel tax cuts</h1>
+		</header>
+
+		<div class="explainer">
+			<p><a href="/files/dashboard">← Price trends</a></p>
+
+			<section class="card">
+				<h2>What they are</h2>
+				<p>Since 22 March 2026 the Government has cut the taxes on petrol and diesel to soften the price rise that followed the crisis in the Middle East. It began with the IVA at 10% and the hydrocarbon tax at the EU minimum. From July the IVA went back to 21% and only the hydrocarbon tax is cut, by an amount that changes every month.</p>
+				<p>The cuts apply wherever the general IVA and hydrocarbon tax do: the Peninsula and the Balearic Islands. Canarias, Ceuta and Melilla have their own fuel taxes, so their prices don't move with these changes.</p>
+			</section>
+
+			<section class="card">
+				<h2>Next change</h2>
+				<p id="next" class="tax-next">Loading…</p>
+			</section>
+
+			<section class="card">
+				<h2>Month by month</h2>
+				<p class="card-note">The cut in the hydrocarbon tax, in euros per litre, and the IVA rate. Later months are as things stand today.</p>
+				<div class="table-scroll">
+					<table id="periods" class="compare-table">
+						<thead><tr><th scope="col">From</th><th scope="col">IVA</th><th scope="col">Gasolina 95</th><th scope="col">Gasóleo A</th><th scope="col">Law</th></tr></thead>
+						<tbody></tbody>
+					</table>
+				</div>
+				<ul id="periodNotes" class="tax-notes"></ul>
+			</section>
+
+			<section class="card">
+				<h2>How long they last</h2>
+				<p>Each decree sets the exact months its cuts apply, and none applies past them. The safeguard clauses can only change how big a month's cut is, never add months.</p>
+				<div class="table-scroll">
+					<table class="compare-table">
+						<thead><tr><th scope="col">Decree</th><th scope="col">Cuts apply</th><th scope="col">Validated by Congress</th></tr></thead>
+						<tbody>
+							<tr><th scope="row">RDL 7/2026</th><td>22/03/2026 – 30/06/2026</td><td>26/03/2026</td></tr>
+							<tr><th scope="row">RDL 18/2026</th><td>01/07/2026 – 30/09/2026</td><td>23/07/2026</td></tr>
+							<tr><th scope="row">RDL 25/2026</th><td>01/10/2026 – 31/12/2026</td><td>16/10/2026</td></tr>
+						</tbody>
+					</table>
+				</div>
+				<p>A decree-law has to be validated by Congress within 30 days or it lapses; all three were. On 1 January 2027 the full taxes come back on their own. Only a new decree-law could bring cuts back: so far the Government has approved each one just before the previous one ended, but there is none for 2027 yet, so this page and the price trends assume the cuts end then.</p>
+			</section>
+
+			<section class="card">
+				<h2>How a cut reaches the pump</h2>
+				<p>The pump price is the product's price plus the hydrocarbon tax, with IVA on top of both. So a cut of 0.20 € in the hydrocarbon tax lowers the price by 0.20 × 1.21 ≈ 0.24 €, and lowering the IVA from 21% to 10% takes about 9% off the whole price.</p>
+				<p>In practice stations pass on most of a change, but not all of it, and not at once: our data shows most of the jump on the first day and the rest over the next two or three, as they sell fuel they bought under the old taxes.</p>
+			</section>
+
+			<section class="card">
+				<h2>Safeguard clauses</h2>
+				<p>Several months have a smaller cut by default and a bigger one if prices have kept rising: if the CPI for that fuel (INE subclasses 07.2.2.2 Gasolina and 07.2.2.1 Gasóleo) in an earlier month was more than 15% above the same month a year before. Each fuel is checked on its own, which is why diesel had a bigger cut than petrol in September.</p>
+				<p>This page reads the CPI from INE. Until INE publishes a month (around the middle of the next month), it estimates it from the change in our average prices since the last month INE published, which so far lands within about a point of INE's figure.</p>
+				<div class="table-scroll">
+					<table id="cpi" class="compare-table">
+						<thead><tr><th scope="col">Month</th><th scope="col">Gasolina 95</th><th scope="col">Gasóleo A</th></tr></thead>
+						<tbody></tbody>
+					</table>
+				</div>
+				<p id="cpiStatus" class="card-note"></p>
+			</section>
+
+			<section class="card">
+				<h2>How the price trends use them</h2>
+				<p>The dashed lines on the price chart show what prices would have been without the cuts: each average is put back to 21% IVA and the full hydrocarbon tax. It assumes the cuts reached the pump in full, so where stations kept part of a cut the dashed line jumps a little at the change.</p>
+				<p>The cheapest-day chart compares these prices without the cuts, so a tax change doesn't look like a cheap or dear weekday, and leaves out the weeks around each change while prices settle.</p>
+			</section>
+
+			<section class="card">
+				<h2>Sources</h2>
+				<ul class="tax-sources">
+					<li><a href="https://www.boe.es/buscar/act.php?id=BOE-A-2026-6544">Real Decreto-ley 7/2026, of 20 March (BOE)</a></li>
+					<li><a href="https://www.boe.es/diario_boe/txt.php?id=BOE-A-2026-14112">Real Decreto-ley 18/2026, of 29 June (BOE)</a></li>
+					<li><a href="https://www.boe.es/diario_boe/txt.php?id=BOE-A-2026-20265">Real Decreto-ley 25/2026, of 29 September (BOE)</a></li>
+					<li><a href="https://sede.agenciatributaria.gob.es/Sede/impuestos-especiales-medioambientales/impuestos-especiales-fabricacion/hidrocarburos/medidas-tributarias-combatir-crisis-energetica-medio.html">Monthly hydrocarbon tax rates (Agencia Tributaria)</a></li>
+					<li><a href="https://www.ine.es/dyngs/INEbase/operacion.htm?c=Estadistica_C&amp;cid=1254736176802&amp;menu=ultiDatos&amp;idp=1254735976607">Consumer Price Index (INE)</a></li>
+				</ul>
+			</section>
+		</div>
+	</div>
+	<script type="module" src="/files/js/taxes.js"></script>
+</body>
+</html>

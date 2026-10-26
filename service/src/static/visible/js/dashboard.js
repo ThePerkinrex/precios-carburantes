@@ -2,7 +2,9 @@ import { getUserState } from "./api.js";
 import { LOCALE, t } from "./i18n.js";
 import { renderNav } from "./nav.js";
 import { formatDate, formatDateTime } from "./dates.js";
+import { formatEuros } from "./money.js";
 import { getPriceHistory, renderBoard } from "./price_board.js";
+import { SETTLE_DAYS, TAXES_PAGE, anyCutBetween, loadFuelTaxes, nextTaxChange, settling, taxChanges, untaxedPrice } from "./fuel_taxes.js";
 
 const ccaaSelect = document.getElementById("ccaaSelect");
 const provSelect = document.getElementById("provinciaSelect");
@@ -19,18 +21,24 @@ const rankingList = document.getElementById("ranking");
 const rankingNote = document.getElementById("rankingNote");
 const weekdayNote = document.getElementById("weekdayNote");
 const weekdayBox = document.getElementById("weekdayBox");
+const taxBox = document.getElementById("taxBox");
+const taxList = document.getElementById("taxList");
+const taxNext = document.getElementById("taxNext");
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_AREAS = 4;
 // How far back each time window reaches, in days (null: everything).
 const RANGES = { "7d": 7, "1m": 30, "3m": 91, "1y": 365, all: null };
+// Gasoline minus diesel.
+const spread = (g95, diesel) => (g95 == null || diesel == null ? null : g95 - diesel);
+// `untaxed` is the value without the temporary tax cuts (see fuel_taxes.js).
 const FUELS = {
-	gasolina_95: { name: "Gasolina 95", value: (p) => p.gasolina_95 },
-	gasoleo_a: { name: "Gasóleo A", value: (p) => p.gasoleo_a },
-	// Gasoline minus diesel, in cents.
+	gasolina_95: { name: "Gasolina 95", value: (p) => p.gasolina_95, untaxed: (p) => untaxedPrice(p, "gasolina_95") },
+	gasoleo_a: { name: "Gasóleo A", value: (p) => p.gasoleo_a, untaxed: (p) => untaxedPrice(p, "gasoleo_a") },
 	spread: {
 		name: t("Spread"),
-		value: (p) => (p.gasolina_95 == null || p.gasoleo_a == null ? null : (p.gasolina_95 - p.gasoleo_a) * 100),
+		value: (p) => spread(p.gasolina_95, p.gasoleo_a),
+		untaxed: (p) => spread(untaxedPrice(p, "gasolina_95"), untaxedPrice(p, "gasoleo_a")),
 	},
 };
 // Monday first. 2024-01-01 was a Monday.
@@ -45,6 +53,8 @@ const css = (name) => style.getPropertyValue(name).trim();
 const G95 = css("--g95");
 const DIESEL = css("--diesel");
 const INK = css("--ink");
+const MUTED = css("--muted");
+const PAPER = css("--paper");
 const SERIES = [1, 2, 3, 4].map((n) => css(`--series-${n}`));
 Chart.defaults.font.family = css("--font");
 Chart.defaults.color = css("--muted");
@@ -142,6 +152,10 @@ async function loadFilters() {
 	try {
 		const response = await fetch("/api/geo/filter");
 		geoData = await response.json();
+		// Alphabetical, with accented names where they belong ("Ávila" by "Asturias").
+		const byName = (a, b) => a.name.localeCompare(b.name, "es");
+		geoData.ccaa.sort(byName);
+		geoData.provincias.sort(byName);
 		for (const c of geoData.ccaa) ccaaSelect.add(new Option(c.name, c.id));
 	} catch (err) {
 		console.error("Failed to load filters:", err);
@@ -266,8 +280,90 @@ function snapshotLabels(histories) {
 	return [...byFecha].sort((a, b) => a[1] - b[1]);
 }
 
-const unitFor = (fuel) => (fuel === "spread" ? t("cents") : "€/L");
-const formatValue = (v, fuel) => (fuel === "spread" ? `${v.toFixed(1)} c` : `${v.toFixed(3)} €/L`);
+const formatValue = (v, fuel) => (fuel === "spread" ? `${formatEuros(v)}/L` : `${v.toFixed(3)} €/L`);
+
+// Draws each tax change in `markers` on the chart: a dashed line where it
+// starts, numbered as in the list under the chart, and a shade over the days
+// prices take to settle.
+function taxMarkerPlugin(markers) {
+	return {
+		id: "taxMarkers",
+		beforeDatasetsDraw(chart) {
+			const { ctx, chartArea: area, scales: { x } } = chart;
+			ctx.save();
+			for (const m of markers) {
+				const start = x.getPixelForValue(m.index);
+				ctx.fillStyle = PAPER;
+				ctx.fillRect(start, area.top, x.getPixelForValue(m.settledIndex) - start, area.bottom - area.top);
+				ctx.strokeStyle = MUTED;
+				ctx.lineWidth = 1;
+				ctx.setLineDash([3, 3]);
+				ctx.beginPath();
+				ctx.moveTo(start, area.top);
+				ctx.lineTo(start, area.bottom);
+				ctx.stroke();
+				ctx.fillStyle = MUTED;
+				ctx.font = `600 11px ${css("--font")}`;
+				ctx.textAlign = "center";
+				ctx.textBaseline = "bottom";
+				ctx.fillText(m.number, start, area.top - 2);
+			}
+			ctx.restore();
+		},
+	};
+}
+
+// The tax changes within the snapshots, as chart markers.
+function taxMarkers(snapshots) {
+	if (snapshots.length < 2) return [];
+	const first = snapshots[0][1];
+	const last = snapshots.at(-1)[1];
+	const indexFrom = (date) => {
+		const i = snapshots.findIndex(([, d]) => d >= date);
+		return i < 0 ? snapshots.length - 1 : i;
+	};
+	return taxChanges()
+		.filter((c) => c.date > first && c.date <= last)
+		.map((c, i) => ({
+			...c,
+			number: i + 1,
+			index: indexFrom(c.date),
+			settledIndex: indexFrom(new Date(c.date.getTime() + SETTLE_DAYS * DAY_MS)),
+		}));
+}
+
+// Lists the changes on the chart, the one in force when it starts and the
+// planned ones.
+function renderTaxChanges(snapshots, markers) {
+	const first = snapshots[0]?.[1] ?? new Date();
+	const last = snapshots.at(-1)?.[1] ?? new Date();
+	const changes = taxChanges();
+	const inForce = changes.findLast((c) => c.date <= first);
+	const items = [
+		...(inForce && anyCutBetween(first, first) ? [{ ...inForce, since: true }] : []),
+		...markers,
+		...changes.filter((c) => c.planned && c.date > last),
+	];
+	const next = nextTaxChange();
+	taxNext.hidden = !next;
+	if (next) {
+		taxNext.querySelector("strong").textContent = t("As it stands, from {date}:", { date: next.label });
+		taxNext.querySelector("span").textContent = next.text;
+	}
+	taxBox.hidden = !items.length && !next;
+	taxList.replaceChildren(
+		...items.map((c) => {
+			const li = document.createElement("li");
+			li.innerHTML = `<span class="tax-number"></span><span class="tax-date"></span><span class="tax-text"></span>`;
+			li.querySelector(".tax-number").textContent = c.number ?? "";
+			li.querySelector(".tax-date").textContent = c.since
+				? t("Since {date}", { date: c.label })
+				: c.planned ? t("{date}, planned", { date: c.label }) : c.label;
+			li.querySelector(".tax-text").textContent = c.text;
+			return li;
+		}),
+	);
+}
 
 function renderChart(histories) {
 	if (fuelChart) fuelChart.destroy();
@@ -290,43 +386,70 @@ function renderChart(histories) {
 			spanGaps: true,
 		};
 	};
+	// Each line, followed by a dashed one without the tax cuts where they
+	// change anything.
+	const lines = (label, history, fuel, color) => {
+		const solid = line(label, history, FUELS[fuel].value, color);
+		const dashed = line(t("{name} without tax cuts", { name: label }), history, FUELS[fuel].untaxed, color);
+		if (dashed.data.every((v, i) => v == null || Math.abs(v - solid.data[i]) < 1e-9)) return [solid];
+		return [solid, { ...dashed, borderWidth: 1.5, borderDash: [6, 4], untaxed: true }];
+	};
 
 	const fuel = chartFuel();
 	let datasets;
 	if (comparing()) {
-		datasets = state.areas.map((a, i) => line(areaName(a.key), histories[i], FUELS[fuel].value, SERIES[a.slot]));
+		datasets = state.areas.flatMap((a, i) => lines(areaName(a.key), histories[i], fuel, SERIES[a.slot]));
 		chartTitle.textContent = fuel === "spread"
 			? t("Gasolina 95 minus Gasóleo A, by area")
 			: t("{fuel}, by area", { fuel: FUELS[fuel].name });
 	} else if (fuel === "both") {
 		datasets = [
-			line("Gasolina 95", histories[0], FUELS.gasolina_95.value, G95),
-			line("Gasóleo A", histories[0], FUELS.gasoleo_a.value, DIESEL),
+			...lines("Gasolina 95", histories[0], "gasolina_95", G95),
+			...lines("Gasóleo A", histories[0], "gasoleo_a", DIESEL),
 		];
 		chartTitle.textContent = t("Average price over time");
 	} else {
 		const color = { gasolina_95: G95, gasoleo_a: DIESEL, spread: INK }[fuel];
-		datasets = [line(FUELS[fuel].name, histories[0], FUELS[fuel].value, color)];
+		datasets = lines(FUELS[fuel].name, histories[0], fuel, color);
 		chartTitle.textContent = fuel === "spread"
 			? t("Gasolina 95 minus Gasóleo A")
 			: t("{fuel} over time", { fuel: FUELS[fuel].name });
 	}
 	const valueFuel = fuel === "spread" ? "spread" : "price";
+	const solidCount = datasets.filter((d) => !d.untaxed).length;
+	const markers = taxMarkers(snapshots);
+	renderTaxChanges(snapshots, markers);
 
 	fuelChart = new Chart(document.getElementById("historyChart"), {
 		type: "line",
 		data: { labels: snapshots.map(([, date]) => formatDate(date)), datasets },
+		plugins: [taxMarkerPlugin(markers)],
 		options: {
 			responsive: true,
 			maintainAspectRatio: false,
 			interaction: { mode: "index", intersect: false },
+			// Room for the markers' numbers.
+			layout: { padding: { top: markers.length ? 16 : 0 } },
 			plugins: {
-				// A single line is named by the title.
+				// A single line is named by the title. Dashed lines go with
+				// the solid line before them, which the legend toggles too.
 				legend: {
-					display: datasets.length > 1,
+					display: solidCount > 1,
 					position: "top",
 					align: "start",
-					labels: { usePointStyle: true, pointStyle: "rectRounded", boxHeight: 10 },
+					labels: {
+						usePointStyle: true,
+						pointStyle: "rectRounded",
+						boxHeight: 10,
+						filter: (item, data) => !data.datasets[item.datasetIndex].untaxed,
+					},
+					onClick: (event, item, legend) => {
+						const chart = legend.chart;
+						const visible = !chart.isDatasetVisible(item.datasetIndex);
+						chart.setDatasetVisibility(item.datasetIndex, visible);
+						if (chart.data.datasets[item.datasetIndex + 1]?.untaxed) chart.setDatasetVisibility(item.datasetIndex + 1, visible);
+						chart.update();
+					},
 				},
 				tooltip: {
 					callbacks: {
@@ -337,7 +460,7 @@ function renderChart(histories) {
 			},
 			scales: {
 				x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkipPadding: 16 } },
-				y: { ticks: { callback: (v) => (valueFuel === "spread" ? `${v.toFixed(1)} c` : `${v.toFixed(2)} €`) } },
+				y: { ticks: { callback: (v) => (valueFuel === "spread" ? formatEuros(v) : `${v.toFixed(2)} €`) } },
 			},
 		},
 	});
@@ -351,12 +474,11 @@ function renderTable(histories) {
 
 	const fuel = chartFuel();
 	const value = FUELS[fuel].value;
-	const toUnit = (v) => (fuel === "spread" ? v : v * 100);
-	const cents = (v) => `${v > 0 ? "+" : ""}${v.toLocaleString(LOCALE, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} c`;
+	const change = (v) => formatEuros(v, { signed: true });
 	const latest = (history) => history.findLast((p) => value(p) != null);
 	const first = histories[0] && latest(histories[0]);
 
-	compareTable.tHead.rows[0].cells[1].textContent = t("Now ({unit})", { unit: unitFor(fuel) });
+	compareTable.tHead.rows[0].cells[1].textContent = t("Now ({unit})", { unit: "€/L" });
 	compareTable.tHead.rows[0].cells[3].textContent = t("vs {area}", { area: areaName(state.areas[0].key) });
 	compareTable.tBodies[0].replaceChildren(
 		...state.areas.map((area, i) => {
@@ -368,11 +490,9 @@ function renderTable(histories) {
 			row.querySelector(".swatch").style.background = SERIES[area.slot];
 			row.cells[0].lastChild.textContent = areaName(area.key);
 			if (now) {
-				row.cells[1].textContent = fuel === "spread"
-					? value(now).toFixed(1)
-					: value(now).toLocaleString(LOCALE, { minimumFractionDigits: 3, maximumFractionDigits: 3 });
-				row.cells[2].textContent = start !== now ? cents(toUnit(value(now) - value(start))) : "–";
-				row.cells[3].textContent = i > 0 && first ? cents(toUnit(value(now) - value(first))) : "–";
+				row.cells[1].textContent = value(now).toLocaleString(LOCALE, { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+				row.cells[2].textContent = start !== now ? change(value(now) - value(start)) : "–";
+				row.cells[3].textContent = i > 0 && first ? change(value(now) - value(first)) : "–";
 			} else {
 				row.cells[1].textContent = t("No data");
 			}
@@ -408,7 +528,7 @@ function renderRanking(rows, region) {
 			const button = li.firstChild;
 			button.querySelector(".name").textContent = areaName(key) ?? r.id_provincia;
 			button.querySelector(".value").textContent = fuel === "spread"
-				? `${value(r).toFixed(1)} c`
+				? formatEuros(value(r))
 				: value(r).toLocaleString(LOCALE, { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 			button.querySelector(".bar").style.setProperty("--fill", `${8 + (92 * (value(r) - min)) / spanOf}%`);
 			button.title = t("{n} stations", { n: r.estaciones });
@@ -428,7 +548,9 @@ function showRankingError(err) {
 }
 
 // For each weekday, how far prices sit from the centred 7-day average around
-// them, in cents: the trend cancels out and the weekly pattern remains.
+// them, in euros: the trend cancels out and the weekly pattern remains.
+// Tax changes would show up as jumps, so `value` should undo the cuts, and
+// weeks where prices were still settling after one are left out.
 function weekdayDeviations(history, value) {
 	const points = history.filter((p) => value(p) != null).map((p) => ({ t: p.date.getTime(), v: value(p), day: p.date.getDay() }));
 	const sums = new Array(7).fill(0);
@@ -445,6 +567,7 @@ function weekdayDeviations(history, value) {
 		while (points[lo].t < p.t - half) windowSum -= points[lo++].v;
 		// Only points with a full week around them.
 		if (p.t - half < firstT || p.t + half > lastT) continue;
+		if (settling(new Date(p.t), { before: half, after: half })) continue;
 		const mean = windowSum / (hi - lo);
 		sums[p.day] += p.v - mean;
 		counts[p.day]++;
@@ -464,15 +587,19 @@ function renderWeekdays(history) {
 		? t("Choose 3M or longer to see which weekdays are cheaper.")
 		: t("Price on each weekday compared with the average of the week around it. Below zero is cheaper.");
 	if (tooShort) return;
+	if (history.length && anyCutBetween(history[0].date, history.at(-1).date)) {
+		const link = document.createElement("a");
+		link.href = TAXES_PAGE;
+		link.textContent = t("temporary tax cuts");
+		// The link goes where {link} is in the translated sentence.
+		const [before, after] = t("Prices are taken without the {link}, leaving out the weeks around each change.").split("{link}");
+		weekdayNote.append(` ${before}`, link, after);
+	}
 
 	const fuel = chartFuel();
-	const toCents = fuel === "spread" ? (v) => v : (v) => v * 100;
 	const bars = (label, key, color) => ({
 		label,
-		data: weekdayDeviations(history, (p) => {
-			const v = FUELS[key].value(p);
-			return v == null ? null : toCents(v);
-		}),
+		data: weekdayDeviations(history, FUELS[key].untaxed),
 		backgroundColor: color,
 		borderRadius: 4,
 		borderSkipped: "start",
@@ -498,15 +625,14 @@ function renderWeekdays(history) {
 				},
 				tooltip: {
 					callbacks: {
-						label: (item) =>
-							`${item.dataset.label}: ${t("{amount} cents", { amount: `${item.parsed.y > 0 ? "+" : ""}${item.parsed.y.toFixed(2)}` })}`,
+						label: (item) => `${item.dataset.label}: ${formatEuros(item.parsed.y, { signed: true, max: 4 })}`,
 					},
 				},
 			},
 			scales: {
 				x: { grid: { display: false } },
-				// Differences are often under a cent, so no fixed rounding.
-				y: { ticks: { callback: (v) => `${+v.toFixed(2)} c` } },
+				// Differences are often under a cent, so up to four decimals.
+				y: { ticks: { callback: (v) => formatEuros(v, { max: 4 }) } },
 			},
 		},
 	});
@@ -548,3 +674,8 @@ getUserState().then((s) => renderNav(document.getElementById("nav"), s, "dashboa
 await loadFilters();
 readUrl();
 update();
+// The safeguard clauses settle once INE's CPI is in; until then the known
+// figures stand.
+loadFuelTaxes()
+	.then(update)
+	.catch((err) => console.error("Failed to load the fuel CPI:", err));

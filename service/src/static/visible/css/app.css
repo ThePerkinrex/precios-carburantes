@@ -552,6 +552,90 @@ select {
 	color: var(--muted);
 }
 
+/* Fuel tax changes under the chart, numbered as on it. */
+.tax-changes {
+	margin-top: 8px;
+}
+
+.tax-list {
+	margin: 0 8px 8px;
+	padding: 0;
+	list-style: none;
+	font-size: 0.85rem;
+}
+
+.tax-list li {
+	display: grid;
+	grid-template-columns: 1.5em auto 1fr;
+	gap: 8px;
+	padding: 6px 0;
+	border-top: 1px solid var(--line);
+}
+
+.tax-number {
+	font-weight: 600;
+	color: var(--muted);
+	text-align: center;
+}
+
+.tax-date {
+	font-weight: 600;
+	white-space: nowrap;
+	font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 480px) {
+	.tax-list li {
+		grid-template-columns: 1.5em 1fr;
+	}
+
+	.tax-text {
+		grid-column: 2;
+	}
+}
+
+.tax-next {
+	margin: 0 8px 8px;
+	font-size: 0.9rem;
+}
+
+/* The fuel tax cuts page. */
+.explainer {
+	display: grid;
+	gap: 16px;
+	max-width: 760px;
+}
+
+.explainer > p {
+	margin: 0;
+}
+
+.explainer .card > p:not(.card-note) {
+	margin: 0 8px 8px;
+	line-height: 1.5;
+}
+
+.explainer .compare-table tr.planned {
+	color: var(--muted);
+}
+
+.explainer .compare-table td.over {
+	font-weight: 700;
+}
+
+.tax-notes,
+.tax-sources {
+	margin: 8px;
+	padding-left: 20px;
+	font-size: 0.85rem;
+}
+
+.tax-notes {
+	padding-left: 0;
+	list-style: none;
+	color: var(--muted);
+}
+
 /* Comparison table under the chart. */
 .table-scroll {
 	overflow-x: auto;

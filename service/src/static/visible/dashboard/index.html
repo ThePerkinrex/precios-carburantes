@@ -80,6 +80,12 @@
 					<div class="chart-box">
 						<canvas id="historyChart" aria-label="Average fuel prices over time"></canvas>
 					</div>
+					<div id="taxBox" class="tax-changes" hidden>
+						<p class="card-note">Fuel tax changes. Dashed lines: the price without the temporary tax cuts (Canarias, Ceuta and Melilla have their own taxes). Shaded: days prices may still be adjusting.</p>
+						<ol id="taxList" class="tax-list"></ol>
+						<p id="taxNext" class="tax-next" hidden><strong></strong> <span></span></p>
+						<p class="card-note"><a href="/files/taxes">How the fuel tax cuts work</a></p>
+					</div>
 					<div class="table-scroll">
 						<table id="compareTable" class="compare-table" hidden>
 							<thead><tr><th scope="col">Area</th><th scope="col">Now</th><th scope="col">Change</th><th scope="col">vs first</th></tr></thead>
@@ -90,7 +96,7 @@
 
 				<section class="card weekday">
 					<h2>Cheapest day to fill up</h2>
-					<p id="weekdayNote" class="card-note">Price on each weekday compared with that week's average, in cents. Below zero is cheaper.</p>
+					<p id="weekdayNote" class="card-note">Price on each weekday compared with the average of the week around it. Below zero is cheaper.</p>
 					<div id="weekdayBox" class="chart-box small">
 						<canvas id="weekdayChart" aria-label="Average price difference by weekday"></canvas>
 					</div>

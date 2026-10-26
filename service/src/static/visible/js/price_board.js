@@ -3,6 +3,7 @@
 
 import { formatDate, formatDateTime, parseFecha } from "./dates.js";
 import { LOCALE, t } from "./i18n.js";
+import { formatEuros } from "./money.js";
 
 const FUELS = [
 	{ key: "gasolina_95", name: "Gasolina 95", className: "g95" },
@@ -28,20 +29,13 @@ function priceHtml(value) {
 	return `${whole}<small>${thousandths}</small><span class="unit">€/L</span>`;
 }
 
-// The change between two prices in euro cents.
+// The change between two prices.
 function deltaText(now, before) {
-	const cents = (now - before) * 100;
-	if (Math.abs(cents) < 0.05) return { text: t("No change"), className: "" };
-	const amount = Math.abs(cents).toLocaleString(LOCALE, { maximumFractionDigits: 1, minimumFractionDigits: 1 });
-	return cents > 0
-		? { text: `▲ ${t("{amount} cents", { amount })}`, className: "up" }
-		: { text: `▼ ${t("{amount} cents", { amount })}`, className: "down" };
-}
-
-// 0.123 -> "12,3 cents"
-function centsText(euros) {
-	const amount = (euros * 100).toLocaleString(LOCALE, { maximumFractionDigits: 1, minimumFractionDigits: 1 });
-	return t("{amount} cents", { amount });
+	const change = now - before;
+	if (Math.abs(change) < 0.0005) return { text: t("No change"), className: "" };
+	return change > 0
+		? { text: `▲ ${formatEuros(change)}`, className: "up" }
+		: { text: `▼ ${formatEuros(-change)}`, className: "down" };
 }
 
 function boardHead(board, where) {
@@ -90,7 +84,7 @@ export function renderBoard(board, history, where, { baseline = "week" } = {}) {
 		const row = document.createElement("p");
 		row.className = "board-spread";
 		row.textContent = t(spread >= 0 ? "Diesel is {amount} cheaper than Gasolina 95" : "Diesel is {amount} dearer than Gasolina 95", {
-			amount: centsText(Math.abs(spread)),
+			amount: formatEuros(Math.abs(spread)),
 		});
 		board.append(row);
 	}

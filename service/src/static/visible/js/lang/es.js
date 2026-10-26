@@ -261,7 +261,6 @@ export default {
 	"Loading prices…": "Cargando precios…",
 	"Couldn't load prices (HTTP {status}).": "No se pudieron cargar los precios (HTTP {status}).",
 	"No change": "Sin cambios",
-	"{amount} cents": "{amount} cént.",
 	"No prices recorded for this area yet.": "Aún no hay precios registrados para esta zona.",
 	"Diesel is {amount} cheaper than Gasolina 95": "El gasóleo está {amount} más barato que la gasolina 95",
 	"Diesel is {amount} dearer than Gasolina 95": "El gasóleo está {amount} más caro que la gasolina 95",
@@ -291,12 +290,9 @@ export default {
 	"Change": "Cambio",
 	"vs first": "frente a la primera",
 	"Cheapest day to fill up": "El día más barato para repostar",
-	"Price on each weekday compared with that week's average, in cents. Below zero is cheaper.":
-		"Precio de cada día de la semana comparado con la media de esa semana, en céntimos. Por debajo de cero es más barato.",
 	"Average price difference by weekday": "Diferencia media de precio por día de la semana",
 	"Stop comparing {area}": "Dejar de comparar {area}",
 	"Couldn't load provinces (HTTP {status}).": "No se pudieron cargar las provincias (HTTP {status}).",
-	"cents": "céntimos",
 	"Gasolina 95 minus Gasóleo A, by area": "Gasolina 95 menos gasóleo A, por zona",
 	"{fuel}, by area": "{fuel}, por zona",
 	"Gasolina 95 minus Gasóleo A": "Gasolina 95 menos gasóleo A",
@@ -311,4 +307,81 @@ export default {
 	"Choose 3M or longer to see which weekdays are cheaper.": "Elige 3M o más para ver qué días de la semana son más baratos.",
 	"Price on each weekday compared with the average of the week around it. Below zero is cheaper.":
 		"Precio de cada día de la semana comparado con la media de la semana de alrededor. Por debajo de cero es más barato.",
+
+	// ---------- Fuel tax cuts (fuel_taxes.js) ----------
+	"Fuel tax changes. Dashed lines: the price without the temporary tax cuts (Canarias, Ceuta and Melilla have their own taxes). Shaded: days prices may still be adjusting.":
+		"Cambios en los impuestos de los carburantes. Líneas discontinuas: el precio sin las rebajas fiscales temporales (Canarias, Ceuta y Melilla tienen sus propios impuestos). Sombreado: días en los que los precios aún pueden estar ajustándose.",
+	"{name} without tax cuts": "{name} sin rebajas fiscales",
+	"Since {date}": "Desde el {date}",
+	"{date}, planned": "{date}, previsto",
+	"IVA": "IVA",
+	"hydrocarbon tax −{amount}/L": "impuesto sobre hidrocarburos −{amount}/L",
+	"hydrocarbon tax −{g95}/L Gasolina 95, −{diesel}/L Gasóleo A": "impuesto sobre hidrocarburos −{g95}/L Gasolina 95, −{diesel}/L Gasóleo A",
+	"no hydrocarbon tax cut": "sin rebaja del impuesto sobre hidrocarburos",
+	"depends on the CPI for {month}, not out yet": "depende del IPC de {month}, aún sin publicar",
+	"CPI for {month} estimated at {change}": "IPC de {month} estimado en {change}",
+	"CPI for {month}: {change}": "IPC de {month}: {change}",
+	"{fuel}: no change, the cut stays at {cut}": "{fuel}: sin cambios, la rebaja sigue en {cut}",
+	"{fuel}: cut {from} → {to}, about {change}/L at the pump":
+		"{fuel}: rebaja de {from} → {to}, unos {change}/L en el surtidor",
+	"Unless a new decree extends the cuts.": "Salvo que un nuevo decreto prorrogue las rebajas.",
+	"As it stands, from {date}:": "Tal como están las cosas, desde el {date}:",
+	"How the fuel tax cuts work": "Cómo funcionan las rebajas fiscales al combustible",
+	"temporary tax cuts": "rebajas fiscales temporales",
+	"Prices are taken without the {link}, leaving out the weeks around each change.":
+		"Se usan los precios sin las {link}, dejando fuera las semanas alrededor de cada cambio.",
+
+	// ---------- Fuel tax cuts page (taxes) ----------
+	"Fuel tax cuts": "Rebajas fiscales al combustible",
+	"← Price trends": "← Evolución de precios",
+	"What they are": "Qué son",
+	"Since 22 March 2026 the Government has cut the taxes on petrol and diesel to soften the price rise that followed the crisis in the Middle East. It began with the IVA at 10% and the hydrocarbon tax at the EU minimum. From July the IVA went back to 21% and only the hydrocarbon tax is cut, by an amount that changes every month.":
+		"Desde el 22 de marzo de 2026 el Gobierno ha rebajado los impuestos de la gasolina y el gasóleo para suavizar la subida de precios que siguió a la crisis en Oriente Medio. Empezó con el IVA al 10 % y el impuesto sobre hidrocarburos en el mínimo de la UE. Desde julio el IVA volvió al 21 % y solo se rebaja el impuesto sobre hidrocarburos, en una cantidad que cambia cada mes.",
+	"The cuts apply wherever the general IVA and hydrocarbon tax do: the Peninsula and the Balearic Islands. Canarias, Ceuta and Melilla have their own fuel taxes, so their prices don't move with these changes.":
+		"Las rebajas se aplican donde rigen el IVA y el impuesto sobre hidrocarburos generales: la Península y las Islas Baleares. Canarias, Ceuta y Melilla tienen sus propios impuestos sobre el combustible, así que sus precios no se mueven con estos cambios.",
+	"Next change": "Próximo cambio",
+	"Month by month": "Mes a mes",
+	"The cut in the hydrocarbon tax, in euros per litre, and the IVA rate. Later months are as things stand today.":
+		"La rebaja del impuesto sobre hidrocarburos, en euros por litro, y el tipo de IVA. Los meses futuros, tal como están las cosas hoy.",
+	"From": "Desde",
+	"Law": "Norma",
+	"How long they last": "Cuánto duran",
+	"Each decree sets the exact months its cuts apply, and none applies past them. The safeguard clauses can only change how big a month's cut is, never add months.":
+		"Cada decreto fija los meses exactos en que se aplican sus rebajas, y ninguna se aplica después. Las cláusulas de salvaguarda solo pueden cambiar cuánto se rebaja en un mes, nunca añadir meses.",
+	"Decree": "Decreto",
+	"Cuts apply": "Rebajas vigentes",
+	"Validated by Congress": "Convalidado por el Congreso",
+	"A decree-law has to be validated by Congress within 30 days or it lapses; all three were. On 1 January 2027 the full taxes come back on their own. Only a new decree-law could bring cuts back: so far the Government has approved each one just before the previous one ended, but there is none for 2027 yet, so this page and the price trends assume the cuts end then.":
+		"Un real decreto-ley tiene que ser convalidado por el Congreso en 30 días o decae; los tres lo fueron. El 1 de enero de 2027 los impuestos completos vuelven por sí solos. Solo un nuevo real decreto-ley podría recuperar las rebajas: hasta ahora el Gobierno ha aprobado cada uno justo antes de que acabara el anterior, pero aún no hay ninguno para 2027, así que esta página y la evolución de precios dan por hecho que las rebajas terminan entonces.",
+	"How a cut reaches the pump": "Cómo llega una rebaja al surtidor",
+	"The pump price is the product's price plus the hydrocarbon tax, with IVA on top of both. So a cut of 0.20 € in the hydrocarbon tax lowers the price by 0.20 × 1.21 ≈ 0.24 €, and lowering the IVA from 21% to 10% takes about 9% off the whole price.":
+		"El precio en el surtidor es el precio del producto más el impuesto sobre hidrocarburos, con el IVA encima de ambos. Así, una rebaja de 0,20 € en el impuesto sobre hidrocarburos baja el precio 0,20 × 1,21 ≈ 0,24 €, y bajar el IVA del 21 % al 10 % quita alrededor de un 9 % a todo el precio.",
+	"In practice stations pass on most of a change, but not all of it, and not at once: our data shows most of the jump on the first day and the rest over the next two or three, as they sell fuel they bought under the old taxes.":
+		"En la práctica las gasolineras trasladan la mayor parte de un cambio, pero no todo, y no de golpe: nuestros datos muestran la mayor parte del salto el primer día y el resto en los dos o tres siguientes, mientras venden el combustible que compraron con los impuestos anteriores.",
+	"Safeguard clauses": "Cláusulas de salvaguarda",
+	"Several months have a smaller cut by default and a bigger one if prices have kept rising: if the CPI for that fuel (INE subclasses 07.2.2.2 Gasolina and 07.2.2.1 Gasóleo) in an earlier month was more than 15% above the same month a year before. Each fuel is checked on its own, which is why diesel had a bigger cut than petrol in September.":
+		"Varios meses tienen una rebaja menor por defecto y una mayor si los precios han seguido subiendo: si el IPC de ese combustible (subclases del INE 07.2.2.2 Gasolina y 07.2.2.1 Gasóleo) en un mes anterior superó en más de un 15 % el del mismo mes del año anterior. Cada combustible se mira por separado, por eso en septiembre el gasóleo tuvo más rebaja que la gasolina.",
+	"This page reads the CPI from INE. Until INE publishes a month (around the middle of the next month), it estimates it from the change in our average prices since the last month INE published, which so far lands within about a point of INE's figure.":
+		"Esta página lee el IPC del INE. Hasta que el INE publica un mes (hacia mediados del mes siguiente), lo estima a partir de cómo han cambiado nuestros precios medios desde el último mes publicado, lo que hasta ahora queda a cerca de un punto de la cifra del INE.",
+	"Month": "Mes",
+	"How the price trends use them": "Cómo las usa la evolución de precios",
+	"The dashed lines on the price chart show what prices would have been without the cuts: each average is put back to 21% IVA and the full hydrocarbon tax. It assumes the cuts reached the pump in full, so where stations kept part of a cut the dashed line jumps a little at the change.":
+		"Las líneas discontinuas del gráfico muestran cuáles habrían sido los precios sin las rebajas: cada media se devuelve al IVA del 21 % y al impuesto sobre hidrocarburos completo. Supone que las rebajas llegaron enteras al surtidor, así que donde las gasolineras se quedaron parte de una rebaja la línea discontinua da un pequeño salto en el cambio.",
+	"The cheapest-day chart compares these prices without the cuts, so a tax change doesn't look like a cheap or dear weekday, and leaves out the weeks around each change while prices settle.":
+		"El gráfico del día más barato compara estos precios sin las rebajas, para que un cambio de impuestos no parezca un día de la semana barato o caro, y deja fuera las semanas alrededor de cada cambio mientras los precios se asientan.",
+	"Sources": "Fuentes",
+	"Real Decreto-ley 7/2026, of 20 March (BOE)": "Real Decreto-ley 7/2026, de 20 de marzo (BOE)",
+	"Real Decreto-ley 18/2026, of 29 June (BOE)": "Real Decreto-ley 18/2026, de 29 de junio (BOE)",
+	"Real Decreto-ley 25/2026, of 29 September (BOE)": "Real Decreto-ley 25/2026, de 29 de septiembre (BOE)",
+	"Monthly hydrocarbon tax rates (Agencia Tributaria)":
+		"Tipos mensuales del impuesto sobre hidrocarburos (Agencia Tributaria)",
+	"Consumer Price Index (INE)": "Índice de Precios de Consumo (INE)",
+	"No changes planned.": "No hay cambios previstos.",
+	"not out yet": "sin publicar",
+	"estimate": "estimación",
+	"Loading INE's figures…": "Cargando las cifras del INE…",
+	"In bold, over the {threshold} % that triggers the bigger cut.":
+		"En negrita, por encima del {threshold} % que activa la rebaja mayor.",
+	"Couldn't reach INE, so only the figures already known are shown.":
+		"No se pudo contactar con el INE, así que solo se muestran las cifras ya conocidas.",
 };
