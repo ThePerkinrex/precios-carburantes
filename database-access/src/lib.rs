@@ -239,6 +239,17 @@ const MIGRATIONS: &[&[&str]] = &[
                 CAST(strftime('%s', last_seen, 'utc') AS INTEGER)
             FROM estaciones WHERE rotulo IS NOT NULL",
     ],
+    // Daily market series for forecasting (`downloader markets`): one value per series and
+    // day. `serie` is "<source>:<id>" (e.g. "ecb:USD" for dollars per euro, "eia:RBRTE" for
+    // Brent in $/bbl). `visto` is when the value was first stored (unix seconds), to measure
+    // each source's publication delay; revisions update `valor` but keep `visto`.
+    &["CREATE TABLE mercados (
+            serie TEXT NOT NULL,
+            fecha TEXT NOT NULL,
+            valor REAL NOT NULL,
+            visto INTEGER NOT NULL,
+            PRIMARY KEY (serie, fecha)
+        ) WITHOUT ROWID"],
 ];
 
 pub const DEFAULT_DB_PATH: &str = "precios_carburantes.db";

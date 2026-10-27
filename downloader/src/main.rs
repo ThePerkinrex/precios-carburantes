@@ -6,6 +6,7 @@ use std::{collections::HashMap, error::Error, time::Instant};
 use database_access::{DEFAULT_DB_PATH, get_connection_manager};
 
 mod backfill;
+mod markets;
 
 // --- Modelos de Datos ---
 
@@ -122,7 +123,8 @@ fn main_internal() -> Result<(), Box<dyn Error>> {
     println!("Descargando datos de la API...");
     let url = "https://sedeaplicaciones.minetur.gob.es/ServiciosRESTCarburantes/PreciosCarburantes/EstacionesTerrestres/";
 
-    let resp = fetch(&client()?, url)?;
+    let client = client()?;
+    let resp = fetch(&client, url)?;
 
     let num_estaciones = resp.lista_eess.len();
     if num_estaciones == 0 {
@@ -244,16 +246,25 @@ fn main_internal() -> Result<(), Box<dyn Error>> {
         start.elapsed().as_secs_f32()
     );
 
+    // The prices are stored: a market source failing shouldn't fail the download.
+    let from = Local::now().date_naive() - chrono::Days::new(markets::UPDATE_DAYS);
+    if let Err(e) = markets::update(&mut conn, &client, from) {
+        eprintln!("Mercados: {e}");
+    }
+
     Ok(())
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
     let start = Instant::now();
+    // API keys (EIA_API_KEY), if there's a .env next to the database.
+    dotenvy::dotenv().ok();
     let args: Vec<String> = std::env::args().skip(1).collect();
     let res = match args.first().map(String::as_str) {
         None => main_internal(),
         Some("backfill") => backfill::run(&args[1..]),
-        Some(other) => Err(format!("Comando desconocido: {other}. Uso: downloader [backfill <desde> <hasta> [segundos entre peticiones]]").into()),
+        Some("markets") => markets::run(&args[1..]),
+        Some(other) => Err(format!("Comando desconocido: {other}. Uso: downloader [backfill <desde> <hasta> [segundos entre peticiones] | markets [desde]]").into()),
     };
     println!(
         "Completado con resultado {res:?} en {:.2}s",

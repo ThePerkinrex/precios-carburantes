@@ -637,6 +637,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "database-access",
+ "dotenvy",
  "openssl",
  "r2d2",
  "r2d2_sqlite",
@@ -2206,6 +2207,7 @@ dependencies = [
  "rustls-platform-verifier",
  "serde",
  "serde_json",
+ "serde_urlencoded",
  "sync_wrapper",
  "tokio",
  "tokio-native-tls",
