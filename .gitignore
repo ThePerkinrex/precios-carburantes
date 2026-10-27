@@ -8,3 +8,5 @@
 config/
 certs/
 /deploy-docs
+
+*.pyc
