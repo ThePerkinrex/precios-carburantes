@@ -28,7 +28,10 @@ const taxNext = document.getElementById("taxNext");
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_AREAS = 4;
 // How far back each time window reaches, in days (null: everything).
-const RANGES = { "7d": 7, "1m": 30, "3m": 91, "1y": 365, all: null };
+const RANGES = { "7d": 7, "1m": 30, "3m": 91, "1y": 365, "5y": 1826, all: null };
+// Long windows only get the last snapshot of each day or week: the history
+// goes back to 2007, one snapshot a day before 09/03/2026.
+const STEPS = { "5y": "day", all: "week" };
 // Gasoline minus diesel.
 const spread = (g95, diesel) => (g95 == null || diesel == null ? null : g95 - diesel);
 // `untaxed` is the value without the temporary tax cuts (see fuel_taxes.js).
@@ -221,7 +224,7 @@ function fetchHistory(key, range) {
 	if (!historyCache.has(cacheKey)) {
 		const days = RANGES[range];
 		const from = days ? new Date(Date.now() - days * DAY_MS) : undefined;
-		const request = getPriceHistory({ ...areaQuery(key), from });
+		const request = getPriceHistory({ ...areaQuery(key), from, step: STEPS[range] });
 		// A failed request shouldn't stick in the cache.
 		request.catch(() => historyCache.delete(cacheKey));
 		historyCache.set(cacheKey, request);
@@ -259,13 +262,18 @@ async function update() {
 		.catch((err) => id === requestId && showRankingError(err));
 
 	try {
-		const histories = await Promise.all(state.areas.map((a) => fetchHistory(a.key, state.range)));
+		// The weekday pattern needs every snapshot, so long windows take it
+		// from the last year.
+		const [weekdayHistory, ...histories] = await Promise.all([
+			STEPS[state.range] ? fetchHistory(activeArea().key, "1y") : null,
+			...state.areas.map((a) => fetchHistory(a.key, state.range)),
+		]);
 		if (id !== requestId) return;
 		const active = histories[state.active];
 		renderBoard(board, active, areaName(activeArea().key), { baseline: "start" });
 		renderChart(histories);
 		renderTable(histories);
-		renderWeekdays(active);
+		renderWeekdays(weekdayHistory ?? active);
 	} catch (err) {
 		if (id !== requestId) return;
 		board.innerHTML = `<p class="board-empty"></p>`;
@@ -453,7 +461,10 @@ function renderChart(histories) {
 				},
 				tooltip: {
 					callbacks: {
-						title: (items) => formatDateTime(snapshots[items[0].dataIndex][1]),
+						title: (items) => {
+							const date = snapshots[items[0].dataIndex][1];
+							return STEPS[state.range] ? formatDate(date) : formatDateTime(date);
+						},
 						label: (item) => `${item.dataset.label}: ${formatValue(item.parsed.y, fuel)}`,
 					},
 				},
@@ -587,6 +598,7 @@ function renderWeekdays(history) {
 		? t("Choose 3M or longer to see which weekdays are cheaper.")
 		: t("Price on each weekday compared with the average of the week around it. Below zero is cheaper.");
 	if (tooShort) return;
+	if (STEPS[state.range]) weekdayNote.append(` ${t("Over the last year.")}`);
 	if (history.length && anyCutBetween(history[0].date, history.at(-1).date)) {
 		const link = document.createElement("a");
 		link.href = TAXES_PAGE;

@@ -13,11 +13,13 @@ const FUELS = [
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 // `from` (a Date) limits the history to the snapshots at or after it.
-export async function getPriceHistory({ ccaa, provincia, from } = {}) {
+export async function getPriceHistory({ ccaa, provincia, from, step } = {}) {
 	const params = new URLSearchParams();
 	if (ccaa) params.set("ccaa_id", ccaa);
 	if (provincia) params.set("provincia_id", provincia);
 	if (from) params.set("from", from.toISOString());
+	// "day" or "week": only the last snapshot of each.
+	if (step) params.set("step", step);
 	const response = await fetch(`/api/prices/history?${params}`);
 	if (!response.ok) throw new Error(t("Couldn't load prices (HTTP {status}).", { status: response.status }));
 	return (await response.json()).map((point) => ({ ...point, date: parseFecha(point.fecha) }));

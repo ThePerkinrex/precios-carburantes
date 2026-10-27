@@ -282,6 +282,7 @@ export default {
 	"Average price over time": "Precio medio a lo largo del tiempo",
 	"Time window": "Periodo",
 	"1Y": "1A",
+	"5Y": "5A",
 	"All": "Todo",
 	"Fuel": "Combustible",
 	"Both": "Ambos",
@@ -309,6 +310,7 @@ export default {
 	"Choose 3M or longer to see which weekdays are cheaper.": "Elige 3M o más para ver qué días de la semana son más baratos.",
 	"Price on each weekday compared with the average of the week around it. Below zero is cheaper.":
 		"Precio de cada día de la semana comparado con la media de la semana de alrededor. Por debajo de cero es más barato.",
+	"Over the last year.": "En el último año.",
 
 	// ---------- Fuel tax cuts (fuel_taxes.js) ----------
 	"Fuel tax changes. Dashed lines: the price without the temporary tax cuts (Canarias, Ceuta and Melilla have their own taxes). Shaded: days prices may still be adjusting.":

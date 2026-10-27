@@ -183,6 +183,25 @@ struct HistoryParams {
     provincia_id: Option<String>,
     /// Only the snapshots at or after this instant.
     from: Option<chrono::DateTime<chrono::Utc>>,
+    /// Only the last snapshot of each day or week (local time), for long windows.
+    step: Option<HistoryStep>,
+}
+
+#[derive(Deserialize, Clone, Copy)]
+#[serde(rename_all = "lowercase")]
+enum HistoryStep {
+    Day,
+    Week,
+}
+
+impl HistoryStep {
+    /// The strftime format that names the step a snapshot falls in.
+    fn format(self) -> &'static str {
+        match self {
+            HistoryStep::Day => "%Y-%m-%d",
+            HistoryStep::Week => "%Y-%W",
+        }
+    }
 }
 
 async fn price_history(
@@ -191,12 +210,18 @@ async fn price_history(
 ) -> Result<Json<Vec<PricePoint>>, AppError> {
     let conn = state.get().unwrap();
     let from = params.from.map(|f| f.timestamp());
+    let step = params.step.map(HistoryStep::format);
 
     let precios = conn
         .prepare(
             r#"
+            WITH picked AS (
+                SELECT MAX(fecha) AS fecha FROM snapshots
+                WHERE ?3 IS NULL OR fecha >= ?3
+                GROUP BY CASE WHEN ?4 IS NULL THEN fecha ELSE strftime(?4, fecha, 'unixepoch', 'localtime') END
+            )
             SELECT
-                fecha,
+                pp.fecha,
                 SUM(suma_gasoleo_a) / SUM(n_gasoleo_a) AS avg_gasoleo,
                 SUM(suma_gasolina_95) / SUM(n_gasolina_95) AS avg_gasolina,
                 -- Canarias (05), Ceuta (18) and Melilla (19) have their own fuel taxes.
@@ -206,15 +231,16 @@ async fn price_history(
                     / SUM(n_gasolina_95) FILTER (WHERE id_ccaa NOT IN ('05', '18', '19')),
                 1.0 * SUM(n_gasoleo_a) FILTER (WHERE id_ccaa NOT IN ('05', '18', '19')) / SUM(n_gasoleo_a),
                 1.0 * SUM(n_gasolina_95) FILTER (WHERE id_ccaa NOT IN ('05', '18', '19')) / SUM(n_gasolina_95)
-            FROM precios_provincia
+            -- CROSS JOIN keeps picked outer: a primary key lookup per snapshot.
+            FROM picked
+            CROSS JOIN precios_provincia pp ON pp.fecha = picked.fecha
             WHERE (?1 IS NULL OR id_ccaa = ?1)
               AND (?2 IS NULL OR id_provincia = ?2)
-              AND (?3 IS NULL OR fecha >= ?3)
-            GROUP BY fecha
-            ORDER BY fecha ASC
+            GROUP BY pp.fecha
+            ORDER BY pp.fecha ASC
             "#,
         )?
-        .query_map(params![params.ccaa_id, params.provincia_id, from], |row| {
+        .query_map(params![params.ccaa_id, params.provincia_id, from, step], |row| {
             Ok(PricePoint {
                 fecha: format_fecha(row.get(0)?),
                 gasoleo_a: row.get(1)?,
