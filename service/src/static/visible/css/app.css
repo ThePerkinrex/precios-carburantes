@@ -401,6 +401,53 @@ select {
 	font-size: 1rem;
 }
 
+/* Sections phones start folded (dashboard.js opens them on wider
+   screens): the summary is the header, with a chevron. */
+.collapsible > summary {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	min-height: 32px;
+	list-style: none;
+	cursor: pointer;
+}
+
+.collapsible > summary::-webkit-details-marker {
+	display: none;
+}
+
+.collapsible > summary::after {
+	content: "";
+	flex: none;
+	width: 7px;
+	height: 7px;
+	margin: 0 12px 4px 0;
+	border-right: 2px solid var(--muted);
+	border-bottom: 2px solid var(--muted);
+	transform: rotate(45deg);
+	transition: transform 0.15s;
+}
+
+.collapsible[open] > summary::after {
+	margin-bottom: -4px;
+	transform: rotate(-135deg);
+}
+
+.collapsible > summary h2 {
+	margin-bottom: 0;
+}
+
+.collapsible[open] > summary {
+	margin-bottom: 4px;
+}
+
+.tax-details > summary {
+	margin: 0 0 0 8px;
+	font-size: 0.9rem;
+	font-weight: 600;
+}
+
 .card-note {
 	margin: 0 8px 8px;
 	font-size: 0.85rem;
@@ -448,7 +495,7 @@ select {
 .segmented button {
 	flex: 1 0 auto;
 	min-height: 40px;
-	padding: 0 12px;
+	padding: 0 6px;
 	border: none;
 	border-radius: 8px;
 	background: none;
@@ -463,6 +510,17 @@ select {
 	background: var(--surface);
 	color: var(--ink);
 	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+/* Phones: the buttons shrink and their labels wrap, so a row always fits
+   (four fuels, in Spanish too). */
+@media (max-width: 480px) {
+	.segmented button {
+		flex: 1 1 auto;
+		min-width: 0;
+		padding: 0 4px;
+		line-height: 1.15;
+	}
 }
 
 /* Compared areas. */
@@ -602,6 +660,8 @@ select {
 /* The fuel tax cuts page. */
 .explainer {
 	display: grid;
+	/* Not wider than the screen, whatever the tables inside. */
+	grid-template-columns: minmax(0, 1fr);
 	gap: 16px;
 	max-width: 760px;
 }
@@ -657,6 +717,23 @@ select {
 	border-top: 1px solid var(--line);
 }
 
+/* Phones: tighter cells that wrap, so the tables fit. */
+@media (max-width: 480px) {
+	.compare-table {
+		font-size: 0.85rem;
+	}
+
+	.compare-table th,
+	.compare-table td {
+		padding: 6px 4px;
+	}
+
+	.compare-table th,
+	.compare-table td {
+		white-space: normal;
+	}
+}
+
 .compare-table thead th {
 	border-top: none;
 	font-size: 0.8rem;
@@ -670,6 +747,33 @@ select {
 
 .compare-table tbody th {
 	font-weight: 600;
+}
+
+/* The forecast: the change, and its 80 % range under it. */
+.outlook-change,
+.outlook-range {
+	display: block;
+}
+
+.outlook-change {
+	font-weight: 600;
+}
+
+.outlook-change.up {
+	color: #b91c1c;
+}
+
+.outlook-change.down {
+	color: #15803d;
+}
+
+.outlook-range {
+	font-size: 0.75rem;
+	color: var(--muted);
+}
+
+.outlook-table td {
+	white-space: normal;
 }
 
 .swatch {

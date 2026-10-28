@@ -22,3 +22,13 @@ export function formatUnixDate(unix) {
 export function parseFecha(fecha) {
 	return new Date(fecha.replace(" ", "T"));
 }
+
+// Date -> "27/03", for chart axes
+export function formatDayMonth(date) {
+	return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}`;
+}
+
+// Date -> "03/2026", for chart axes
+export function formatMonthYear(date) {
+	return `${pad(date.getMonth() + 1)}/${date.getFullYear()}`;
+}

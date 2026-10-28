@@ -52,11 +52,11 @@
 					<p id="compareHint" class="hint" hidden>Tap an area to change it with the selects above. Up to 4.</p>
 				</div>
 
-				<section class="card ranking">
-					<h2 id="rankingTitle">Provinces right now</h2>
+				<details class="card ranking collapsible">
+					<summary><h2 id="rankingTitle">Provinces right now</h2></summary>
 					<p id="rankingNote" class="card-note">Cheapest first. Tap one to compare it.</p>
 					<ol id="ranking" class="ranking-list"></ol>
-				</section>
+				</details>
 			</div>
 
 			<div class="trends-main">
@@ -82,10 +82,13 @@
 						<canvas id="historyChart" aria-label="Average fuel prices over time"></canvas>
 					</div>
 					<div id="taxBox" class="tax-changes" hidden>
-						<p class="card-note">Fuel tax changes. Dashed lines: the price without the temporary tax cuts (Canarias, Ceuta and Melilla have their own taxes). Shaded: days prices may still be adjusting.</p>
-						<ol id="taxList" class="tax-list"></ol>
-						<p id="taxNext" class="tax-next" hidden><strong></strong> <span></span></p>
-						<p class="card-note"><a href="/files/taxes">How the fuel tax cuts work</a></p>
+						<p class="card-note">Dashed lines: the price without the temporary tax cuts (Canarias, Ceuta and Melilla have their own taxes). Shaded: days prices may still be adjusting.</p>
+						<details class="collapsible tax-details">
+							<summary id="taxSummary">Fuel tax changes</summary>
+							<ol id="taxList" class="tax-list"></ol>
+							<p id="taxNext" class="tax-next" hidden><strong></strong> <span></span></p>
+							<p class="card-note"><a href="/files/taxes">How the fuel tax cuts work</a></p>
+						</details>
 					</div>
 					<div class="table-scroll">
 						<table id="compareTable" class="compare-table" hidden>
@@ -95,13 +98,24 @@
 					</div>
 				</section>
 
-				<section class="card weekday">
-					<h2>Cheapest day to fill up</h2>
+				<section id="outlookCard" class="card outlook" hidden>
+					<h2>Outlook</h2>
+					<p class="card-note">Where the average price is heading, with the range it should stay in 8 times out of 10. Spain without Canarias, Ceuta and Melilla; on the chart, from the latest price.</p>
+					<div class="table-scroll">
+						<table id="outlookTable" class="compare-table outlook-table">
+							<thead><tr><th scope="col">In</th><th scope="col">Gasolina 95</th><th scope="col">Gasóleo A</th></tr></thead>
+							<tbody></tbody>
+						</table>
+					</div>
+				</section>
+
+				<details class="card weekday collapsible">
+					<summary><h2>Cheapest day to fill up</h2></summary>
 					<p id="weekdayNote" class="card-note">Price on each weekday compared with the average of the week around it. Below zero is cheaper.</p>
 					<div id="weekdayBox" class="chart-box small">
 						<canvas id="weekdayChart" aria-label="Average price difference by weekday"></canvas>
 					</div>
-				</section>
+				</details>
 			</div>
 		</div>
 	</div>

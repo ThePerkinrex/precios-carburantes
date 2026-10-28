@@ -1,8 +1,9 @@
 import { getUserState } from "./api.js";
 import { LOCALE, t } from "./i18n.js";
 import { renderNav } from "./nav.js";
-import { formatDate, formatDateTime } from "./dates.js";
+import { formatDate, formatDateTime, parseFecha } from "./dates.js";
 import { formatEuros } from "./money.js";
+import { gapSegment, timeAxis } from "./time_axis.js";
 import { getPriceHistory, renderBoard } from "./price_board.js";
 import { SETTLE_DAYS, TAXES_PAGE, anyCutBetween, loadFuelTaxes, nextTaxChange, settling, taxChanges, untaxedPrice } from "./fuel_taxes.js";
 
@@ -24,6 +25,9 @@ const weekdayBox = document.getElementById("weekdayBox");
 const taxBox = document.getElementById("taxBox");
 const taxList = document.getElementById("taxList");
 const taxNext = document.getElementById("taxNext");
+const taxSummary = document.getElementById("taxSummary");
+const outlookCard = document.getElementById("outlookCard");
+const outlookTable = document.getElementById("outlookTable");
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_AREAS = 4;
@@ -32,6 +36,11 @@ const RANGES = { "7d": 7, "1m": 30, "3m": 91, "1y": 365, "5y": 1826, all: null }
 // Long windows only get the last snapshot of each day or week: the history
 // goes back to 2007, one snapshot a day before 09/03/2026.
 const STEPS = { "5y": "day", all: "week" };
+// Snapshots further apart than this (by step) are a gap in the data. Every
+// download is at most 9 h apart, one a day before 09/03/2026.
+const MAX_GAP_DAYS = { none: 2, day: 3, week: 15 };
+// The chart shows the forecast on windows short enough to see its 14 days.
+const FORECAST_RANGES = new Set(["7d", "1m", "3m"]);
 // Gasoline minus diesel.
 const spread = (g95, diesel) => (g95 == null || diesel == null ? null : g95 - diesel);
 // `untaxed` is the value without the temporary tax cuts (see fuel_taxes.js).
@@ -69,6 +78,10 @@ let geoData = { ccaa: [], provincias: [] };
 let requestId = 0;
 const historyCache = new Map();
 const rankingCache = new Map();
+// Spain's forecasts by `downloader forecast`; none until it has run.
+const forecastRequest = fetch("/api/prices/forecast")
+	.then((response) => (response.ok ? response.json() : []))
+	.catch(() => []);
 
 // Areas are keyed "" (Spain), "c:<region id>" or "p:<province id>". Each
 // keeps its colour slot while others come and go. The selects edit the
@@ -248,6 +261,58 @@ function fetchRanking(ccaa) {
 
 // ---------- Rendering ----------
 
+// Phones start with the long extras folded; wider screens show them open.
+if (window.matchMedia("(min-width: 720px)").matches) {
+	for (const details of document.querySelectorAll("details.collapsible")) details.open = true;
+}
+
+// The forecast's table: each fuel's expected change and 80 % range, a row
+// per horizon (two columns fit a phone).
+function renderOutlook(forecasts) {
+	outlookCard.hidden = !forecasts.length;
+	if (!forecasts.length) return;
+	const horizons = [...new Set(forecasts.map((f) => f.horizonte))].sort((a, b) => a - b);
+	const fuels = Object.keys(FUELS).filter((fuel) => forecasts.some((f) => f.combustible === fuel));
+	outlookTable.tHead.rows[0].replaceChildren(
+		Object.assign(document.createElement("th"), { scope: "col", textContent: t("In") }),
+		...fuels.map((fuel) => {
+			const th = document.createElement("th");
+			th.scope = "col";
+			th.innerHTML = `<span class="swatch"></span><span></span>`;
+			th.querySelector(".swatch").style.background = fuel === "gasolina_95" ? G95 : DIESEL;
+			th.lastChild.textContent = FUELS[fuel].name;
+			return th;
+		}),
+	);
+	outlookTable.tBodies[0].replaceChildren(
+		...horizons.map((h) => {
+			const row = document.createElement("tr");
+			const name = document.createElement("th");
+			name.scope = "row";
+			name.textContent = h === 1 ? t("1 day") : t("{n} days", { n: h });
+			row.append(name);
+			for (const fuel of fuels) {
+				const f = forecasts.find((x) => x.combustible === fuel && x.horizonte === h);
+				const cell = document.createElement("td");
+				if (f) {
+					const flat = Math.abs(f.cambio) < 0.0005;
+					const change = document.createElement("span");
+					change.className = `outlook-change ${flat ? "" : f.cambio > 0 ? "up" : "down"}`;
+					change.textContent = flat ? t("No change") : `${f.cambio > 0 ? "▲" : "▼"} ${formatEuros(Math.abs(f.cambio))}`;
+					const range = document.createElement("span");
+					range.className = "outlook-range";
+					range.textContent = `${formatEuros(f.bajo, { signed: true })} … ${formatEuros(f.alto, { signed: true })}`;
+					cell.append(change, range);
+				} else {
+					cell.textContent = "–";
+				}
+				row.append(cell);
+			}
+			return row;
+		}),
+	);
+}
+
 async function update() {
 	const id = ++requestId;
 	writeUrl();
@@ -264,15 +329,17 @@ async function update() {
 	try {
 		// The weekday pattern needs every snapshot, so long windows take it
 		// from the last year.
-		const [weekdayHistory, ...histories] = await Promise.all([
+		const [forecasts, weekdayHistory, ...histories] = await Promise.all([
+			forecastRequest,
 			STEPS[state.range] ? fetchHistory(activeArea().key, "1y") : null,
 			...state.areas.map((a) => fetchHistory(a.key, state.range)),
 		]);
 		if (id !== requestId) return;
 		const active = histories[state.active];
 		renderBoard(board, active, areaName(activeArea().key), { baseline: "start" });
-		renderChart(histories);
+		renderChart(histories, forecasts);
 		renderTable(histories);
+		renderOutlook(forecasts);
 		renderWeekdays(weekdayHistory ?? active);
 	} catch (err) {
 		if (id !== requestId) return;
@@ -300,9 +367,10 @@ function taxMarkerPlugin(markers) {
 			const { ctx, chartArea: area, scales: { x } } = chart;
 			ctx.save();
 			for (const m of markers) {
-				const start = x.getPixelForValue(m.index);
+				const start = x.getPixelForValue(m.date.getTime());
+				const settled = Math.min(x.getPixelForValue(m.settled), area.right);
 				ctx.fillStyle = PAPER;
-				ctx.fillRect(start, area.top, x.getPixelForValue(m.settledIndex) - start, area.bottom - area.top);
+				ctx.fillRect(start, area.top, settled - start, area.bottom - area.top);
 				ctx.strokeStyle = MUTED;
 				ctx.lineWidth = 1;
 				ctx.setLineDash([3, 3]);
@@ -326,18 +394,9 @@ function taxMarkers(snapshots) {
 	if (snapshots.length < 2) return [];
 	const first = snapshots[0][1];
 	const last = snapshots.at(-1)[1];
-	const indexFrom = (date) => {
-		const i = snapshots.findIndex(([, d]) => d >= date);
-		return i < 0 ? snapshots.length - 1 : i;
-	};
 	return taxChanges()
 		.filter((c) => c.date > first && c.date <= last)
-		.map((c, i) => ({
-			...c,
-			number: i + 1,
-			index: indexFrom(c.date),
-			settledIndex: indexFrom(new Date(c.date.getTime() + SETTLE_DAYS * DAY_MS)),
-		}));
+		.map((c, i) => ({ ...c, number: i + 1, settled: c.date.getTime() + SETTLE_DAYS * DAY_MS }));
 }
 
 // Lists the changes on the chart, the one in force when it starts and the
@@ -359,6 +418,7 @@ function renderTaxChanges(snapshots, markers) {
 		taxNext.querySelector("span").textContent = next.text;
 	}
 	taxBox.hidden = !items.length && !next;
+	taxSummary.textContent = items.length ? t("Fuel tax changes ({n})", { n: items.length }) : t("Fuel tax changes");
 	taxList.replaceChildren(
 		...items.map((c) => {
 			const li = document.createElement("li");
@@ -373,25 +433,43 @@ function renderTaxChanges(snapshots, markers) {
 	);
 }
 
-function renderChart(histories) {
+function renderChart(histories, forecasts) {
 	if (fuelChart) fuelChart.destroy();
 
 	const snapshots = snapshotLabels(histories);
+	const maxGap = MAX_GAP_DAYS[STEPS[state.range] ?? "none"] * DAY_MS;
+	const fuel = chartFuel();
+	// The forecast goes on Spain's chart, from the end of its origin day.
+	const showForecast =
+		!comparing() && activeArea().key === "" && FORECAST_RANGES.has(state.range) && fuel !== "spread" && forecasts.length > 0;
+	const shownForecasts = showForecast ? forecasts : [];
+	const origin = shownForecasts.length ? parseFecha(`${shownForecasts[0].origen} 23:59:59`).getTime() : null;
+	const horizons = [...new Set(shownForecasts.map((f) => f.horizonte))];
+	const ahead = horizons.map((h) => origin + h * DAY_MS);
+	// Every line has a point at each snapshot and each forecast target, so
+	// the tooltip lines up by index.
 	const line = (label, history, value, color) => {
 		const byFecha = new Map(history.map((p) => [p.fecha, p]));
 		return {
 			label,
-			data: snapshots.map(([fecha]) => {
-				const point = byFecha.get(fecha);
-				return point ? value(point) : null;
-			}),
+			group: label,
+			data: [
+				...snapshots.map(([fecha, date]) => {
+					const point = byFecha.get(fecha);
+					return { x: date.getTime(), y: point ? value(point) : null };
+				}),
+				...ahead.map((x) => ({ x, y: null })),
+			],
 			borderColor: color,
 			backgroundColor: color,
 			borderWidth: 2,
 			pointRadius: 0,
 			pointHitRadius: 12,
 			tension: 0.2,
+			// Joins across an area's missing points, but not across a
+			// stretch without snapshots.
 			spanGaps: true,
+			segment: gapSegment(maxGap),
 		};
 	};
 	// Each line, followed by a dashed one without the tax cuts where they
@@ -399,11 +477,43 @@ function renderChart(histories) {
 	const lines = (label, history, fuel, color) => {
 		const solid = line(label, history, FUELS[fuel].value, color);
 		const dashed = line(t("{name} without tax cuts", { name: label }), history, FUELS[fuel].untaxed, color);
-		if (dashed.data.every((v, i) => v == null || Math.abs(v - solid.data[i]) < 1e-9)) return [solid];
-		return [solid, { ...dashed, borderWidth: 1.5, borderDash: [6, 4], untaxed: true }];
+		const lines = [...forecastLines(label, history, fuel, color)];
+		if (dashed.data.every(({ y }, i) => y == null || Math.abs(y - solid.data[i].y) < 1e-9)) return [solid, ...lines];
+		return [solid, { ...dashed, group: label, borderWidth: 1.5, borderDash: [6, 4], untaxed: true }, ...lines];
+	};
+	// The forecast as a dotted line from the latest price, over its 80 % range.
+	const forecastLines = (label, history, fuel, color) => {
+		const rows = shownForecasts.filter((f) => f.combustible === fuel);
+		const latest = history.findLast((p) => p[fuel] != null);
+		if (!rows.length || !latest) return [];
+		const anchor = snapshots.findIndex(([fecha]) => fecha === latest.fecha);
+		const points = (change) => [
+			...snapshots.map(([, date], k) => ({ x: date.getTime(), y: k === anchor ? latest[fuel] : null })),
+			...ahead.map((x, k) => {
+				const row = rows.find((r) => r.horizonte === horizons[k]);
+				return { x, y: row ? latest[fuel] + change(row) : null };
+			}),
+		];
+		const shared = { group: label, spanGaps: true, pointRadius: 0, pointHitRadius: 12, tension: 0, forecast: true };
+		const low = points((r) => r.bajo);
+		const high = points((r) => r.alto);
+		return [
+			{
+				...shared,
+				label: t("{name} forecast", { name: label }),
+				data: points((r) => r.cambio),
+				range: low.map((p, k) => (p.y == null ? null : [p.y, high[k].y])),
+				borderColor: color,
+				backgroundColor: color,
+				borderWidth: 2,
+				borderDash: [2, 4],
+				pointRadius: (ctx) => (ctx.dataIndex >= snapshots.length ? 3 : 0),
+			},
+			{ ...shared, band: true, data: low, borderWidth: 0, backgroundColor: "transparent" },
+			{ ...shared, band: true, data: high, borderWidth: 0, backgroundColor: `${color}26`, fill: "-1" },
+		];
 	};
 
-	const fuel = chartFuel();
 	let datasets;
 	if (comparing()) {
 		datasets = state.areas.flatMap((a, i) => lines(areaName(a.key), histories[i], fuel, SERIES[a.slot]));
@@ -424,23 +534,23 @@ function renderChart(histories) {
 			: t("{fuel} over time", { fuel: FUELS[fuel].name });
 	}
 	const valueFuel = fuel === "spread" ? "spread" : "price";
-	const solidCount = datasets.filter((d) => !d.untaxed).length;
+	const solidCount = datasets.filter((d) => !d.untaxed && !d.forecast).length;
 	const markers = taxMarkers(snapshots);
 	renderTaxChanges(snapshots, markers);
 
 	fuelChart = new Chart(document.getElementById("historyChart"), {
 		type: "line",
-		data: { labels: snapshots.map(([, date]) => formatDate(date)), datasets },
+		data: { datasets },
 		plugins: [taxMarkerPlugin(markers)],
 		options: {
 			responsive: true,
 			maintainAspectRatio: false,
 			interaction: { mode: "index", intersect: false },
-			// Room for the markers' numbers.
-			layout: { padding: { top: markers.length ? 16 : 0 } },
+			// Room for the markers' numbers, and for the last forecast point.
+			layout: { padding: { top: markers.length ? 16 : 0, right: ahead.length ? 6 : 0 } },
 			plugins: {
-				// A single line is named by the title. Dashed lines go with
-				// the solid line before them, which the legend toggles too.
+				// A single line is named by the title. Dashed lines and the
+				// forecast go with their solid line, which toggles them too.
 				legend: {
 					display: solidCount > 1,
 					position: "top",
@@ -449,28 +559,39 @@ function renderChart(histories) {
 						usePointStyle: true,
 						pointStyle: "rectRounded",
 						boxHeight: 10,
-						filter: (item, data) => !data.datasets[item.datasetIndex].untaxed,
+						filter: (item, data) => !data.datasets[item.datasetIndex].untaxed && !data.datasets[item.datasetIndex].forecast,
 					},
 					onClick: (event, item, legend) => {
 						const chart = legend.chart;
 						const visible = !chart.isDatasetVisible(item.datasetIndex);
-						chart.setDatasetVisibility(item.datasetIndex, visible);
-						if (chart.data.datasets[item.datasetIndex + 1]?.untaxed) chart.setDatasetVisibility(item.datasetIndex + 1, visible);
+						const group = chart.data.datasets[item.datasetIndex].group;
+						chart.data.datasets.forEach((d, i) => d.group === group && chart.setDatasetVisibility(i, visible));
 						chart.update();
 					},
 				},
 				tooltip: {
+					filter: (item) => !item.dataset.band && !(item.dataset.forecast && item.dataIndex < snapshots.length),
 					callbacks: {
 						title: (items) => {
-							const date = snapshots[items[0].dataIndex][1];
-							return STEPS[state.range] ? formatDate(date) : formatDateTime(date);
+							const date = new Date(items[0].parsed.x);
+							return STEPS[state.range] || items[0].dataIndex >= snapshots.length ? formatDate(date) : formatDateTime(date);
 						},
-						label: (item) => `${item.dataset.label}: ${formatValue(item.parsed.y, fuel)}`,
+						label: (item) => {
+							const range = item.dataset.range?.[item.dataIndex];
+							const text = `${item.dataset.label}: ${formatValue(item.parsed.y, fuel)}`;
+							return range ? `${text} (${range[0].toFixed(3)}–${range[1].toFixed(3)})` : text;
+						},
 					},
 				},
 			},
 			scales: {
-				x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkipPadding: 16 } },
+				// The whole window, so missing data at either end shows too.
+				x: timeAxis({
+					min: RANGES[state.range] ? Date.now() - RANGES[state.range] * DAY_MS : undefined,
+					max: ahead.length ? Math.max(...ahead) : RANGES[state.range] ? Date.now() : undefined,
+					grid: { display: false },
+					ticks: { autoSkipPadding: 16 },
+				}),
 				y: { ticks: { callback: (v) => (valueFuel === "spread" ? formatEuros(v) : `${v.toFixed(2)} €`) } },
 			},
 		},

@@ -163,6 +163,16 @@ export default {
 	"All brands": "Todas",
 	"None": "Ninguna",
 	"{shown} of {total} shown": "{shown} de {total} visibles",
+	"Wait or fill up?": "¿Esperar o repostar?",
+	"Wait": "Espera",
+	"Fill up": "Reposta",
+	"tomorrow": "mañana",
+	"in {n} days": "en {n} días",
+	"{p} chance it's cheaper {when}": "{p} de probabilidad de que esté más barato {when}",
+	"{p} chance it's dearer {when}": "{p} de probabilidad de que esté más caro {when}",
+	"Unlikely to drop soon": "Es poco probable que baje pronto",
+	"Hide stations without a price change in {days} days": "Ocultar gasolineras sin cambios de precio en {days} días",
+	"Prices unchanged since {date} ({days} days): they may be out of date.": "Precios sin cambios desde el {date} ({days} días): puede que no estén al día.",
 	"Others": "Otras",
 	"Stations on screen": "Gasolineras en pantalla",
 	"Sort by the price of": "Ordenar por precio de",
@@ -285,6 +295,13 @@ export default {
 	"5Y": "5A",
 	"All": "Todo",
 	"Fuel": "Combustible",
+	"Outlook": "Previsión",
+	"In": "En",
+	"Where the average price is heading, with the range it should stay in 8 times out of 10. Spain without Canarias, Ceuta and Melilla; on the chart, from the latest price.":
+		"Hacia dónde va el precio medio, con el margen en el que debería quedar 8 de cada 10 veces. España sin Canarias, Ceuta y Melilla; en el gráfico, desde el último precio.",
+	"1 day": "1 día",
+	"{n} days": "{n} días",
+	"{name} forecast": "{name}, previsión",
 	"Both": "Ambos",
 	"Spread": "Diferencia",
 	"Average fuel prices over time": "Precios medios del combustible a lo largo del tiempo",
@@ -313,8 +330,10 @@ export default {
 	"Over the last year.": "En el último año.",
 
 	// ---------- Fuel tax cuts (fuel_taxes.js) ----------
-	"Fuel tax changes. Dashed lines: the price without the temporary tax cuts (Canarias, Ceuta and Melilla have their own taxes). Shaded: days prices may still be adjusting.":
-		"Cambios en los impuestos de los carburantes. Líneas discontinuas: el precio sin las rebajas fiscales temporales (Canarias, Ceuta y Melilla tienen sus propios impuestos). Sombreado: días en los que los precios aún pueden estar ajustándose.",
+	"Dashed lines: the price without the temporary tax cuts (Canarias, Ceuta and Melilla have their own taxes). Shaded: days prices may still be adjusting.":
+		"Líneas discontinuas: el precio sin las rebajas fiscales temporales (Canarias, Ceuta y Melilla tienen sus propios impuestos). Sombreado: días en los que los precios aún pueden estar ajustándose.",
+	"Fuel tax changes": "Cambios en los impuestos de los carburantes",
+	"Fuel tax changes ({n})": "Cambios en los impuestos de los carburantes ({n})",
 	"{name} without tax cuts": "{name} sin rebajas fiscales",
 	"Since {date}": "Desde el {date}",
 	"{date}, planned": "{date}, previsto",

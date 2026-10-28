@@ -1,8 +1,48 @@
-import { formatDateTime, parseFecha } from "./dates.js";
+import { formatDate, formatDateTime, parseFecha } from "./dates.js";
 import { getStatus, formatOpenCloseDate } from "./schedules.js";
 import { updateFilter } from "./api.js";
 import { fitToScreen, onlyOneOpen } from "./map_panels.js";
 import { t } from "./i18n.js";
+import { gapSegment, timeAxis } from "./time_axis.js";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+// Downloads are at most 9 h apart: a longer stretch without any is a gap.
+const MAX_GAP_MS = DAY_MS;
+// A station whose prices haven't changed in this long may have stopped
+// updating them: the map can hide it, and its popup says so.
+const STALE_DAYS = 7;
+const STALE_STORAGE_KEY = "hideStaleStations";
+
+// When the station's prices last changed, if that's STALE_DAYS or more ago.
+function staleSince(eess) {
+	if (!eess.ultimo_cambio) return null;
+	const since = parseFecha(eess.ultimo_cambio);
+	return Date.now() - since.getTime() >= STALE_DAYS * DAY_MS ? since : null;
+}
+
+function staleWarning(eess) {
+	const since = staleSince(eess);
+	if (!since) return "";
+	const days = Math.floor((Date.now() - since.getTime()) / DAY_MS);
+	return `<p class="station-stale">${t("Prices unchanged since {date} ({days} days): they may be out of date.", { date: formatDate(since), days })}</p>`;
+}
+
+// Whether the map hides stale stations: the viewer's last choice, on by default.
+function loadHideStale() {
+	try {
+		return localStorage.getItem(STALE_STORAGE_KEY) !== "false";
+	} catch {
+		return true;
+	}
+}
+
+function saveHideStale(hide) {
+	try {
+		localStorage.setItem(STALE_STORAGE_KEY, String(hide));
+	} catch {
+		// Not remembered; it still applies until the page reloads.
+	}
+}
 
 // Same colours as the --g95 / --diesel tokens (map_base.css), for Chart.js.
 const G95_COLOR = "#16a34a";
@@ -171,6 +211,9 @@ export function buildDefaultPopupContent(eess, blacklist = null) {
 			${boardLine("Gasolina 95", "g95", eess.gasolina_95)}
 			${boardLine("Gasóleo A", "diesel", eess.gasoleo_a)}
 		</div>
+		${staleWarning(eess)}
+
+		<nav class="station-nav" aria-label="${t("Directions")}">${navigationLinks(eess)}</nav>
 
 		<dl class="station-details">
 			<dt>${t("Address")}</dt>
@@ -187,7 +230,7 @@ export function buildDefaultPopupContent(eess, blacklist = null) {
 			<div class="chart-box"><canvas class="chart"></canvas></div>
 		</div>
 
-		<nav class="station-nav" aria-label="${t("Directions")}">${navigationLinks(eess)}</nav>
+		${adviceHtml(eess)}
 
 		${buildBlacklistToggle(eess, blacklist)}
 	</div>`;
@@ -212,6 +255,65 @@ function rebuildHistory(snapshots, changes) {
 			gasolina_95: reported ? current.gasolina_95 : null,
 		};
 	});
+}
+
+const FORECAST_FUELS = [
+	["gasolina_95", "g95", "G95"],
+	["gasoleo_a", "diesel", "Gasóleo A"],
+];
+const percent = (p) => `${Math.round(p * 100)} %`;
+const inDays = (h) => (h === 1 ? t("tomorrow") : t("in {n} days", { n: h }));
+
+// Wait or fill up, from one fuel's forecasts: wait if the price is more
+// likely lower than not at some horizon (the likeliest one).
+function advice(rows) {
+	const wait = rows.reduce((a, b) => (b.baja > a.baja ? b : a));
+	if (wait.baja > 0.5) {
+		return { verdict: "wait", label: t("Wait"), text: t("{p} chance it's cheaper {when}", { p: percent(wait.baja), when: inDays(wait.horizonte) }) };
+	}
+	const rise = rows.reduce((a, b) => (b.sube > a.sube ? b : a));
+	return {
+		verdict: "fill",
+		label: t("Fill up"),
+		text: rise.sube >= 0.4
+			? t("{p} chance it's dearer {when}", { p: percent(rise.sube), when: inDays(rise.horizonte) })
+			: t("Unlikely to drop soon"),
+	};
+}
+
+// Each station's forecasts by id, once loaded (empty if it has none).
+const stationForecasts = new Map();
+
+/** Loads the station's forecasts into stationForecasts, if they aren't there. */
+async function loadForecasts(eess) {
+	if (stationForecasts.has(eess.id)) return;
+	try {
+		const response = await fetch(`/api/${eess.id}/forecast`);
+		stationForecasts.set(eess.id, response.ok ? await response.json() : []);
+	} catch (e) {
+		console.error("Couldn't load the forecast", e);
+	}
+}
+
+/** The popup's wait-or-fill-up advice, from the loaded forecasts ("" without). */
+function adviceHtml(eess) {
+	const forecasts = stationForecasts.get(eess.id) ?? [];
+	const rows = FORECAST_FUELS.map(([fuel, className, name]) => {
+		const mine = forecasts.filter((f) => f.combustible === fuel).sort((a, b) => a.horizonte - b.horizonte);
+		if (!mine.length || eess[fuel] == null) return "";
+		const { verdict, label, text } = advice(mine);
+		const odds = mine
+			.map((f) => `<span>${f.horizonte} d: ▼${percent(f.baja)} ▲${percent(f.sube)}</span>`)
+			.join("");
+		return `
+			<div class="advice-row">
+				<span class="fuel-name"><span class="fuel-chip ${className}"></span>${name}</span>
+				<span class="advice-verdict ${verdict}">${label}</span>
+				<span class="advice-text">${text}</span>
+				<span class="advice-odds">${odds}</span>
+			</div>`;
+	}).join("");
+	return rows ? `<div class="station-advice"><div class="advice-head">${t("Wait or fill up?")}</div>${rows}</div>` : "";
 }
 
 /**
@@ -243,7 +345,7 @@ async function drawHistoryChart(eess) {
 
 	const line = (label, key, color) => ({
 		label,
-		data: history.map((x) => x[key]),
+		data: history.map((x) => ({ x: parseFecha(x.fecha).getTime(), y: x[key] })),
 		borderColor: color,
 		backgroundColor: color,
 		borderWidth: 2,
@@ -251,12 +353,12 @@ async function drawHistoryChart(eess) {
 		pointHoverRadius: 4,
 		stepped: true,
 		fill: false,
+		segment: gapSegment(MAX_GAP_MS),
 	});
 
 	new Chart(chart, {
 		type: "line",
 		data: {
-			labels: history.map((x) => formatDateTime(parseFecha(x.fecha))),
 			datasets: [
 				line("Gasolina 95", "gasolina_95", G95_COLOR),
 				line("Gasóleo A", "gasoleo_a", DIESEL_COLOR),
@@ -271,25 +373,19 @@ async function drawHistoryChart(eess) {
 				legend: { display: false },
 				tooltip: {
 					callbacks: {
+						title: (items) => formatDateTime(new Date(items[0].parsed.x)),
 						label: (ctx) =>
 							ctx.parsed.y == null ? null : `${ctx.dataset.label}: ${formatPrice(ctx.parsed.y)} €`,
 					},
 				},
 			},
 			scales: {
-				x: {
+				x: timeAxis({
+					min: from.getTime(),
+					max: Date.now(),
 					grid: { display: false },
-					ticks: {
-						maxTicksLimit: 4,
-						maxRotation: 0,
-						color: "#6b7280",
-						font: { size: 10 },
-						// Just the day; the tooltip has the time.
-						callback(value) {
-							return this.getLabelForValue(value).split(" ")[0].replace(/\/\d{4}$/, "");
-						},
-					},
-				},
+					ticks: { color: "#6b7280", font: { size: 10 } },
+				}),
 				y: {
 					grid: { color: "#e5e7eb" },
 					border: { display: false },
@@ -452,8 +548,10 @@ let brandFilterCount = 0;
 
 /**
  * @param {Array<{name: string, text: string, image: string|null, subgroup: L.Layer, count: number}>} brands
+ * @param {{count: number, hidden: () => boolean, setHidden: (hide: boolean) => void}|null} stale
+ *        adds a switch that hides the stale stations, if given
  */
-function createBrandFilterControl(brands) {
+function createBrandFilterControl(brands, stale = null) {
 	const panelId = `brandPanel${++brandFilterCount}`;
 
 	const BrandFilterControl = L.Control.extend({
@@ -476,6 +574,12 @@ function createBrandFilterControl(brands) {
 						</div>
 						<button type="button" class="map-panel-close" aria-label="${t("Close")}">&times;</button>
 					</div>
+					${stale ? `
+					<label class="brand-row stale-row">
+						<span class="brand-name">${t("Hide stations without a price change in {days} days", { days: STALE_DAYS })}</span>
+						<span class="brand-count">${stale.count}</span>
+						<input type="checkbox" class="switch stale-switch">
+					</label>` : ""}
 					<div class="brand-actions">
 						<button type="button" data-select="all">${t("All brands")}</button>
 						<button type="button" data-select="none">${t("None")}</button>
@@ -502,7 +606,7 @@ function createBrandFilterControl(brands) {
 			const panel = container.querySelector(".brand-panel");
 			const badge = container.querySelector(".map-button-badge");
 			const sub = container.querySelector(".map-panel-sub");
-			const checks = [...container.querySelectorAll(".switch")];
+			const checks = [...container.querySelectorAll(".brand-list .switch")];
 
 			const sync = () => {
 				let shown = 0;
@@ -550,6 +654,11 @@ function createBrandFilterControl(brands) {
 					else map.removeLayer(brands[i].subgroup);
 				});
 			});
+			const staleCheck = container.querySelector(".stale-switch");
+			if (staleCheck) {
+				staleCheck.checked = stale.hidden();
+				staleCheck.addEventListener("change", () => stale.setHidden(staleCheck.checked));
+			}
 			container.querySelector('[data-select="all"]').addEventListener("click", () => {
 				for (const b of brands) map.addLayer(b.subgroup);
 			});
@@ -730,6 +839,9 @@ function fitPopup(map, popup) {
  * @param {(eess: object, blacklisted: boolean, blacklist: StationBlacklist) => any} [options.onBlacklistChange]
  *        called whenever a station is added to/removed from the blacklist via
  *        the popup button. No-op by default; use it to persist the blacklist.
+ * @param {boolean} [options.staleFilter]
+ *        adds a switch to the brand filter that hides stations whose prices
+ *        haven't changed in STALE_DAYS (on unless the viewer turned it off).
  *
  * @returns {{markers: L.MarkerClusterGroup, control: L.Control, subgroups: Array, allMarkers: L.Marker[], markersById: Map<number, L.Marker>}}
  */
@@ -743,6 +855,7 @@ export function createStationsLayer(
 		onFilterChange = updateFilter,
 		blacklist = null,
 		onBlacklistChange = null,
+		staleFilter = false,
 	} = {},
 ) {
 	const markers = L.markerClusterGroup({ showCoverageOnHover: false });
@@ -765,10 +878,19 @@ export function createStationsLayer(
 			riseOnHover: true,
 			title: eess.rotulo,
 		}).bindPopup(() => buildPopupContent(eess, blacklist), popup);
+		// Counts the popup's openings, so a slow load only fills the one it was for.
+		let opens = 0;
 		marker.on("popupopen", (e) => {
-			fitPopup(map, e.popup);
-			drawHistoryChart(eess);
-			attachBlacklistToggle(eess, blacklist, marker, logos, logos_sorted, onBlacklistChange);
+			// Fitting rebuilds the content, so it waits for the forecasts
+			// the advice shows, and everything drawn into it comes after.
+			const ready = () => {
+				fitPopup(map, e.popup);
+				drawHistoryChart(eess);
+				attachBlacklistToggle(eess, blacklist, marker, logos, logos_sorted, onBlacklistChange);
+			};
+			const open = ++opens;
+			if (stationForecasts.has(eess.id)) ready();
+			else loadForecasts(eess).then(() => open === opens && e.popup.isOpen() && ready());
 		});
 
 		marker.eess = eess; // keep raw data around for sorting/displaying elsewhere
@@ -786,6 +908,28 @@ export function createStationsLayer(
 		.toSorted(([name1, , len1], [name2, , len2]) =>
 			name1 == "other" ? 1 : name2 == "other" ? -1 : len2 - len1,
 		);
+
+	// Stale markers leave their brand's group while hidden.
+	let stale = null;
+	if (staleFilter) {
+		const staleMarkers = subgroups.flatMap(([name, subgroup]) =>
+			subgroupLayers[name].filter((m) => staleSince(m.eess)).map((m) => [subgroup, m]),
+		);
+		let hidden = false;
+		stale = {
+			count: staleMarkers.length,
+			hidden: () => hidden,
+			setHidden(hide) {
+				hidden = hide;
+				saveHideStale(hide);
+				for (const [subgroup, m] of staleMarkers) {
+					if (hide) subgroup.removeLayer(m);
+					else subgroup.addLayer(m);
+				}
+			},
+		};
+		if (loadHideStale()) stale.setHidden(true);
+	}
 
 	for (let [name, subgroup] of subgroups) {
 		if (filter.has(name)) subgroup.addTo(map);
@@ -809,6 +953,7 @@ export function createStationsLayer(
 				subgroup,
 				count,
 			})),
+		stale,
 	);
 	control.addTo(map);
 

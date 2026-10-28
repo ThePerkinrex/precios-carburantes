@@ -39,6 +39,8 @@ struct EstacionPrecio {
     latitud: f64,
     longitud: f64,
     fecha: String,
+    /// When the station's prices last changed (or it came back to the feed).
+    ultimo_cambio: String,
     gasoleo_a: Option<f64>,
     gasolina_95: Option<f64>,
 }
@@ -62,7 +64,8 @@ async fn get_latest_station_data(pool: DbPool) -> Result<Vec<EstacionPrecio>, Ap
                 e.margen,
                 e.localidad,
                 e.horario,
-                e.cp
+                e.cp,
+                (SELECT MAX(q.fecha) FROM precios q WHERE q.id_estacion = e.id AND q.reportado = 1)
             FROM estaciones e
             JOIN precios_actuales p ON p.id_estacion = e.id
             "#,
@@ -84,6 +87,7 @@ async fn get_latest_station_data(pool: DbPool) -> Result<Vec<EstacionPrecio>, Ap
             localidad: row.get(11)?,
             horario: row.get(12)?,
             cp: row.get(13)?,
+            ultimo_cambio: format_fecha(row.get(14)?),
         })
     })?;
 
@@ -305,12 +309,89 @@ async fn province_prices(
     Ok(Json(provincias))
 }
 
+/// The national forecast of a fuel from the end of day `origen` to `horizonte` days later
+/// (see downloader/src/forecast): Spain's average without Canarias, Ceuta and Melilla.
+#[derive(Serialize)]
+struct NationalForecast {
+    combustible: String,
+    horizonte: i64,
+    origen: String,
+    precio: f64,
+    cambio: f64,
+    bajo: f64,
+    alto: f64,
+}
+
+/// Each fuel's latest national forecasts; empty until `downloader forecast` has run.
+async fn price_forecast(
+    State(pool): State<DbPool>,
+) -> Result<Json<Vec<NationalForecast>>, AppError> {
+    let conn = pool.get().unwrap();
+    let rows = conn
+        .prepare(
+            "SELECT combustible, horizonte, origen, precio, cambio, bajo, alto FROM pronosticos p
+            WHERE origen = (SELECT MAX(origen) FROM pronosticos q WHERE q.combustible = p.combustible)
+            ORDER BY combustible, horizonte",
+        )?
+        .query_map([], |row| {
+            Ok(NationalForecast {
+                combustible: row.get(0)?,
+                horizonte: row.get(1)?,
+                origen: row.get(2)?,
+                precio: row.get(3)?,
+                cambio: row.get(4)?,
+                bajo: row.get(5)?,
+                alto: row.get(6)?,
+            })
+        })?
+        .collect::<Result<_, _>>()?;
+    Ok(Json(rows))
+}
+
+/// A station's odds that its price of a fuel is lower, the same or higher `horizonte` days
+/// after the end of day `origen`.
+#[derive(Serialize)]
+struct StationForecast {
+    combustible: String,
+    horizonte: i64,
+    origen: String,
+    baja: f64,
+    igual: f64,
+    sube: f64,
+}
+
+async fn station_forecast(
+    Path(id): Path<i64>,
+    State(pool): State<DbPool>,
+) -> Result<Json<Vec<StationForecast>>, AppError> {
+    let conn = pool.get().unwrap();
+    let rows = conn
+        .prepare(
+            "SELECT combustible, horizonte, origen, baja, igual, sube FROM pronosticos_estaciones
+            WHERE id_estacion = ? ORDER BY combustible, horizonte",
+        )?
+        .query_map([id], |row| {
+            Ok(StationForecast {
+                combustible: row.get(0)?,
+                horizonte: row.get(1)?,
+                origen: row.get(2)?,
+                baja: row.get(3)?,
+                igual: row.get(4)?,
+                sube: row.get(5)?,
+            })
+        })?
+        .collect::<Result<_, _>>()?;
+    Ok(Json(rows))
+}
+
 pub fn get_router() -> Router<DbPool> {
     Router::new()
         .route("/prices", get(latest_prices))
         .route("/prices/history", get(price_history))
         .route("/prices/provinces", get(province_prices))
+        .route("/prices/forecast", get(price_forecast))
         .route("/{id}/history", get(price_history_station))
+        .route("/{id}/forecast", get(station_forecast))
         .nest("/user", user::get_router())
         .nest("/admin", admin::get_router())
         .nest("/geo", geo::get_router())

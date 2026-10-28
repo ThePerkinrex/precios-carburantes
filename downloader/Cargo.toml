@@ -14,3 +14,5 @@ r2d2 = "0.8.10"
 chrono = { version = "0.4.44"}
 database-access = { path = "../database-access" }
 dotenvy = "0.15.7"
+nalgebra = "0.35"
+rand = "0.10"

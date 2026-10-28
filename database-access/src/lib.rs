@@ -250,6 +250,43 @@ const MIGRATIONS: &[&[&str]] = &[
             visto INTEGER NOT NULL,
             PRIMARY KEY (serie, fecha)
         ) WITHOUT ROWID"],
+    // Price forecasts (`downloader forecast`, see downloader/src/forecast).
+    //
+    // - modelos: each fitted model's coefficients as JSON, by name ("nacional:<fuel>:<h>",
+    //   "estaciones:<fuel>:<h>"), and when it was fitted (unix seconds).
+    // - pronosticos: Spain's average pump price from the end of day `origen` (YYYY-MM-DD) to h
+    //   days later: the price at `origen`, the expected change and its 80 % interval, in €/L.
+    //   Kept, to score them later.
+    // - pronosticos_estaciones: each station's probabilities that its price is lower, the same
+    //   or higher (by 0.0005 €/L) h days after `origen`. Only the latest run.
+    &[
+        "CREATE TABLE modelos (
+            nombre TEXT PRIMARY KEY,
+            ajustado INTEGER NOT NULL,
+            datos TEXT NOT NULL
+        )",
+        "CREATE TABLE pronosticos (
+            origen TEXT NOT NULL,
+            combustible TEXT NOT NULL,
+            horizonte INTEGER NOT NULL,
+            precio REAL NOT NULL,
+            cambio REAL NOT NULL,
+            bajo REAL NOT NULL,
+            alto REAL NOT NULL,
+            creado INTEGER NOT NULL,
+            PRIMARY KEY (origen, combustible, horizonte)
+        ) WITHOUT ROWID",
+        "CREATE TABLE pronosticos_estaciones (
+            id_estacion INTEGER NOT NULL,
+            combustible TEXT NOT NULL,
+            horizonte INTEGER NOT NULL,
+            origen TEXT NOT NULL,
+            baja REAL NOT NULL,
+            igual REAL NOT NULL,
+            sube REAL NOT NULL,
+            PRIMARY KEY (id_estacion, combustible, horizonte)
+        ) WITHOUT ROWID",
+    ],
 ];
 
 pub const DEFAULT_DB_PATH: &str = "precios_carburantes.db";

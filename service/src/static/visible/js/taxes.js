@@ -15,7 +15,7 @@ const cpiTable = document.getElementById("cpi");
 const cpiStatus = document.getElementById("cpiStatus");
 
 const cut = (euros) => (euros ? `−${formatEuros(euros)}` : "–");
-const percent = (v) => `${v > 0 ? "+" : ""}${v.toLocaleString(LOCALE, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %`;
+const percent = (v) => `${v > 0 ? "+" : ""}${v.toLocaleString(LOCALE, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}\u00a0%`;
 
 function renderNext() {
 	const change = nextTaxChange();
@@ -36,7 +36,7 @@ function renderPeriods() {
 			const row = document.createElement("tr");
 			row.innerHTML = `<th scope="row"></th><td></td><td></td><td></td><td></td>`;
 			row.cells[0].textContent = p.planned ? t("{date}, planned", { date: p.label }) : p.label;
-			row.cells[1].textContent = `${Math.round(p.vat * 100)} %`;
+			row.cells[1].textContent = `${Math.round(p.vat * 100)}\u00a0%`;
 			FUELS.forEach((f, i) => {
 				const { note } = p.fuels[f];
 				row.cells[2 + i].textContent = cut(p.fuels[f].cut);

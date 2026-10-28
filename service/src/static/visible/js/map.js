@@ -118,6 +118,7 @@ async function load() {
 	// calling this if you only want a subset shown.
 	const { markers, allMarkers } = createStationsLayer(map, data, logos, {
 		filter: state.filter,
+		staleFilter: true,
 		// buildPopupContent: myCustomPopupBuilder, // override to customize popup contents
 	});
 

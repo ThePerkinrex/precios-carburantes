@@ -6,6 +6,7 @@ use std::{collections::HashMap, error::Error, time::Instant};
 use database_access::{DEFAULT_DB_PATH, get_connection_manager};
 
 mod backfill;
+mod forecast;
 mod markets;
 
 // --- Modelos de Datos ---
@@ -251,6 +252,10 @@ fn main_internal() -> Result<(), Box<dyn Error>> {
     if let Err(e) = markets::update(&mut conn, &client, from) {
         eprintln!("Mercados: {e}");
     }
+    // Nor should the forecasts.
+    if let Err(e) = forecast::daily(&mut conn) {
+        eprintln!("Pronósticos: {e}");
+    }
 
     Ok(())
 }
@@ -264,7 +269,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         None => main_internal(),
         Some("backfill") => backfill::run(&args[1..]),
         Some("markets") => markets::run(&args[1..]),
-        Some(other) => Err(format!("Comando desconocido: {other}. Uso: downloader [backfill <desde> <hasta> [segundos entre peticiones] | markets [desde]]").into()),
+        Some("forecast") => forecast::run(&args[1..]),
+        Some(other) => Err(format!("Comando desconocido: {other}. Uso: downloader [backfill <desde> <hasta> [segundos entre peticiones] | markets [desde] | forecast [fit]]").into()),
     };
     println!(
         "Completado con resultado {res:?} en {:.2}s",

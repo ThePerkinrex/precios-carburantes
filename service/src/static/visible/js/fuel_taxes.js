@@ -130,7 +130,7 @@ export function settling(date, { before = 0, after = 0 } = {}) {
 // ---------- Describing the changes ----------
 
 export const FUEL_NAMES = { gasolina_95: "Gasolina 95", gasoleo_a: "Gasóleo A" };
-const percent = (v) => `${v > 0 ? "+" : ""}${v.toLocaleString(LOCALE, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %`;
+const percent = (v) => `${v > 0 ? "+" : ""}${v.toLocaleString(LOCALE, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}\u00a0%`;
 // "2026-10" -> "10/2026"
 const monthLabel = (month) => month.split("-").reverse().join("/");
 
@@ -146,7 +146,7 @@ function cpiNote(resolved) {
 
 function describe(period) {
 	const resolved = Object.fromEntries(FUELS.map((f) => [f, cutOf(period, f)]));
-	const parts = [`${t("IVA")} ${Math.round(period.vat * 100)} %`];
+	const parts = [`${t("IVA")} ${Math.round(period.vat * 100)}\u00a0%`];
 	const g95 = resolved.gasolina_95.cut;
 	const diesel = resolved.gasoleo_a.cut;
 	if (!g95 && !diesel) parts.push(t("no hydrocarbon tax cut"));
