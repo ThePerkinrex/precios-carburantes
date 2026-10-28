@@ -4,6 +4,7 @@ import { t } from "./i18n.js";
 
 export const PAGES = [
 	{ id: "map", href: "/files/map", label: t("Map"), hint: t("Stations and prices near you") },
+	{ id: "stations", href: "/files/stations", label: t("My stations"), hint: t("Your saved stations, their prices and history") },
 	{ id: "trips", href: "/files/trips", label: t("My trips"), hint: t("Saved routes and their fuel stops") },
 	{ id: "dashboard", href: "/files/dashboard", label: t("Price trends"), hint: t("Average prices over time, by region") },
 	{ id: "settings", href: "/files/settings", label: t("Settings"), hint: t("Language and your car") },

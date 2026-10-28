@@ -634,3 +634,151 @@
 .switch:checked::after {
 	transform: translateX(16px);
 }
+
+/* ---------- My stations ---------- */
+
+/* A saved station's star, in the corner of its sign. */
+.sign-star {
+	position: absolute;
+	top: -7px;
+	right: -7px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 18px;
+	border-radius: 50%;
+	background: var(--led);
+	color: var(--board);
+	font-size: 12px;
+	line-height: 1;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+.station-nickname {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	font-weight: 700;
+	font-size: 0.95rem;
+	overflow-wrap: anywhere;
+}
+
+.station-nickname .star,
+.row-star {
+	color: #d97706;
+}
+
+.mine-controls {
+	display: grid;
+	gap: 8px;
+}
+
+.mine-buttons {
+	display: flex;
+	gap: 8px;
+}
+
+.mine-buttons button {
+	flex: 1 1 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	min-height: 44px;
+	padding: 0 10px;
+	border: 1px solid var(--route-border);
+	border-radius: var(--route-radius-md);
+	background: var(--route-surface);
+	color: var(--route-text);
+	font: inherit;
+	font-size: 0.9rem;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.mine-buttons .mine-save.on {
+	border-color: #f59e0b;
+	background: #fef3c7;
+	color: #92400e;
+}
+
+.mine-buttons .mine-hide {
+	flex: 0 1 auto;
+	color: var(--route-text-muted);
+}
+
+.mine-buttons button:hover {
+	filter: brightness(0.96);
+}
+
+.mine-buttons .star {
+	font-size: 1.1rem;
+	line-height: 1;
+}
+
+.mine-nickname {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 0.85rem;
+	color: var(--route-text-muted);
+}
+
+.mine-nickname[hidden] {
+	display: none;
+}
+
+.mine-nickname input {
+	flex: 1 1 auto;
+	min-width: 0;
+	min-height: 38px;
+	padding: 0 10px;
+	border: 1px solid var(--route-border);
+	border-radius: var(--route-radius-md);
+	font: inherit;
+	font-size: 16px; /* no zoom on focus in iOS */
+	color: var(--route-text);
+}
+
+.mine-error {
+	margin: 0;
+	color: var(--route-danger);
+	font-size: 0.85rem;
+}
+
+/* ---------- Against the area's average ---------- */
+
+.avg-badge {
+	flex: none;
+	margin-left: auto;
+	padding: 2px 6px;
+	border-radius: var(--route-radius-pill, 999px);
+	font-size: 0.75rem;
+	font-weight: 700;
+	white-space: nowrap;
+	font-variant-numeric: tabular-nums;
+}
+
+/* On the dark price board. */
+.station-board .avg-badge.cheaper {
+	background: rgba(74, 222, 128, 0.15);
+	color: #4ade80;
+}
+
+.station-board .avg-badge.dearer {
+	background: rgba(248, 113, 113, 0.15);
+	color: #fca5a5;
+}
+
+.station-board .avg-badge.even {
+	background: rgba(255, 255, 255, 0.1);
+	color: var(--board-text);
+}
+
+.station-average {
+	margin: -4px 0 0;
+	color: var(--route-text-muted);
+	font-size: 0.78rem;
+	line-height: 1.4;
+}

@@ -287,6 +287,16 @@ const MIGRATIONS: &[&[&str]] = &[
             PRIMARY KEY (id_estacion, combustible, horizonte)
         ) WITHOUT ROWID",
     ],
+    // The stations each user saved or hid everywhere (`kind` 'saved' | 'hidden'), with an
+    // optional nickname. Private to `username`; a station is in at most one of the two lists.
+    &["CREATE TABLE user_stations (
+            username TEXT NOT NULL,
+            station_id INTEGER NOT NULL REFERENCES estaciones(id),
+            kind TEXT NOT NULL CHECK (kind IN ('saved', 'hidden')),
+            nickname TEXT,
+            created_at INTEGER NOT NULL,
+            PRIMARY KEY (username, station_id)
+        ) WITHOUT ROWID"],
 ];
 
 pub const DEFAULT_DB_PATH: &str = "precios_carburantes.db";

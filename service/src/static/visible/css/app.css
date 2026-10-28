@@ -26,11 +26,16 @@
 	--g95: #16a34a;
 	--diesel: #1f2937;
 
-	/* Compared areas, in slot order (validated for colour-vision deficiency). */
+	/* Compared areas and saved stations, in slot order (validated for
+	   colour-vision deficiency). */
 	--series-1: #2a78d6;
 	--series-2: #eb6834;
 	--series-3: #1baf7a;
 	--series-4: #eda100;
+	--series-5: #e87ba4;
+	--series-6: #008300;
+	--series-7: #6250d6;
+	--series-8: #e34948;
 
 	--radius: 16px;
 	--radius-sm: 10px;
@@ -902,4 +907,75 @@ select {
 	.primary-link:active {
 		transform: none;
 	}
+}
+
+/* ---------- Dashboard: my stations ---------- */
+
+.mine-list {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.mine-list a {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	gap: 2px 12px;
+	padding: 8px;
+	border-radius: var(--radius-sm);
+	color: var(--ink);
+	text-decoration: none;
+}
+
+.mine-list a:hover {
+	background: var(--paper);
+}
+
+.mine-list .name {
+	font-weight: 600;
+}
+
+.mine-list .value {
+	grid-row: span 2;
+	align-self: center;
+	font-family: var(--font-sign);
+	font-size: 1.5rem;
+	font-weight: 700;
+}
+
+.mine-list .value small {
+	font-size: 0.7em;
+}
+
+.mine-list .mine-sub,
+.mine-list .mine-advice {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--muted);
+	font-size: 0.8rem;
+}
+
+.mine-list .mine-advice {
+	grid-column: 1 / -1;
+}
+
+.mine-list .mine-advice:empty {
+	display: none;
+}
+
+.mine-list .advice-verdict {
+	padding: 1px 8px;
+	border-radius: 999px;
+	font-weight: 600;
+}
+
+.mine-list .advice-verdict.wait {
+	background: #dcfce7;
+	color: #166534;
+}
+
+.mine-list .advice-verdict.fill {
+	background: #dbeafe;
+	color: #1e40af;
 }

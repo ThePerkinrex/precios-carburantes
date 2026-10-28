@@ -173,6 +173,30 @@ export function routePageUrl(hash, routeIdx, tripId = null) {
 
 
 // ---------------------------------------------------------------------------
+// Saved and hidden stations
+// ---------------------------------------------------------------------------
+
+// Every station the user saved or hid: { kind: "saved" | "hidden", nickname,
+// created_at, en_listado, ultima_vez, rotulo_anterior, rotulo_desde, ...the
+// fields of getLatestPrices }. Prices are null once it left the Ministry's list.
+export async function getMyStations() {
+	return await fetch(API_LOCATION + "/my-stations").then(checkOk).then((x) => x.json());
+}
+
+// Saves (kind "saved") or hides (kind "hidden") a station, or renames it.
+export async function putMyStation(id, kind, nickname = null) {
+	await fetch(`${API_LOCATION}/my-stations/${id}`, {
+		method: "PUT",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ kind, nickname }),
+	}).then(checkOk);
+}
+
+export async function deleteMyStation(id) {
+	await fetch(`${API_LOCATION}/my-stations/${id}`, { method: "DELETE" }).then(checkOk);
+}
+
+// ---------------------------------------------------------------------------
 // Client certificates
 // ---------------------------------------------------------------------------
 
@@ -181,6 +205,7 @@ export function routePageUrl(hash, routeIdx, tripId = null) {
 const SERVER_ERRORS = [
 	[/^Password must be (\d+)-(\d+) characters$/, "Password must be {1}-{2} characters"],
 	[/^Trip names must be 1-(\d+) characters$/, "Trip names must be 1-{1} characters"],
+	[/^Nicknames must be at most (\d+) characters$/, "Nicknames must be at most {1} characters"],
 	[/^invalid name "(.*)": use 1-32 of a-z, 0-9, '-' and '_'$/, "Invalid name \"{1}\": use 1-32 of a-z, 0-9, '-' and '_'"],
 	[/^(.*) already has an active cert labelled "(.*)"$/, "{1} already has an active certificate named \"{2}\""],
 ];

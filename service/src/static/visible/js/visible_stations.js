@@ -18,7 +18,8 @@ const isPhone = () => matchMedia("(max-width: 639px)").matches;
 
 // Button in the top-right corner that lists the stations on screen, cheapest
 // first, for the chosen fuel. Tapping one zooms to it and opens its popup.
-export function addVisibleStationsControl(map, clusterGroup, allMarkers) {
+// `myStations` (optional) stars the saved ones and shows their nicknames.
+export function addVisibleStationsControl(map, clusterGroup, allMarkers, myStations = null) {
 	const VisibleStationsControl = L.Control.extend({
 		options: { position: "topright" },
 
@@ -141,6 +142,9 @@ export function addVisibleStationsControl(map, clusterGroup, allMarkers) {
 			list.innerHTML = this._shown
 				.map((m, i) => {
 					const eess = m.eess;
+					const saved = myStations?.isSaved(eess.id);
+					const nickname = myStations?.nickname(eess.id);
+					const place = escapeHtml(eess.localidad ?? eess.municipio ?? "");
 					const prices = FUELS.map(
 						(f) => `
 						<span class="row-price ${f.className}${f.key === sort ? " sorted" : ""}">
@@ -153,8 +157,8 @@ export function addVisibleStationsControl(map, clusterGroup, allMarkers) {
 						<button type="button" class="station-row" data-index="${i}">
 							${logoBadge(stationLogo(eess), eess.rotulo, "row-logo")}
 							<span class="row-name">
-								<strong>${escapeHtml(eess.rotulo)}</strong>
-								<span>${escapeHtml(eess.localidad ?? eess.municipio ?? "")}</span>
+								<strong>${saved ? `<span class="row-star" title="${t("Saved")}">★</span> ` : ""}${escapeHtml(eess.rotulo)}</strong>
+								<span>${nickname ? `<b>${escapeHtml(nickname)}</b> · ` : ""}${place}</span>
 							</span>
 							<span class="row-prices">${prices}</span>
 						</button>

@@ -31,6 +31,7 @@ import { addRouteOptionsControl } from "./route_options.js";
 import { addMenuControl } from "./map_menu.js";
 import { getLogos } from "./logos.js";
 import { createTripAlternativesPanel } from "./trip_alternatives.js";
+import { MyStations } from "./my_stations.js";
 import { arrivalTime, planStops, statusAt } from "./fuel_planner.js";
 import { LOCALE, t } from "./i18n.js";
 
@@ -79,6 +80,7 @@ async function load() {
 	let route_data = getRoute(hash, route_idx);
 	let logos = getLogos();
 	let state = getUserState();
+	let myStations = MyStations.load();
 	let tripResult = findTrip(hash, route_idx, url.searchParams.get("trip"));
 
 	// Zoom is added after the menu so the menu sits at the very top, as on the map.
@@ -138,6 +140,7 @@ async function load() {
 	logos = await logos;
 	const logos_sorted = sortLogos(logos);
 	state = await state;
+	myStations = await myStations;
 	const { trip: loadedTrip, error: tripError } = await tripResult;
 	if (tripError) setTripInUrl(hash, route_idx, null);
 	else if (loadedTrip) setTripInUrl(hash, route_idx, loadedTrip.id);
@@ -189,6 +192,8 @@ async function load() {
 		if (trip?.owned) removeTripBlacklist(trip.id, stationId).catch(tripControl.showError);
 	});
 	blacklist.on("change", () => reloadStops());
+	// Stations hidden everywhere are left out of the plans too.
+	myStations.on(() => reloadStops());
 
 	function focusStation(station) {
 		const marker = stationsLayer?.markersById?.get(station.id);
@@ -264,7 +269,7 @@ async function load() {
 	map.on("moveend", placeStopBadges);
 
 	// The default popup, plus when we'd get there and whether it's open then.
-	function buildPopupContent(eess, blacklist) {
+	function buildPopupContent(eess, blacklist, context) {
 		const eta = arrivalTime(eess, departure);
 		const time = eta.toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit", hour12: false });
 		const status = statusAt(eess, eta);
@@ -275,7 +280,7 @@ async function load() {
 				• km ${(eess.distance_along_route / 1000).toFixed(1)}
 				${detourKm >= 0.1 ? `• ${t("~{km} km detour", { km: detourKm.toFixed(1) })}` : ""}
 			</div>
-			${buildDefaultPopupContent(eess, blacklist)}`;
+			${buildDefaultPopupContent(eess, blacklist, context)}`;
 	}
 
 	async function reloadStations(maxDistance) {
@@ -303,6 +308,7 @@ async function load() {
 			},
 			blacklist,
 			buildPopupContent,
+			myStations,
 		});
 		stationsLayer.markers.on("animationend", placeStopBadges);
 	}
@@ -316,8 +322,10 @@ async function load() {
 
 		const stations = price_data.filter(
 			(s) =>
-				station_filter.has(getLogoKey(s, logos, logos_sorted).logoKey) &&
+				// Saved stations show whatever the brand filter (stations.js).
+				(station_filter.has(getLogoKey(s, logos, logos_sorted).logoKey) || myStations.isSaved(s.id)) &&
 				!blacklist.has(s.id) &&
+				!myStations.isHidden(s.id) &&
 				Number.isFinite(s.distance_along_route),
 		);
 

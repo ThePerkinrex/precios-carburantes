@@ -1,4 +1,6 @@
 import { getUserState } from "./api.js";
+import { MyStations } from "./my_stations.js";
+import { advice, escapeHtml, forecastsFor, priceDigits } from "./stations.js";
 import { LOCALE, t } from "./i18n.js";
 import { renderNav } from "./nav.js";
 import { formatDate, formatDateTime, parseFecha } from "./dates.js";
@@ -803,7 +805,53 @@ fuelGroup.addEventListener("click", (event) => {
 	update();
 });
 
-getUserState().then((s) => renderNav(document.getElementById("nav"), s, "dashboard"));
+// ---------- My stations ----------
+
+const MINE_SHOWN = 3;
+
+// The cheapest saved stations for the user's fuel, with whether to wait.
+async function renderMyStations(user) {
+	const fuel = user.car?.fuel === "diesel" ? "gasoleo_a" : "gasolina_95";
+	const mine = await MyStations.load();
+	const stations = mine
+		.ids("saved")
+		.map((id) => mine.get(id))
+		.filter((s) => s[fuel] != null)
+		.sort((a, b) => a[fuel] - b[fuel]);
+	if (!stations.length) return;
+
+	const card = document.getElementById("mineCard");
+	document.getElementById("mineNote").textContent = t("Cheapest {fuel} now.", { fuel: FUELS[fuel].name });
+	const list = document.getElementById("mineList");
+	const shown = stations.slice(0, MINE_SHOWN);
+	list.replaceChildren(
+		...shown.map((s) => {
+			const li = document.createElement("li");
+			li.innerHTML = `
+				<a href="/files/map?station=${s.id}">
+					<span class="name">${escapeHtml(s.nickname ?? s.rotulo)}</span>
+					<span class="value digits">${priceDigits(s[fuel])}</span>
+					<span class="mine-sub">${s.nickname ? `${escapeHtml(s.rotulo)} · ` : ""}${escapeHtml(s.localidad ?? s.municipio ?? "")}</span>
+					<span class="mine-advice"></span>
+				</a>`;
+			return li;
+		}),
+	);
+	card.hidden = false;
+
+	await Promise.all(
+		shown.map(async (s, i) => {
+			const rows = (await forecastsFor(s)).filter((f) => f.combustible === fuel).sort((a, b) => a.horizonte - b.horizonte);
+			if (!rows.length) return;
+			const { verdict, label, text } = advice(rows);
+			list.children[i].querySelector(".mine-advice").innerHTML = `<span class="advice-verdict ${verdict}">${label}</span> ${text}`;
+		}),
+	);
+}
+
+const user = getUserState();
+user.then((s) => renderNav(document.getElementById("nav"), s, "dashboard"));
+user.then(renderMyStations).catch((e) => console.error("Couldn't show your stations", e));
 await loadFilters();
 readUrl();
 update();

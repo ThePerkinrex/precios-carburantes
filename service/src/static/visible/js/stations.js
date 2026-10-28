@@ -4,6 +4,7 @@ import { updateFilter } from "./api.js";
 import { fitToScreen, onlyOneOpen } from "./map_panels.js";
 import { t } from "./i18n.js";
 import { gapSegment, timeAxis } from "./time_axis.js";
+import { averageBadge, provinceAverages } from "./area_average.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 // Downloads are at most 9 h apart: a longer stretch without any is a gap.
@@ -14,13 +15,13 @@ const STALE_DAYS = 7;
 const STALE_STORAGE_KEY = "hideStaleStations";
 
 // When the station's prices last changed, if that's STALE_DAYS or more ago.
-function staleSince(eess) {
+export function staleSince(eess) {
 	if (!eess.ultimo_cambio) return null;
 	const since = parseFecha(eess.ultimo_cambio);
 	return Date.now() - since.getTime() >= STALE_DAYS * DAY_MS ? since : null;
 }
 
-function staleWarning(eess) {
+export function staleWarning(eess) {
 	const since = staleSince(eess);
 	if (!since) return "";
 	const days = Math.floor((Date.now() - since.getTime()) / DAY_MS);
@@ -28,7 +29,7 @@ function staleWarning(eess) {
 }
 
 // Whether the map hides stale stations: the viewer's last choice, on by default.
-function loadHideStale() {
+export function loadHideStale() {
 	try {
 		return localStorage.getItem(STALE_STORAGE_KEY) !== "false";
 	} catch {
@@ -45,11 +46,11 @@ function saveHideStale(hide) {
 }
 
 // Same colours as the --g95 / --diesel tokens (map_base.css), for Chart.js.
-const G95_COLOR = "#16a34a";
-const DIESEL_COLOR = "#1f2937";
+export const G95_COLOR = "#16a34a";
+export const DIESEL_COLOR = "#1f2937";
 
 // Prices always show 3 decimal places (e.g. 1.5 -> "1.500").
-function formatPrice(price) {
+export function formatPrice(price) {
 	return price.toFixed(3);
 }
 
@@ -134,7 +135,7 @@ function statusPills(eess) {
 	return pill;
 }
 
-function navigationLinks(eess) {
+export function navigationLinks(eess) {
 	const where = `${eess.latitud},${eess.longitud}`;
 	const links = [
 		{
@@ -171,15 +172,52 @@ function roadSide(margen) {
 	return t("side {side}", { side: escapeHtml(margen) });
 }
 
-function boardLine(name, className, price) {
+function boardLine(name, className, price, badge = "") {
 	return `
 		<div class="station-board-row ${className}">
 			<span class="fuel-name"><span class="fuel-chip"></span>${name}</span>
+			${badge}
 			${
 				price != null
 					? `<span class="board-price digits">${priceDigits(price)}<span class="unit">€/L</span></span>`
 					: `<span class="board-price none">—</span>`
 			}
+		</div>`;
+}
+
+// Under the board: what the badges in it compare with.
+function averageNote(eess, average) {
+	const parts = [
+		["G95", average?.gasolina_95],
+		["Gasóleo A", average?.gasoleo_a],
+	].filter(([, a]) => a);
+	if (!parts.length) return "";
+	const n = Math.max(...parts.map(([, a]) => a.n));
+	return `<p class="station-average">${t("Average of the {n} stations shown in {area}:", { n, area: escapeHtml(eess.provincia) })} ${parts
+		.map(([name, a]) => `${name} <b>${a.mean.toFixed(3)}</b>`)
+		.join(" · ")}</p>`;
+}
+
+const STAR = `<span class="star" aria-hidden="true">★</span>`;
+const EMPTY_STAR = `<span class="star" aria-hidden="true">☆</span>`;
+
+/**
+ * Save / hide buttons and the nickname field, when the user's lists are in
+ * use (attachMineControls wires them). "" without `myStations`.
+ */
+function buildMineControls(eess, myStations) {
+	if (!myStations) return "";
+	return `
+		<div class="mine-controls">
+			<div class="mine-buttons">
+				<button type="button" class="mine-save"></button>
+				<button type="button" class="mine-hide">${t("Hide everywhere")}</button>
+			</div>
+			<label class="mine-nickname">
+				<span>${t("Nickname")}</span>
+				<input type="text" maxlength="60" placeholder="${t("e.g. Home, Work")}" enterkeyhint="done" autocomplete="off">
+			</label>
+			<p class="mine-error" role="alert" hidden></p>
 		</div>`;
 }
 
@@ -191,15 +229,17 @@ function boardLine(name, className, price) {
  * @param {object} eess station record, same shape as returned by /api/prices
  * @returns {string} HTML for the popup contents
  */
-export function buildDefaultPopupContent(eess, blacklist = null) {
+export function buildDefaultPopupContent(eess, blacklist = null, { myStations = null, average = null } = {}) {
 	const blacklisted = blacklist ? blacklist.has(eess.id) : false;
 	const place = [eess.localidad, eess.provincia].filter(Boolean).map(escapeHtml).join(" · ");
+	const nickname = myStations?.nickname(eess.id);
 
 	return `
 	<div class="gasolinera${blacklisted ? " blacklisted" : ""}" id="gasolinera-${eess.id}">
 		<header class="station-head">
 			${logoBadge(stationLogo(eess), eess.rotulo, "station-logo")}
 			<div class="station-title">
+				<div class="station-nickname"${nickname ? "" : " hidden"}>${STAR} <span>${escapeHtml(nickname)}</span></div>
 				<div class="rotulo">${escapeHtml(eess.rotulo)}</div>
 				<div class="station-place">${place}</div>
 			</div>
@@ -208,10 +248,13 @@ export function buildDefaultPopupContent(eess, blacklist = null) {
 		<div class="station-status">${statusPills(eess)}</div>
 
 		<div class="station-board">
-			${boardLine("Gasolina 95", "g95", eess.gasolina_95)}
-			${boardLine("Gasóleo A", "diesel", eess.gasoleo_a)}
+			${boardLine("Gasolina 95", "g95", eess.gasolina_95, averageBadge(eess.gasolina_95, average?.gasolina_95, eess.provincia))}
+			${boardLine("Gasóleo A", "diesel", eess.gasoleo_a, averageBadge(eess.gasoleo_a, average?.gasoleo_a, eess.provincia))}
 		</div>
+		${averageNote(eess, average)}
 		${staleWarning(eess)}
+
+		${buildMineControls(eess, myStations)}
 
 		<nav class="station-nav" aria-label="${t("Directions")}">${navigationLinks(eess)}</nav>
 
@@ -243,7 +286,7 @@ export function buildDefaultPopupContent(eess, blacklist = null) {
  * Both lists are sorted, and fechas are "YYYY-MM-DD HH:MM:SS", so they
  * compare as strings.
  */
-function rebuildHistory(snapshots, changes) {
+export function rebuildHistory(snapshots, changes) {
 	let next = 0;
 	let current = null;
 	return snapshots.map((fecha) => {
@@ -266,7 +309,7 @@ const inDays = (h) => (h === 1 ? t("tomorrow") : t("in {n} days", { n: h }));
 
 // Wait or fill up, from one fuel's forecasts: wait if the price is more
 // likely lower than not at some horizon (the likeliest one).
-function advice(rows) {
+export function advice(rows) {
 	const wait = rows.reduce((a, b) => (b.baja > a.baja ? b : a));
 	if (wait.baja > 0.5) {
 		return { verdict: "wait", label: t("Wait"), text: t("{p} chance it's cheaper {when}", { p: percent(wait.baja), when: inDays(wait.horizonte) }) };
@@ -293,6 +336,12 @@ async function loadForecasts(eess) {
 	} catch (e) {
 		console.error("Couldn't load the forecast", e);
 	}
+}
+
+/** The station's forecasts (see /api/{id}/forecast), loading them if needed. */
+export async function forecastsFor(eess) {
+	await loadForecasts(eess);
+	return stationForecasts.get(eess.id) ?? [];
 }
 
 /** The popup's wait-or-fill-up advice, from the loaded forecasts ("" without). */
@@ -410,7 +459,7 @@ async function drawHistoryChart(eess) {
  * styling and the marker's map icon in place, so the popup doesn't need to
  * be closed/reopened.
  */
-function attachBlacklistToggle(eess, blacklist, marker, logos, logos_sorted, onBlacklistChange) {
+function attachBlacklistToggle(eess, blacklist, marker, iconFor, onBlacklistChange) {
 	if (!blacklist) return;
 
 	const container = document.getElementById(`gasolinera-${eess.id}`);
@@ -438,11 +487,73 @@ function attachBlacklistToggle(eess, blacklist, marker, logos, logos_sorted, onB
 		btn.title = blacklistButtonTitle(isBlacklisted);
 
 		// Gray out (or restore) the marker icon shown on the map.
-		const { icon } = buildMarkerIcon(eess, logos, logos_sorted, blacklist);
-		marker.setIcon(icon);
+		marker.setIcon(iconFor(eess));
 
 		onBlacklistChange?.(eess, isBlacklisted, blacklist);
 	});
+}
+
+/**
+ * Wires the controls rendered by buildMineControls inside the open popup of
+ * `eess`. The marker's star and visibility follow from myStations' change
+ * events (createStationsLayer); hiding the station closes its popup.
+ */
+function attachMineControls(eess, myStations, closePopup) {
+	const container = document.getElementById(`gasolinera-${eess.id}`);
+	const controls = container?.querySelector(".mine-controls");
+	if (!myStations || !controls) return;
+
+	const saveButton = controls.querySelector(".mine-save");
+	const hideButton = controls.querySelector(".mine-hide");
+	const field = controls.querySelector(".mine-nickname");
+	const input = field.querySelector("input");
+	const error = controls.querySelector(".mine-error");
+	const nicknameLine = container.querySelector(".station-nickname");
+
+	const render = () => {
+		const saved = myStations.isSaved(eess.id);
+		saveButton.classList.toggle("on", saved);
+		saveButton.setAttribute("aria-pressed", String(saved));
+		saveButton.innerHTML = saved ? `${STAR} ${t("Saved")}` : `${EMPTY_STAR} ${t("Save")}`;
+		saveButton.title = t(saved ? "Remove from My stations" : "Add to My stations");
+		field.hidden = !saved;
+		const nickname = myStations.nickname(eess.id);
+		if (document.activeElement !== input) input.value = nickname ?? "";
+		nicknameLine.hidden = !nickname;
+		nicknameLine.querySelector("span:last-child").textContent = nickname ?? "";
+	};
+	const run = async (action) => {
+		error.hidden = true;
+		try {
+			await action();
+		} catch (e) {
+			error.textContent = e.message;
+			error.hidden = false;
+		}
+		if (container.isConnected) render();
+	};
+
+	L.DomEvent.on(saveButton, "click", (ev) => {
+		L.DomEvent.stop(ev);
+		const saving = !myStations.isSaved(eess.id);
+		run(() => (saving ? myStations.save(eess) : myStations.remove(eess.id)));
+		render();
+		if (saving) input.focus();
+	});
+	L.DomEvent.on(hideButton, "click", (ev) => {
+		L.DomEvent.stop(ev);
+		closePopup();
+		myStations.hide(eess).catch((e) => console.error("Couldn't hide the station", e));
+	});
+	input.addEventListener("change", () => {
+		if (myStations.isSaved(eess.id) && (input.value.trim() || null) !== myStations.nickname(eess.id)) {
+			run(() => myStations.rename(eess.id, input.value));
+		}
+	});
+	input.addEventListener("keydown", (ev) => {
+		if (ev.key === "Enter") input.blur();
+	});
+	render();
 }
 
 export function sortLogos(logos) {
@@ -507,7 +618,7 @@ const SIGN_ROW_HEIGHT = 16;
 const SIGN_PADDING = 6; // top + bottom of the price rows
 const SIGN_TAIL = 6;
 
-function buildMarkerIcon(eess, logos, logos_sorted, blacklist = null) {
+function buildMarkerIcon(eess, logos, logos_sorted, blacklist = null, myStations = null) {
 	const { logoKey, image, squareImage } = getLogoKey(eess, logos, logos_sorted);
 
 	const rows = [];
@@ -528,6 +639,7 @@ function buildMarkerIcon(eess, logos, logos_sorted, blacklist = null) {
 		className: "station-marker",
 		html: `<div class="station-sign${blacklisted ? " blacklisted" : ""}">
 				<span class="sign-brand">${brand}</span>
+				${myStations?.isSaved(eess.id) ? `<span class="sign-star" aria-hidden="true">★</span>` : ""}
 				<span class="sign-prices">${rows.join("")}</span>
 			</div>`,
 		iconSize: [SIGN_WIDTH, height],
@@ -548,10 +660,11 @@ let brandFilterCount = 0;
 
 /**
  * @param {Array<{name: string, text: string, image: string|null, subgroup: L.Layer, count: number}>} brands
- * @param {{count: number, hidden: () => boolean, setHidden: (hide: boolean) => void}|null} stale
- *        adds a switch that hides the stale stations, if given
+ * @param {Array<{label: string, count: () => number, on: () => boolean, set: (on: boolean) => void}>} switches
+ *        extra switches above the brands (stale stations, my stations)
+ * @returns the control; its refresh() updates the switches' counts
  */
-function createBrandFilterControl(brands, stale = null) {
+function createBrandFilterControl(brands, switches = []) {
 	const panelId = `brandPanel${++brandFilterCount}`;
 
 	const BrandFilterControl = L.Control.extend({
@@ -574,12 +687,16 @@ function createBrandFilterControl(brands, stale = null) {
 						</div>
 						<button type="button" class="map-panel-close" aria-label="${t("Close")}">&times;</button>
 					</div>
-					${stale ? `
+					${switches
+						.map(
+							(sw, i) => `
 					<label class="brand-row stale-row">
-						<span class="brand-name">${t("Hide stations without a price change in {days} days", { days: STALE_DAYS })}</span>
-						<span class="brand-count">${stale.count}</span>
-						<input type="checkbox" class="switch stale-switch">
-					</label>` : ""}
+						<span class="brand-name">${sw.label}</span>
+						<span class="brand-count"></span>
+						<input type="checkbox" class="switch extra-switch" data-index="${i}">
+					</label>`,
+						)
+						.join("")}
 					<div class="brand-actions">
 						<button type="button" data-select="all">${t("All brands")}</button>
 						<button type="button" data-select="none">${t("None")}</button>
@@ -654,11 +771,21 @@ function createBrandFilterControl(brands, stale = null) {
 					else map.removeLayer(brands[i].subgroup);
 				});
 			});
-			const staleCheck = container.querySelector(".stale-switch");
-			if (staleCheck) {
-				staleCheck.checked = stale.hidden();
-				staleCheck.addEventListener("change", () => stale.setHidden(staleCheck.checked));
-			}
+			const extraRows = [...container.querySelectorAll(".stale-row")];
+			this.refresh = () => {
+				switches.forEach((sw, i) => {
+					extraRows[i].querySelector(".switch").checked = sw.on();
+					extraRows[i].querySelector(".brand-count").textContent = sw.count();
+				});
+			};
+			switches.forEach((sw, i) => {
+				const check = extraRows[i].querySelector(".switch");
+				check.addEventListener("change", () => {
+					sw.set(check.checked);
+					this.refresh();
+				});
+			});
+			this.refresh();
 			container.querySelector('[data-select="all"]').addEventListener("click", () => {
 				for (const b of brands) map.addLayer(b.subgroup);
 			});
@@ -681,7 +808,9 @@ function createBrandFilterControl(brands, stale = null) {
 		},
 	});
 
-	return new BrandFilterControl();
+	const control = new BrandFilterControl();
+	control.refresh = () => {}; // until it's on a map
+	return control;
 }
 
 export class StationBlacklist {
@@ -824,8 +953,9 @@ function fitPopup(map, popup) {
  * @param {object} logos              logo/brand metadata, as returned by getLogos()
  * @param {object} [options]
  * @param {Set<string>} [options.filter]           brand keys that should start visible (default: all)
- * @param {(eess: object) => string} [options.buildPopupContent]
- *        builds the popup HTML for a station. Defaults to buildDefaultPopupContent.
+ * @param {(eess: object, blacklist: StationBlacklist|null, context: object) => string} [options.buildPopupContent]
+ *        builds the popup HTML for a station. Defaults to buildDefaultPopupContent;
+ *        pass `context` ({ myStations, average }) on to it when wrapping it.
  *        Use this to show different/extra info per station without touching the
  *        clustering/brand-filter logic.
  * @param {(filter: Set<string>) => any} [options.onFilterChange]
@@ -842,8 +972,14 @@ function fitPopup(map, popup) {
  * @param {boolean} [options.staleFilter]
  *        adds a switch to the brand filter that hides stations whose prices
  *        haven't changed in STALE_DAYS (on unless the viewer turned it off).
+ * @param {MyStations} [options.myStations]
+ *        the user's saved and hidden stations (my_stations.js): popups get
+ *        save / hide buttons, saved stations a star, and hidden ones are left
+ *        off the map.
+ * @param {boolean} [options.mineFilter]
+ *        adds switches to show only the saved stations, or the hidden ones too.
  *
- * @returns {{markers: L.MarkerClusterGroup, control: L.Control, subgroups: Array, allMarkers: L.Marker[], markersById: Map<number, L.Marker>}}
+ * @returns {{markers: L.MarkerClusterGroup, control: L.Control, subgroups: Array, allMarkers: L.Marker[], markersById: Map<number, L.Marker>, focus: (id: number) => boolean}}
  */
 export function createStationsLayer(
 	map,
@@ -856,6 +992,8 @@ export function createStationsLayer(
 		blacklist = null,
 		onBlacklistChange = null,
 		staleFilter = false,
+		myStations = null,
+		mineFilter = false,
 	} = {},
 ) {
 	const markers = L.markerClusterGroup({ showCoverageOnHover: false });
@@ -868,16 +1006,17 @@ export function createStationsLayer(
 	const allMarkers = [];
 	const markersById = new Map();
 	const popup = popupOptions();
+	const iconFor = (eess) => buildMarkerIcon(eess, logos, logos_sorted, blacklist, myStations).icon;
 
 	for (let eess of stations) {
-		const { icon, logoKey, squareImage } = buildMarkerIcon(eess, logos, logos_sorted, blacklist);
+		const { icon, logoKey, squareImage } = buildMarkerIcon(eess, logos, logos_sorted, blacklist, myStations);
 		stationLogos.set(eess, squareImage);
 
 		const marker = L.marker([eess.latitud, eess.longitud], {
 			icon,
 			riseOnHover: true,
 			title: eess.rotulo,
-		}).bindPopup(() => buildPopupContent(eess, blacklist), popup);
+		}).bindPopup(() => buildPopupContent(eess, blacklist, { myStations, average: averageFor(eess) }), popup);
 		// Counts the popup's openings, so a slow load only fills the one it was for.
 		let opens = 0;
 		marker.on("popupopen", (e) => {
@@ -886,7 +1025,8 @@ export function createStationsLayer(
 			const ready = () => {
 				fitPopup(map, e.popup);
 				drawHistoryChart(eess);
-				attachBlacklistToggle(eess, blacklist, marker, logos, logos_sorted, onBlacklistChange);
+				attachBlacklistToggle(eess, blacklist, marker, iconFor, onBlacklistChange);
+				attachMineControls(eess, myStations, () => marker.closePopup());
 			};
 			const open = ++opens;
 			if (stationForecasts.has(eess.id)) ready();
@@ -894,6 +1034,7 @@ export function createStationsLayer(
 		});
 
 		marker.eess = eess; // keep raw data around for sorting/displaying elsewhere
+		marker.logoKey = logoKey;
 		allMarkers.push(marker);
 		subgroupLayers[logoKey].push(marker);
 		markersById.set(eess.id, marker)
@@ -902,43 +1043,106 @@ export function createStationsLayer(
 	const subgroups = Object.entries(subgroupLayers)
 		.map(([name, layers]) => [
 			name,
-			L.featureGroup.subGroup(markers, layers),
+			// Filled by applyView below.
+			L.featureGroup.subGroup(markers, []),
 			layers.length,
 		])
 		.toSorted(([name1, , len1], [name2, , len2]) =>
 			name1 == "other" ? 1 : name2 == "other" ? -1 : len2 - len1,
 		);
+	const subgroupOf = Object.fromEntries(subgroups.map(([name, subgroup]) => [name, subgroup]));
 
-	// Stale markers leave their brand's group while hidden.
-	let stale = null;
-	if (staleFilter) {
-		const staleMarkers = subgroups.flatMap(([name, subgroup]) =>
-			subgroupLayers[name].filter((m) => staleSince(m.eess)).map((m) => [subgroup, m]),
-		);
-		let hidden = false;
-		stale = {
-			count: staleMarkers.length,
-			hidden: () => hidden,
-			setHidden(hide) {
-				hidden = hide;
-				saveHideStale(hide);
-				for (const [subgroup, m] of staleMarkers) {
-					if (hide) subgroup.removeLayer(m);
-					else subgroup.addLayer(m);
-				}
-			},
-		};
-		if (loadHideStale()) stale.setHidden(true);
+	// Saved stations are in a group of their own, always on the map,
+	// whatever brands the filter shows.
+	const savedGroup = L.featureGroup.subGroup(markers, []);
+
+	// The switches in the brand filter decide each marker's group: its
+	// brand's, the saved group, or none while they hide it. Saved stations
+	// show even when stale: their popup says so.
+	const view = { hideStale: false, onlySaved: false, showHidden: false };
+	const groupOf = new Map();
+	function wantedGroup(m) {
+		const saved = myStations?.isSaved(m.eess.id);
+		if (saved) return savedGroup;
+		if (view.onlySaved) return null;
+		if (view.hideStale && staleSince(m.eess)) return null;
+		if (myStations?.isHidden(m.eess.id) && !view.showHidden) return null;
+		return subgroupOf[m.logoKey];
 	}
+	function applyView() {
+		for (const m of allMarkers) {
+			const group = wantedGroup(m);
+			const current = groupOf.get(m) ?? null;
+			if (group === current) continue;
+			current?.removeLayer(m);
+			group?.addLayer(m);
+			groupOf.set(m, group);
+		}
+		averages = null;
+	}
+	const isShown = (m) => {
+		const group = groupOf.get(m);
+		return group != null && map.hasLayer(group);
+	};
+
+	// Each province's averages over the stations on screen, until that changes.
+	let averages = null;
+	function averageFor(eess) {
+		averages ??= provinceAverages(allMarkers.filter(isShown).map((m) => m.eess));
+		return averages[eess.provincia] ?? null;
+	}
+
+	const switches = [];
+	if (staleFilter) {
+		const count = allMarkers.filter((m) => staleSince(m.eess)).length;
+		view.hideStale = loadHideStale();
+		switches.push({
+			label: t("Hide stations without a price change in {days} days", { days: STALE_DAYS }),
+			count: () => count,
+			on: () => view.hideStale,
+			set(on) {
+				view.hideStale = on;
+				saveHideStale(on);
+				applyView();
+			},
+		});
+	}
+	if (myStations && mineFilter) {
+		const count = (kind) => allMarkers.filter((m) => myStations.get(m.eess.id)?.kind === kind).length;
+		switches.push(
+			{
+				label: t("Only my saved stations"),
+				count: () => count("saved"),
+				on: () => view.onlySaved,
+				set(on) {
+					view.onlySaved = on;
+					applyView();
+				},
+			},
+			{
+				label: t("Show the stations I hid"),
+				count: () => count("hidden"),
+				on: () => view.showHidden,
+				set(on) {
+					view.showHidden = on;
+					applyView();
+				},
+			},
+		);
+	}
+	applyView();
+	savedGroup.addTo(map);
 
 	for (let [name, subgroup] of subgroups) {
 		if (filter.has(name)) subgroup.addTo(map);
 		subgroup.on("add", () => {
 			filter.add(name);
+			averages = null;
 			onFilterChange(filter);
 		});
 		subgroup.on("remove", () => {
 			filter.delete(name);
+			averages = null;
 			onFilterChange(filter);
 		});
 	}
@@ -953,9 +1157,37 @@ export function createStationsLayer(
 				subgroup,
 				count,
 			})),
-		stale,
+		switches,
 	);
 	control.addTo(map);
 
-	return { markers, control, subgroups, allMarkers, markersById };
+	if (myStations) {
+		// Stops listening once the layer is taken off the map (route pages rebuild it).
+		const onChange = (id) => {
+			if (!map.hasLayer(markers)) return myStations.off(onChange);
+			const marker = markersById.get(id);
+			const update = () => {
+				applyView();
+				control.refresh();
+			};
+			if (!marker) return update();
+			marker.setIcon(iconFor(marker.eess));
+			// Taking it off the map would close the popup the user is using.
+			if (marker.isPopupOpen()) marker.once("popupclose", update);
+			else update();
+		};
+		myStations.on(onChange);
+	}
+
+	// Centres the map on a station and opens its popup, if it's shown.
+	function focus(id) {
+		const marker = markersById.get(id);
+		if (!marker) return false;
+		map.setView(marker.getLatLng(), Math.max(map.getZoom(), 15));
+		if (!isShown(marker)) return false;
+		markers.zoomToShowLayer(marker, () => marker.openPopup());
+		return true;
+	}
+
+	return { markers, control, subgroups, allMarkers, markersById, focus };
 }

@@ -4,6 +4,7 @@ import { getLogos } from "./logos.js";
 import { addMenuControl } from "./map_menu.js";
 import { addRouteControl } from "./route.js";
 import { createStationsLayer } from "./stations.js";
+import { MyStations } from "./my_stations.js";
 
 let marker = undefined;
 
@@ -81,6 +82,7 @@ async function load() {
 	let data = getLatestPrices();
 	let logos = getLogos();
 	let state = getUserState();
+	let myStations = MyStations.load();
 
 	// Zoom is added after the menu so the menu sits at the very top.
 	const map = L.map("map", { zoomControl: false }).setView([40.4165, -3.70256], 11);
@@ -104,26 +106,34 @@ async function load() {
 	});
 
 	map.on("locationerror", onLocationError);
-	map.locate({ setView: true, maxZoom: 12, maximumAge: 5000 });
+	// "Show on map" links (My stations) open /files/map?station=<id>: the map
+	// goes there instead of to where the user is.
+	const focusId = Number(new URL(location.href).searchParams.get("station")) || null;
+	map.locate({ setView: !focusId, maxZoom: 12, maximumAge: 5000 });
 	//map.locate({watch: true});
 
 	data = await data;
 	logos = await logos;
 	lastLoadTime = Date.now();
 	state = await state;
+	myStations = await myStations;
 
 	// Everything about rendering the stations themselves (markers, popups,
 	// clustering, and the brand filter) lives in stations.js now.
 	// `data` is the full list of stations to render — filter it before
 	// calling this if you only want a subset shown.
-	const { markers, allMarkers } = createStationsLayer(map, data, logos, {
+	const { markers, allMarkers, focus } = createStationsLayer(map, data, logos, {
 		filter: state.filter,
 		staleFilter: true,
+		myStations,
+		mineFilter: true,
 		// buildPopupContent: myCustomPopupBuilder, // override to customize popup contents
 	});
 
-	addVisibleStationsControl(map, markers, allMarkers);
+	addVisibleStationsControl(map, markers, allMarkers, myStations);
 	addRouteControl(map);
+
+	if (focusId) focus(focusId);
 }
 
 load();
