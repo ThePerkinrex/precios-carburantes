@@ -157,6 +157,9 @@ fn fit(conn: &mut Connection) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+/// Computes every forecast with reads only, then stores them in one short transaction: the
+/// computing takes over a minute per fuel on the Pi, and holding the write lock that long would
+/// make the site's writes (saved stations, trips, settings) time out.
 fn predict(conn: &mut Connection) -> Result<(), Box<dyn Error>> {
     let taxes = Taxes::load();
     let created = Local::now().timestamp();
@@ -164,26 +167,21 @@ fn predict(conn: &mut Connection) -> Result<(), Box<dyn Error>> {
         let s = Series::load(conn, &taxes, fuel)?;
         let t = s.last_day();
         let price = s.pump(t).unwrap();
-        let tx = conn.transaction()?;
+        // horizon -> forecast
         let mut national = HashMap::new();
         for h in national::HORIZONS {
-            let Some(model) = load::<national::Model>(&tx, &format!("nacional:{fuel}:{h}"))? else {
+            let Some(model) = load::<national::Model>(conn, &format!("nacional:{fuel}:{h}"))? else {
                 continue;
             };
             let Some(f) = s.sample(t, h).and_then(|x| model.forecast(&x)) else {
                 eprintln!("Pronósticos: sin datos para {fuel} a {h} días desde {t}");
                 continue;
             };
-            tx.execute(
-                "INSERT OR REPLACE INTO pronosticos (origen, combustible, horizonte, precio, cambio, bajo, alto, creado)
-                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-                params![t.to_string(), fuel, h as i64, price, f.change, f.low, f.high, created],
-            )?;
-            national.insert(h, f.change);
+            national.insert(h, f);
         }
 
         let st = Stations::load(
-            &tx,
+            conn,
             fuel,
             t - Days::new(stations::LOAD_DAYS as u64),
             t,
@@ -191,17 +189,14 @@ fn predict(conn: &mut Connection) -> Result<(), Box<dyn Error>> {
         )?;
         let i = st.days.len() - 1;
         let peers = stations::find_peers(&st, i);
-        tx.execute(
-            "DELETE FROM pronosticos_estaciones WHERE combustible = ?",
-            [fuel],
-        )?;
-        let mut stored = 0;
+        // (station, horizon, [down, same, up])
+        let mut rows = Vec::new();
         for h in stations::HORIZONS {
-            let Some(model) = load::<stations::Model>(&tx, &format!("estaciones:{fuel}:{h}"))?
+            let Some(model) = load::<stations::Model>(conn, &format!("estaciones:{fuel}:{h}"))?
             else {
                 continue;
             };
-            let Some(&change) = national.get(&(h as u64)) else {
+            let Some(change) = national.get(&(h as u64)).map(|f| f.change) else {
                 continue;
             };
             let inputs = inputs(
@@ -212,22 +207,39 @@ fn predict(conn: &mut Connection) -> Result<(), Box<dyn Error>> {
                 model.prior_rate,
                 peers.clone(),
             );
+            for (k, id) in st.ids.iter().enumerate() {
+                if let Some(x) = inputs.features(i, k) {
+                    rows.push((*id, h, model.predict(&x)));
+                }
+            }
+        }
+
+        let tx = conn.transaction()?;
+        for (h, f) in &national {
+            tx.execute(
+                "INSERT OR REPLACE INTO pronosticos (origen, combustible, horizonte, precio, cambio, bajo, alto, creado)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                params![t.to_string(), fuel, *h as i64, price, f.change, f.low, f.high, created],
+            )?;
+        }
+        tx.execute(
+            "DELETE FROM pronosticos_estaciones WHERE combustible = ?",
+            [fuel],
+        )?;
+        {
             let mut stmt = tx.prepare(
                 "INSERT INTO pronosticos_estaciones (id_estacion, combustible, horizonte, origen, baja, igual, sube)
                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             )?;
-            for (k, id) in st.ids.iter().enumerate() {
-                if let Some(x) = inputs.features(i, k) {
-                    let [down, same, up] = model.predict(&x);
-                    stmt.execute(params![id, fuel, h as i64, t.to_string(), down, same, up])?;
-                    stored += 1;
-                }
+            for (id, h, [down, same, up]) in &rows {
+                stmt.execute(params![id, fuel, *h as i64, t.to_string(), down, same, up])?;
             }
         }
         tx.commit()?;
         println!(
-            "Pronósticos: {fuel} desde {t}, {} horizontes nacionales, {stored} de estaciones",
-            national.len()
+            "Pronósticos: {fuel} desde {t}, {} horizontes nacionales, {} de estaciones",
+            national.len(),
+            rows.len()
         );
     }
     Ok(())
