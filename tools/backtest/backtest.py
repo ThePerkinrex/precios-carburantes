@@ -50,9 +50,12 @@ Reports, per fuel and horizon: mean absolute error, its 90th percentile, bias, a
 the actual value fell in the 80 % interval (the 10-90 % quantiles of the training residuals),
 over all origins and split by whether a tax change falls between T - SETTLE_DAYS and T + h.
 The intervals scale with volatility: the residual quantiles are of residuals divided by the
-standard deviation of daily pump changes over the VOL_DAYS before the origin, and are
-multiplied back by the one at the test origin. For the regressions, how much the fitted
-coefficients move across blocks.
+standard deviation of daily pump changes over the VOL_DAYS before the origin (leaving out a tax
+change's day and the SETTLE_DAYS after it), and are multiplied back by the one at the test origin. Trend reversals, from 3 days ahead: on the
+origins every model forecasts (but today and tax, which have no direction), whether the change to the target goes against the last
+REVERSAL_DAYS' change, and how often each model saw it coming (the reversals it called, and how
+many of its reversal calls were right). Moves under FLAT €/L a week count as flat and are left
+out. For the regressions, how much the fitted coefficients move across blocks.
 """
 
 import argparse
@@ -75,6 +78,8 @@ TREND_DAYS = 7
 DAMPING = 0.8
 VOL_DAYS = 28
 ACTIVITY_DAYS = 365
+REVERSAL_DAYS = 7
+FLAT = 0.003
 RIDGE = 1.0
 GAL = 3.785411784
 PRODUCT = {"gasoleo_a": "eia:EER_EPD2DXL0_PF4_Y35NY_DPG", "gasolina_95": "eia:EER_EPMRU_PF4_Y35NY_DPG"}
@@ -140,6 +145,12 @@ class Series:
         if futures:
             self.products["futures"] = market[FUTURES[fuel]]
         self._activity = {}
+        self.tax_changes = sorted({r["from"] for r in taxes.load() if r["fuel"] in (fuel, "both")})
+
+    def settling(self, day):
+        """Whether `day` is a tax change's day or one of the SETTLE_DAYS after it."""
+        i = bisect.bisect_left(self.tax_changes, day - SETTLE_DAYS * DAY)
+        return i < len(self.tax_changes) and self.tax_changes[i] <= day
 
     def activity(self, day):
         """Each weekday's mean absolute daily change of the pre-tax price over the ACTIVITY_DAYS
@@ -268,9 +279,10 @@ def baselines(s, t, h, tax):
 
 
 def volatility(s, t):
-    """The standard deviation of daily pump changes over the VOL_DAYS before t, or None."""
+    """The standard deviation of daily pump changes over the VOL_DAYS before t, or None. Days
+    settling a tax change are left out: their step is the tax, and it rarely reaches the pump in full."""
     changes = [s.pump[d] - s.pump[d - DAY] for d in (t - k * DAY for k in range(VOL_DAYS))
-               if d in s.pump and d - DAY in s.pump]
+               if d in s.pump and d - DAY in s.pump and not s.settling(d)]
     return float(np.std(changes)) if len(changes) >= VOL_DAYS // 2 else None
 
 
@@ -379,6 +391,8 @@ def run(s, h, holdout, final, changes):
                     resid[name].append((y - f) / vol)
         bands = {name: np.quantile(r, [0.1, 0.9]) for name, r in resid.items() if r}
         for t, y, vol, base, xs in test:
+            before = t - REVERSAL_DAYS * DAY
+            past = s.pump[t] - s.pump[before] if before in s.pump else None
             preds = dict(base)
             for name, model in models.items():
                 if xs[name] is not None:
@@ -386,7 +400,7 @@ def run(s, h, holdout, final, changes):
             for name, f in ensemble(preds).items():
                 lo_q, hi_q = bands.get(name, (None, None))
                 inside = None if lo_q is None else (f + lo_q * vol <= y <= f + hi_q * vol)
-                scored.append((name, t, y - f, inside, near_tax_change(t, h, changes)))
+                scored.append((name, t, y - f, inside, near_tax_change(t, h, changes), y, past))
     return scored, coefs
 
 
@@ -395,6 +409,38 @@ def run(s, h, holdout, final, changes):
 def summary(errors):
     a = np.abs(errors)
     return a.mean(), np.quantile(a, 0.9), np.mean(errors)
+
+
+def reversals(by_h, models):
+    """How well each model calls trend reversals, on the origins every model forecasts. today
+    and tax have no direction of their own, so they're left out."""
+    models = [m for m in models if m not in ("today", "tax")]
+    horizons = [h for h in HORIZONS if h >= 3]
+    table = {m: [] for m in models}
+    bases = []
+    for h in horizons:
+        by_origin = collections.defaultdict(dict)
+        for name, t, err, _, _, y, past in by_h.get(h, []):
+            if past is not None and abs(past) >= FLAT and abs(y) >= FLAT * h / 7:
+                by_origin[t][name] = (y - err, y, past)
+        rows = [v for v in by_origin.values() if all(m in v for m in models)]
+        reversed_ = [v for v in rows if np.sign(next(iter(v.values()))[1]) != np.sign(next(iter(v.values()))[2])]
+        bases.append(f"{h} d: {len(reversed_)} of {len(rows)} ({len(reversed_) / len(rows):.0%})" if rows else f"{h} d: –")
+        for m in models:
+            if not rows:
+                table[m].append("–")
+                continue
+            called = [v[m] for v in rows if np.sign(v[m][0]) != np.sign(v[m][2])]
+            hits = sum(np.sign(y) != np.sign(past) for _, y, past in called)
+            right = np.mean([np.sign(v[m][0]) == np.sign(v[m][1]) for v in rows])
+            precision = f"{hits / len(called):.0%}" if called else "–"
+            table[m].append(f"{hits / len(reversed_):.0%} / {precision} ({len(called)}) / {right:.0%}")
+    print(f"\nTrend reversals against the last {REVERSAL_DAYS} days (reversed: {', '.join(bases)}).")
+    print("Reversals called / reversal calls right (calls) / direction right overall:\n")
+    print("| Model | " + " | ".join(f"{h} d" for h in horizons) + " |")
+    print("|---|" + "---|" * len(horizons))
+    for m in models:
+        print(f"| {m} | " + " | ".join(table[m]) + " |")
 
 
 def report(results, coefs_by):
@@ -426,6 +472,7 @@ def report(results, coefs_by):
                 fmt = lambda v: f"{np.mean(v):.4f} ({len(v)})" if v else "–"
                 cells.append(f"{fmt(calm)} / {fmt(taxed)}")
             print(f"| {m} | " + " | ".join(cells) + " |")
+        reversals(by_h, models)
         for model, coefs in coefs_by.get((fuel, 7), {}).items():
             c = np.array(coefs)
             print(f"\n{model}, 7 d, standardized coefficients over {len(c)} blocks (mean ± sd, share with the same sign):\n")

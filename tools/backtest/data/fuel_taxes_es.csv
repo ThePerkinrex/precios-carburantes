@@ -23,40 +23,45 @@ from,published,region,fuel,component,value,unit,confidence,source,note
 2026-11-01,2026-10-15,ES,both,cut,200,eur_per_1000l,published-approx,RDL 25/2026 safeguard: CPI 09/2026 +27.5 % / +34.0 %,published = INE CPI release (approximate date)
 2026-12-01,2026-09-30,ES,both,cut,60,eur_per_1000l,exact,RDL 25/2026,base cut; safeguards hang on CPI 10/2026 and 09/2026 (see fuel_taxes.js)
 2027-01-01,2026-09-30,ES,both,cut,0,eur_per_1000l,exact,RDL 25/2026,end of the cuts
-2022-04-01,2022-03-30,ALL,both,bonus,0.20,eur_per_l,exact,RDL 6/2022,"discount at the pump, after IVA, everywhere incl. Canarias; to check: whether the Ministry's prices include it"
-2022-07-01,2022-03-30,ALL,both,bonus,0,eur_per_l,exact,RDL 6/2022,planned end when first published
-2022-07-01,2022-06-26,ALL,both,bonus,0.20,eur_per_l,exact,RDL 11/2022,extended
-2023-01-01,2022-06-26,ALL,both,bonus,0,eur_per_l,exact,RDL 11/2022,"end (RDL 20/2022 kept it only for professionals)"
+2022-04-01,2022-03-30,ALL,both,bonus,,eur_per_l,exact,RDL 6/2022,"discount at the pump, after IVA, everywhere incl. Canarias (0.20); documentation only: the Ministry's prices don't include it (no national step on 2022-04-01 or 2023-01-01 in the backfill)"
+2022-07-01,2022-03-30,ALL,both,bonus,,eur_per_l,exact,RDL 6/2022,planned end when first published
+2022-07-01,2022-06-26,ALL,both,bonus,,eur_per_l,exact,RDL 11/2022,extended (0.20)
+2023-01-01,2022-06-26,ALL,both,bonus,,eur_per_l,exact,RDL 11/2022,"end (RDL 20/2022 kept it only for professionals)"
 2007-01-01,,09,gasolina_95,regional,24,eur_per_1000l,exact,IVMDH tramo autonómico Cataluña,since 01/08/2004
 2007-01-01,,09,gasoleo_a,regional,24,eur_per_1000l,exact,IVMDH tramo autonómico Cataluña,since 01/08/2004
-2012-01-01,,09,both,regional,48,eur_per_1000l,year,"Hacienda, Tributación autonómica 2012: Cataluña increases in 2012",date to pin from the data
+2012-04-01,,09,both,regional,48,eur_per_1000l,data,"Hacienda, Tributación autonómica 2012: Cataluña increases in 2012","date pinned from the price steps (detect_tax_steps.py --pin)"
 2007-01-01,,03,gasolina_95,regional,24,eur_per_1000l,exact,IVMDH tramo autonómico Asturias,since 01/01/2004
 2007-01-01,,03,gasoleo_a,regional,20,eur_per_1000l,exact,IVMDH tramo autonómico Asturias,since 01/01/2004
-2013-01-01,,03,gasolina_95,regional,48,eur_per_1000l,year,"Hacienda, Tributación autonómica 2013 (2012: 24)",date to pin from the data
-2013-01-01,,03,gasoleo_a,regional,40,eur_per_1000l,year,"Hacienda, Tributación autonómica 2013 (2012: 20)",date to pin from the data
+2013-01-01,,03,gasolina_95,regional,48,eur_per_1000l,data,"Hacienda, Tributación autonómica 2013 (2012: 24)","date pinned from the price steps (detect_tax_steps.py --pin)"
+2013-01-01,,03,gasoleo_a,regional,40,eur_per_1000l,data,"Hacienda, Tributación autonómica 2013 (2012: 20)","date pinned from the price steps (detect_tax_steps.py --pin)"
 2007-01-01,,12,gasolina_95,regional,24,eur_per_1000l,exact,IVMDH tramo autonómico Galicia,since 01/01/2004
 2007-01-01,,12,gasoleo_a,regional,12,eur_per_1000l,exact,IVMDH tramo autonómico Galicia,since 01/01/2004
-2014-01-01,,12,both,regional,48,eur_per_1000l,year,"Hacienda, Tributación autonómica 2014 (2013: 24 / 12)",date to pin from the data
+2014-01-01,,12,both,regional,48,eur_per_1000l,data,"Hacienda, Tributación autonómica 2014 (2013: 24 / 12)","date pinned from the price steps (detect_tax_steps.py --pin)"
 2007-01-01,,13,both,regional,17,eur_per_1000l,exact,IVMDH tramo autonómico Madrid,since 01/08/2002; unchanged until 2018
 2007-01-01,,07,both,regional,24,eur_per_1000l,exact,IVMDH tramo autonómico Castilla-La Mancha,since 01/01/2006
-2012-01-01,,07,both,regional,48,eur_per_1000l,year,"Hacienda, Tributación autonómica 2012: increases in 2012",date to pin from the data
+2012-05-01,,07,both,regional,48,eur_per_1000l,data,"Hacienda, Tributación autonómica 2012: increases in 2012","date pinned from the price steps (detect_tax_steps.py --pin)"
 2007-01-01,,10,both,regional,24,eur_per_1000l,exact,IVMDH tramo autonómico Comunitat Valenciana,since 01/01/2006
-2012-01-01,,10,both,regional,48,eur_per_1000l,year,"Hacienda, Tributación autonómica 2012: increases in 2012",date to pin from the data
+2012-01-10,,10,both,regional,48,eur_per_1000l,data,"Hacienda, Tributación autonómica 2012: increases in 2012","date pinned from the price steps (detect_tax_steps.py --pin); most stations moved on 01-10 and 01-11; gasóleo rose ~1.3x the expected step (check the 2011 gasóleo rate)"
 2010-07-10,,01,both,regional,24,eur_per_1000l,exact,"Hacienda, Tributación autonómica 2011: Andalucía from 10/07/2010",
-2012-01-01,,01,both,regional,48,eur_per_1000l,year,"Hacienda, Tributación autonómica 2012: increases in 2012",date to pin from the data
+2012-06-23,,01,both,regional,48,eur_per_1000l,data,"Hacienda, Tributación autonómica 2012: increases in 2012","date pinned from the price steps (detect_tax_steps.py --pin)"
 2011-01-01,,14,gasolina_95,regional,24,eur_per_1000l,exact,"Hacienda, Tributación autonómica 2011: Murcia from 01/01/2011",
 2011-01-01,,14,gasoleo_a,regional,12,eur_per_1000l,exact,"Hacienda, Tributación autonómica 2011: Murcia from 01/01/2011",
-2012-01-01,,14,both,regional,48,eur_per_1000l,year,"Hacienda, Tributación autonómica 2012: increases in 2012",date to pin from the data
+2012-11-01,,14,both,regional,48,eur_per_1000l,data,"Hacienda, Tributación autonómica 2012: increases in 2012","date pinned from the price steps (detect_tax_steps.py --pin)"
 2011-01-01,,11,gasolina_95,regional,24,eur_per_1000l,exact,"Hacienda, Tributación autonómica 2011: Extremadura from 01/01/2011",
 2011-01-01,,11,gasoleo_a,regional,20,eur_per_1000l,exact,"Hacienda, Tributación autonómica 2011: Extremadura from 01/01/2011",
-2012-01-01,,11,both,regional,48,eur_per_1000l,year,"Hacienda, Tributación autonómica 2012: increases in 2012",date to pin from the data
-2015-01-01,,11,both,regional,38.4,eur_per_1000l,year,"Hacienda, Tributación autonómica 2015 (2014: 48)",date to pin from the data
-2012-05-01,,04,both,regional,48,eur_per_1000l,month,"Hacienda, Tributación autonómica 2012: Illes Balears from May 2012",date to pin from the data
-2012-06-01,,06,both,regional,48,eur_per_1000l,month,"Hacienda, Tributación autonómica 2012: Cantabria from June 2012",date to pin from the data
-2014-01-01,,06,both,regional,24,eur_per_1000l,year,"Hacienda, Tributación autonómica 2014 (2013: 48)",date to pin from the data
-2015-01-01,,06,both,regional,0,eur_per_1000l,year,"Hacienda, Tributación autonómica 2015: Cantabria abolishes it",date to pin from the data
+2012-06-29,,11,both,regional,48,eur_per_1000l,data,"Hacienda, Tributación autonómica 2012: increases in 2012","date pinned from the price steps (detect_tax_steps.py --pin); moved on 06-29 and 06-30"
+2015-04-01,,11,both,regional,38.4,eur_per_1000l,data,"Hacienda, Tributación autonómica 2015 (2014: 48)","date pinned from the price steps (detect_tax_steps.py --pin)"
+2012-05-01,,04,both,regional,48,eur_per_1000l,data,"Hacienda, Tributación autonómica 2012: Illes Balears from May 2012","date pinned from the price steps (detect_tax_steps.py --pin)"
+2012-06-02,,06,both,regional,48,eur_per_1000l,data,"Hacienda, Tributación autonómica 2012: Cantabria from June 2012","date pinned from the price steps (detect_tax_steps.py --pin); a few stations moved on 06-01"
+2014-01-01,,06,both,regional,24,eur_per_1000l,data,"Hacienda, Tributación autonómica 2014 (2013: 48)","date pinned from the price steps (detect_tax_steps.py --pin)"
+2015-01-01,,06,both,regional,0,eur_per_1000l,data,"Hacienda, Tributación autonómica 2015: Cantabria abolishes it","date pinned from the price steps (detect_tax_steps.py --pin)"
 2012-03-01,,08,both,regional,48,eur_per_1000l,exact,"Hacienda, Tributación autonómica 2012; cosapublica.javiersevillano.es: Castilla y León from 01/03/2012",
-2015-01-01,,08,both,regional,16,eur_per_1000l,year,"Hacienda, Tributación autonómica 2015 (2014: 48)",date to pin from the data
-2016-01-01,,08,both,regional,0,eur_per_1000l,year,"Hacienda, Tributación autonómica 2016: Castilla y León abolishes it",date to pin from the data
-2016-01-01,,02,both,regional,24,eur_per_1000l,year,"Hacienda, Tributación autonómica 2016: Aragón from 2016",date to pin from the data
+2015-01-01,,08,both,regional,16,eur_per_1000l,data,"Hacienda, Tributación autonómica 2015 (2014: 48)","date pinned from the price steps (detect_tax_steps.py --pin)"
+2016-01-01,,08,both,regional,0,eur_per_1000l,data,"Hacienda, Tributación autonómica 2016: Castilla y León abolishes it","date pinned from the price steps (detect_tax_steps.py --pin)"
+2016-01-01,,02,both,regional,24,eur_per_1000l,data,"Hacienda, Tributación autonómica 2016: Aragón from 2016","date pinned from the price steps (detect_tax_steps.py --pin)"
+2007-01-01,,15,both,regional,0,eur_per_1000l,exact,IVMDH tramo autonómico Navarra: not applied,
+2012-07-01,,15,both,regional,24,eur_per_1000l,exact,"mundopetroleo.com notes; Ley Foral 21/2012: Navarra from 01/07/2012",step seen in the backfill on 2012-07-01
+2014-01-01,,15,both,regional,0,eur_per_1000l,data,"mundopetroleo.com: ""several years at zero"" before 2016","date and value from the price steps (-2 c€/L on 2014-01-01, the size of the 2012 rise)"
+2016-01-01,,15,both,regional,24,eur_per_1000l,exact,Ley Foral 23/2015: Navarra from 01/01/2016,
+2017-01-01,,15,both,regional,0,eur_per_1000l,exact,Ley Foral 25/2016: Navarra abolishes it,
 2019-01-01,2018-07-04,ALL,both,regional,0,eur_per_1000l,exact,Ley 6/2018: tramo autonómico abolished (folded into the state rate),
