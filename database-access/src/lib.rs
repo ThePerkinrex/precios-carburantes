@@ -297,6 +297,16 @@ const MIGRATIONS: &[&[&str]] = &[
             created_at INTEGER NOT NULL,
             PRIMARY KEY (username, station_id)
         ) WITHOUT ROWID"],
+    // When each station's current prices were first seen (unix seconds): when they last
+    // changed, or the station came back to the list. Saves /api/prices from looking it up in
+    // the whole price history.
+    &[
+        "ALTER TABLE precios_actuales ADD COLUMN ultimo_cambio INTEGER",
+        "UPDATE precios_actuales SET ultimo_cambio = (
+            SELECT MAX(q.fecha) FROM precios q
+            WHERE q.id_estacion = precios_actuales.id_estacion AND q.reportado = 1
+        )",
+    ],
 ];
 
 pub const DEFAULT_DB_PATH: &str = "precios_carburantes.db";
@@ -387,8 +397,12 @@ fn apply_migrations(conn: &mut Connection) -> rusqlite::Result<()> {
     tx.commit()?;
 
     // Migrations may free a lot of pages (e.g. table rebuilds); VACUUM can't run inside
-    // a transaction, so reclaim the space here.
-    if applied_any {
+    // a transaction, so reclaim the space here. Only when a tenth of the file is free: it
+    // rewrites the whole database, minutes on the Pi, and the service doesn't listen until
+    // it's done.
+    let free: i64 = conn.query_row("PRAGMA freelist_count", [], |r| r.get(0))?;
+    let pages: i64 = conn.query_row("PRAGMA page_count", [], |r| r.get(0))?;
+    if applied_any && free * 10 >= pages {
         eprintln!("Vacuuming database");
         let vacuum_start = Instant::now();
         conn.execute_batch("VACUUM")?;

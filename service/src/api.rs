@@ -66,7 +66,7 @@ async fn get_latest_station_data(pool: DbPool) -> Result<Vec<EstacionPrecio>, Ap
                 e.localidad,
                 e.horario,
                 e.cp,
-                (SELECT MAX(q.fecha) FROM precios q WHERE q.id_estacion = e.id AND q.reportado = 1)
+                p.ultimo_cambio
             FROM estaciones e
             JOIN precios_actuales p ON p.id_estacion = e.id
             "#,
@@ -88,7 +88,7 @@ async fn get_latest_station_data(pool: DbPool) -> Result<Vec<EstacionPrecio>, Ap
             localidad: row.get(11)?,
             horario: row.get(12)?,
             cp: row.get(13)?,
-            ultimo_cambio: format_fecha(row.get(14)?),
+            ultimo_cambio: row.get::<_, Option<i64>>(14)?.map(format_fecha).unwrap_or_default(),
         })
     })?;
 

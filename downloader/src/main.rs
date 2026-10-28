@@ -207,9 +207,9 @@ fn main_internal() -> Result<(), Box<dyn Error>> {
                 params![id, fecha, precios.0, precios.1],
             )?;
             tx.execute(
-                "INSERT OR REPLACE INTO precios_actuales (id_estacion, gasoleo_a, gasolina_95) 
-                 VALUES (?1, ?2, ?3)",
-                params![id, precios.0, precios.1],
+                "INSERT OR REPLACE INTO precios_actuales (id_estacion, gasoleo_a, gasolina_95, ultimo_cambio)
+                 VALUES (?1, ?2, ?3, ?4)",
+                params![id, precios.0, precios.1, fecha],
             )?;
             cambios += 1;
         }

@@ -13,6 +13,7 @@ use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use reqwest::StatusCode;
 use tracing::{debug, info, level_filters::LevelFilter, warn};
+use tower_http::{CompressionLevel, compression::CompressionLayer};
 use tracing_subscriber::EnvFilter;
 
 use crate::{
@@ -170,6 +171,9 @@ async fn main() {
         .layer(middleware::from_fn(error::log_app_errors))
         .layer(Extension(certs))
         .layer(Extension(Arc::new(config)))
+        // The station list is megabytes of JSON. The fastest level still shrinks it about as
+        // much, for a fraction of the Pi's CPU.
+        .layer(CompressionLayer::new().quality(CompressionLevel::Fastest))
         .with_state(pool);
 
     // let addr = std::env::var("PRICE_ADDR").unwrap_or_else(|_| "127.0.0.1:8001".into());
