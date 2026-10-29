@@ -174,6 +174,10 @@ async fn put_station(
             created_at = CASE WHEN kind = excluded.kind THEN created_at ELSE excluded.created_at END",
         params![auth.username, id, body.kind.as_str(), nickname, now()],
     )?;
+    // Alerts are only on saved stations.
+    if matches!(body.kind, Kind::Hidden) {
+        delete_alerts(&conn, &auth.username, id)?;
+    }
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -187,7 +191,16 @@ async fn delete_station(
         "DELETE FROM user_stations WHERE username = ?1 AND station_id = ?2",
         params![auth.username, id],
     )?;
+    delete_alerts(&conn, &auth.username, id)?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+fn delete_alerts(conn: &rusqlite::Connection, username: &str, id: i64) -> rusqlite::Result<()> {
+    conn.execute(
+        "DELETE FROM price_alerts WHERE username = ?1 AND station_id = ?2",
+        params![username, id],
+    )?;
+    Ok(())
 }
 
 pub fn get_router() -> Router<DbPool> {

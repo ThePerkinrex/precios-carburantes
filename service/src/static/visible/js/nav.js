@@ -7,7 +7,7 @@ export const PAGES = [
 	{ id: "stations", href: "/files/stations", label: t("My stations"), hint: t("Your saved stations, their prices and history") },
 	{ id: "trips", href: "/files/trips", label: t("My trips"), hint: t("Saved routes and their fuel stops") },
 	{ id: "dashboard", href: "/files/dashboard", label: t("Price trends"), hint: t("Average prices over time, by region") },
-	{ id: "settings", href: "/files/settings", label: t("Settings"), hint: t("Language and your car") },
+	{ id: "settings", href: "/files/settings", label: t("Settings"), hint: t("Language, your car and notifications") },
 	{ id: "account", href: "/files/account", label: t("My devices"), hint: t("Renew or revoke your certificates") },
 	{ id: "admin", href: "/files/admin", label: t("Users"), hint: t("Invite people and manage access"), role: "admin_users" },
 ];

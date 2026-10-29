@@ -307,6 +307,55 @@ const MIGRATIONS: &[&[&str]] = &[
             WHERE q.id_estacion = precios_actuales.id_estacion AND q.reportado = 1
         )",
     ],
+    // Price alerts and where to send them. All private to `username`.
+    //
+    // - price_alerts: a saved station, a fuel and when to tell the user: 'any_drop', 'drop_by'
+    //   (`value` cents) or 'below' (`value` €/l). `ref_price` is drop_by's state: the price when
+    //   the rule was made or last fired, which the drop is measured from.
+    // - notification_channels: where a user's notifications go. `address` identifies the
+    //   destination (a Web Push endpoint, or a Telegram chat later on); `config` is the rest as
+    //   JSON (the subscription's keys). `failures` counts failed sends in a row.
+    // - notification_outbox: what the downloader found, for the service to send. `body` is
+    //   JSON (the alerts that fired); it's rendered per channel when sent.
+    &[
+        "CREATE TABLE price_alerts (
+            id INTEGER PRIMARY KEY,
+            username TEXT NOT NULL,
+            station_id INTEGER NOT NULL REFERENCES estaciones(id),
+            fuel TEXT NOT NULL CHECK (fuel IN ('gasoleo_a', 'gasolina_95')),
+            kind TEXT NOT NULL CHECK (kind IN ('any_drop', 'drop_by', 'below')),
+            value REAL,
+            ref_price REAL,
+            created_at INTEGER NOT NULL,
+            UNIQUE (username, station_id, fuel, kind)
+        )",
+        "CREATE INDEX idx_price_alerts_station ON price_alerts(station_id)",
+        "CREATE TABLE notification_channels (
+            id INTEGER PRIMARY KEY,
+            username TEXT NOT NULL,
+            kind TEXT NOT NULL CHECK (kind IN ('webpush', 'telegram')),
+            address TEXT NOT NULL,
+            label TEXT NOT NULL,
+            config TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            last_ok_at INTEGER,
+            failures INTEGER NOT NULL DEFAULT 0,
+            UNIQUE (kind, address)
+        )",
+        "CREATE INDEX idx_notification_channels_user ON notification_channels(username)",
+        "CREATE TABLE notification_outbox (
+            id INTEGER PRIMARY KEY,
+            username TEXT NOT NULL,
+            fecha INTEGER NOT NULL,
+            body TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            sent_at INTEGER,
+            attempts INTEGER NOT NULL DEFAULT 0,
+            next_attempt_at INTEGER NOT NULL
+        )",
+        "CREATE INDEX idx_notification_outbox_pending ON notification_outbox(next_attempt_at)
+            WHERE sent_at IS NULL",
+    ],
 ];
 
 pub const DEFAULT_DB_PATH: &str = "precios_carburantes.db";

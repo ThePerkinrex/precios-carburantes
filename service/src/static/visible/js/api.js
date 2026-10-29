@@ -296,3 +296,57 @@ export async function adminRevokeCert(serial, reason) {
 		body: JSON.stringify({ reason }),
 	}).then(checkOk);
 }
+
+// ---------------------------------------------------------------------------
+// Price alerts and where they're sent
+// ---------------------------------------------------------------------------
+
+// [{ id, station_id, fuel, kind ("any_drop" | "drop_by" | "below"), value,
+// ref_price, created_at }]
+export async function getAlerts() {
+	return await fetch(API_LOCATION + "/notifications/alerts").then(checkOk).then((x) => x.json());
+}
+
+// Adds an alert, or changes the value of the station's alert of that fuel and kind.
+export async function putAlert(stationId, fuel, kind, value = null) {
+	return await fetch(API_LOCATION + "/notifications/alerts", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ station_id: stationId, fuel, kind, value }),
+	})
+		.then(checkOk)
+		.then((x) => x.json());
+}
+
+export async function deleteAlert(id) {
+	await fetch(`${API_LOCATION}/notifications/alerts/${id}`, { method: "DELETE" }).then(checkOk);
+}
+
+export async function getVapidKey() {
+	return await fetch(API_LOCATION + "/notifications/vapid-key").then(checkOk).then((x) => x.json()).then((x) => x.key);
+}
+
+// [{ id, kind, label, address, created_at, last_ok_at, failures }]
+export async function getChannels() {
+	return await fetch(API_LOCATION + "/notifications/channels").then(checkOk).then((x) => x.json());
+}
+
+// `subscription`: a PushSubscription. Returns { id }.
+export async function putPushSubscription(subscription, label, lang) {
+	return await fetch(API_LOCATION + "/notifications/channels/webpush", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ ...subscription.toJSON(), label, lang }),
+	})
+		.then(checkOk)
+		.then((x) => x.json());
+}
+
+export async function deleteChannel(id) {
+	await fetch(`${API_LOCATION}/notifications/channels/${id}`, { method: "DELETE" }).then(checkOk);
+}
+
+// Sends a test notification everywhere. Returns { sent, failed, removed }.
+export async function sendTestNotification() {
+	return await fetch(API_LOCATION + "/notifications/test", { method: "POST" }).then(checkOk).then((x) => x.json());
+}

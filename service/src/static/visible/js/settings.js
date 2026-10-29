@@ -1,9 +1,11 @@
-// Settings: the UI language and the car profile the route planner uses.
+// Settings: the UI language, the car profile the route planner uses and
+// (settings_notifications.js) notifications.
 
 import { getUserState, updateCar, updateLanguage } from "./api.js";
 import { DEFAULT_CAR } from "./car.js";
 import { t, useLanguage } from "./i18n.js";
 import { renderNav } from "./nav.js";
+import "./settings_notifications.js";
 
 const languageGroup = document.getElementById("language");
 const languageMessage = document.getElementById("languageMessage");

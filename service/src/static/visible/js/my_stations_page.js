@@ -1,10 +1,11 @@
 // "My stations": the saved stations' prices against their province's
-// average, their history (together and one by one), and the hidden ones.
+// average, their history (together and one by one), their price alerts, and
+// the hidden ones.
 
-import { getLatestPrices, getUserState } from "./api.js";
+import { deleteAlert, getAlerts, getChannels, getLatestPrices, getUserState, putAlert } from "./api.js";
 import { averageBadge, provinceAverages } from "./area_average.js";
 import { formatDateTime, parseFecha } from "./dates.js";
-import { t, tn } from "./i18n.js";
+import { LOCALE, t, tn } from "./i18n.js";
 import { getLogos } from "./logos.js";
 import { MyStations } from "./my_stations.js";
 import { renderNav } from "./nav.js";
@@ -58,6 +59,13 @@ let averages = null;
 const slots = new Map();
 // The ones the user took off the chart.
 const dropped = new Set();
+// The user's price alerts, and whether any device gets them (null: unknown).
+let alerts = [];
+let hasDevice = null;
+// Stations whose alerts are open, so they stay open when the list is redrawn.
+const alertsOpen = new Set();
+// The server's limit on alerts per user.
+const MAX_ALERTS = 50;
 
 const saved = () => mine.ids("saved").map((id) => mine.get(id));
 const hidden = () => mine.ids("hidden").map((id) => mine.get(id));
@@ -326,6 +334,10 @@ function savedItem(s) {
 		<details class="fold mine-history">
 			<summary>${t("Price history")}</summary>
 			<div class="chart-box small"><canvas aria-label="${t("Price history")}"></canvas></div>
+		</details>
+		<details class="fold mine-alerts"${alertsOpen.has(s.id) ? " open" : ""}>
+			<summary>${t("Price alerts")}<span class="pill alert-count" hidden></span></summary>
+			<div class="alerts-box"></div>
 		</details>`;
 
 	const form = li.querySelector(".mine-rename");
@@ -348,6 +360,13 @@ function savedItem(s) {
 	details.addEventListener("toggle", () => {
 		if (details.open) drawStationChart(s, details.querySelector("canvas"));
 	});
+
+	const alertsFold = li.querySelector(".mine-alerts");
+	alertsFold.addEventListener("toggle", () => {
+		if (alertsFold.open) alertsOpen.add(s.id);
+		else alertsOpen.delete(s.id);
+	});
+	fillAlerts(s, alertsFold);
 
 	fillAdvice(s, li.querySelector(".mine-advice"));
 	return li;
@@ -399,6 +418,123 @@ function renderHidden() {
 			return li;
 		}),
 	);
+}
+
+// ---------------------------------------------------------------------------
+// Price alerts
+// ---------------------------------------------------------------------------
+
+const cents = (value) => value.toLocaleString(LOCALE, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+function alertText(a) {
+	const fuel = FUELS[a.fuel].name;
+	if (a.kind === "any_drop") return t("{fuel}: whenever it drops", { fuel });
+	// A no-break space keeps the unit with its number.
+	if (a.kind === "drop_by") return t("{fuel}: when it drops {cents} c", { fuel, cents: cents(a.value) }).replace(/ c$/, "\u00a0c");
+	return t("{fuel}: when it goes below {price} €", { fuel, price: formatPrice(a.value) });
+}
+
+function alertNote(a) {
+	if (a.kind !== "drop_by") return "";
+	return a.ref_price != null
+		? t("From {price} €, its price when you added it or it last told you.", { price: formatPrice(a.ref_price) })
+		: t("From its next price: it has none now.");
+}
+
+// The alerts of saved station `s` in its fold, and the form to add one.
+function fillAlerts(s, fold) {
+	const mineAlerts = alerts.filter((a) => a.station_id === s.id);
+	const count = fold.querySelector(".alert-count");
+	count.hidden = mineAlerts.length === 0;
+	count.textContent = mineAlerts.length;
+
+	const box = fold.querySelector(".alerts-box");
+	const left = MAX_ALERTS - alerts.length;
+	box.innerHTML = `
+		${mineAlerts.length ? `<ul class="alert-list">${mineAlerts.map((a) => `
+			<li data-id="${a.id}">
+				<span>${escapeHtml(alertText(a))}<span class="item-meta">${escapeHtml(alertNote(a))}</span></span>
+				<button type="button" class="danger">${t("Remove")}</button>
+			</li>`).join("")}</ul>` : `<p class="muted">${t("Get a notification when this station's price drops.")}</p>`}
+		${hasDevice === false ? `<p class="mine-warning">${t("None of your devices gets notifications yet.")} <a href="/files/settings">${t("Turn them on in Settings.")}</a></p>` : ""}
+		<form class="alert-form">
+			<label>${t("Fuel")}
+				<select name="fuel">${Object.entries(FUELS).map(([key, f]) => `<option value="${key}"${key === view.fuel ? " selected" : ""}>${f.name}</option>`).join("")}</select>
+			</label>
+			<label>${t("Tell me")}
+				<select name="kind">
+					<option value="any_drop">${t("Whenever it drops")}</option>
+					<option value="drop_by">${t("When it drops by")}</option>
+					<option value="below">${t("When it goes below")}</option>
+				</select>
+			</label>
+			<label class="value" hidden><span></span>
+				<input name="value" type="number" inputmode="decimal" required>
+			</label>
+			<div class="button-row">
+				<button type="submit" class="secondary"${left > 0 ? "" : " disabled"}>${t("Add alert")}</button>
+			</div>
+			<p class="item-meta">${left > 0 ? tn(left, "You can add 1 more alert.", "You can add {n} more alerts.") : t("You have the most alerts you can: remove one to add another")}</p>
+		</form>`;
+
+	for (const li of box.querySelectorAll(".alert-list li")) {
+		li.querySelector("button").addEventListener("click", () =>
+			act(async () => {
+				const id = Number(li.dataset.id);
+				await deleteAlert(id);
+				alerts = alerts.filter((a) => a.id !== id);
+				refreshAlerts();
+			}),
+		);
+	}
+
+	const form = box.querySelector("form");
+	const valueLabel = form.querySelector(".value");
+	const input = form.elements.value;
+	const showValue = () => {
+		const kind = form.elements.kind.value;
+		valueLabel.hidden = kind === "any_drop";
+		input.disabled = kind === "any_drop";
+		const price = s[form.elements.fuel.value];
+		if (kind === "drop_by") {
+			valueLabel.firstElementChild.textContent = t("Cents");
+			Object.assign(input, { min: 0.1, max: 50, step: 0.1, placeholder: "3" });
+		} else if (kind === "below") {
+			valueLabel.firstElementChild.textContent = t("Price (€/l)");
+			Object.assign(input, { min: 0.5, max: 5, step: 0.001, placeholder: price != null ? (price - 0.02).toFixed(3) : "1.400" });
+		}
+	};
+	form.addEventListener("change", showValue);
+	showValue();
+	form.addEventListener("submit", (e) => {
+		e.preventDefault();
+		const kind = form.elements.kind.value;
+		const value = kind === "any_drop" ? null : Number(input.value.replace(",", "."));
+		act(async () => {
+			const alert = await putAlert(s.id, form.elements.fuel.value, kind, value);
+			alerts = [...alerts.filter((a) => a.id !== alert.id), alert];
+			refreshAlerts();
+		});
+	});
+}
+
+// Redraws every station's alerts (the count left changes for all of them).
+function refreshAlerts() {
+	for (const fold of savedList.querySelectorAll(".mine-alerts")) {
+		const id = Number(fold.closest(".mine-station").dataset.id);
+		fillAlerts(mine.get(id), fold);
+	}
+}
+
+async function loadAlerts() {
+	try {
+		const [list, channels] = await Promise.all([getAlerts(), getChannels()]);
+		alerts = list;
+		hasDevice = channels.length > 0;
+		refreshAlerts();
+	} catch (e) {
+		console.error("Couldn't load your price alerts", e);
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -460,6 +596,8 @@ rangeGroup.addEventListener("click", (e) => {
 });
 
 function renderAll() {
+	// Unsaving a station deletes its alerts.
+	alerts = alerts.filter((a) => mine.isSaved(a.station_id));
 	assignSlots();
 	renderLegend();
 	renderSaved();
@@ -493,6 +631,7 @@ async function load() {
 	renderSegmented(rangeGroup, "range", view.range);
 	renderAll();
 	mine.on(renderAll);
+	loadAlerts();
 
 	try {
 		averages = computeAverages(await prices, state.filter);

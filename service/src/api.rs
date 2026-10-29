@@ -11,6 +11,7 @@ use crate::{DbPool, error::AppError};
 mod admin;
 mod geo;
 mod my_stations;
+mod notifications;
 pub mod route;
 mod trips;
 mod user;
@@ -399,4 +400,5 @@ pub fn get_router() -> Router<DbPool> {
         .nest("/route/", route::get_router())
         .nest("/trips", trips::get_router())
         .nest("/my-stations", my_stations::get_router())
+        .nest("/notifications", notifications::get_router())
 }

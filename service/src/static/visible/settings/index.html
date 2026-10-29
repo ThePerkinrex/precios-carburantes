@@ -9,11 +9,13 @@
 	<link rel="icon" href="/files/images/favicon.svg" type="image/svg+xml">
 	<link rel="icon" href="/files/images/favicon.ico" sizes="32x32">
 	<link rel="apple-touch-icon" href="/files/images/apple-touch-icon.png">
+	<link rel="manifest" href="/files/manifest.webmanifest">
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 	<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&display=swap">
 	<link rel="stylesheet" href="/files/css/app.css">
 	<link rel="stylesheet" href="/files/css/account.css">
+	<link rel="stylesheet" href="/files/css/notifications.css">
 </head>
 <body>
 	<div class="page">
@@ -66,6 +68,24 @@
 				<button type="submit">Save</button>
 			</form>
 			<p id="carMessage"></p>
+		</section>
+
+		<section class="card">
+			<h2>Notifications</h2>
+			<p class="muted">
+				A notification when a saved station's price drops. Choose which stations and how much on
+				<a href="/files/stations">My stations</a>.
+			</p>
+			<p id="pushStatus"></p>
+			<div class="button-row">
+				<button type="button" id="pushToggle" hidden></button>
+				<button type="button" class="secondary" id="pushTest" hidden>Send a test</button>
+			</div>
+			<p id="pushMessage"></p>
+			<div id="channelsBox" hidden>
+				<h3 class="subhead">Devices that get them</h3>
+				<ul id="channels" class="list"></ul>
+			</div>
 		</section>
 	</div>
 	<script type="module" src="/files/js/settings.js"></script>

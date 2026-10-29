@@ -1,0 +1,80 @@
+/* Notifications: the Settings card and the alerts on "My stations". Builds on account.css. */
+
+.button-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.subhead {
+	margin: 16px 0 0;
+	font-size: 1rem;
+}
+
+.channel-warning {
+	color: var(--up);
+}
+
+/* A saved station's alerts. */
+
+.alert-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.alert-list li {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 6px 0;
+	border-bottom: 1px solid var(--line);
+	font-size: 0.95rem;
+}
+
+.alert-list li:last-child {
+	border-bottom: none;
+}
+
+.alert-list .item-meta {
+	display: block;
+}
+
+/* Stacked on phones; side by side (fuel, kind, value) when there's room. */
+.alert-form {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 8px;
+	margin-top: 8px;
+}
+
+@media (min-width: 560px) {
+	.alert-form {
+		grid-template-columns: 1fr 1.4fr 1fr;
+		align-items: end;
+	}
+}
+
+.alert-form label {
+	min-width: 0;
+}
+
+.alert-form select {
+	min-height: 48px;
+	width: 100%;
+}
+
+.alert-form .value[hidden] {
+	display: none;
+}
+
+.alert-form .button-row,
+.alert-form p {
+	grid-column: 1 / -1;
+	margin: 0;
+}
+
+.alert-count {
+	margin-left: 4px;
+}

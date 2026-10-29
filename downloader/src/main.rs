@@ -5,6 +5,7 @@ use std::{collections::HashMap, error::Error, time::Instant};
 
 use database_access::{DEFAULT_DB_PATH, get_connection_manager};
 
+mod alerts;
 mod backfill;
 mod forecast;
 mod markets;
@@ -158,6 +159,7 @@ fn main_internal() -> Result<(), Box<dyn Error>> {
         .query_map([], |row| Ok((row.get(0)?, (row.get(1)?, row.get(2)?))))?
         .collect::<Result<_>>()?;
     let mut cambios = 0;
+    let mut alerts = alerts::Alerts::load(&tx)?;
 
     for est in resp.lista_eess {
         let id: i32 = est.id_eess.parse().unwrap_or(0);
@@ -200,7 +202,9 @@ fn main_internal() -> Result<(), Box<dyn Error>> {
 
         // Guardar el precio solo si la estación es nueva, vuelve a aparecer o ha cambiado
         let precios = (est.precio_gasoleo_a, est.precio_gasolina_95);
-        if actuales.remove(&id) != Some(precios) {
+        let antes = actuales.remove(&id);
+        if antes != Some(precios) {
+            alerts.check(id, antes, precios);
             tx.execute(
                 "INSERT OR REPLACE INTO precios (id_estacion, fecha, reportado, gasoleo_a, gasolina_95) 
                  VALUES (?1, ?2, 1, ?3, ?4)",
@@ -238,7 +242,12 @@ fn main_internal() -> Result<(), Box<dyn Error>> {
         params![fecha],
     )?;
 
+    let avisos = alerts.save(&tx, fecha)?;
+
     tx.commit()?;
+    if avisos > 0 {
+        println!("{avisos} avisos de precio en cola");
+    }
     println!(
         "Datos guardados correctamente para la fecha: {} ({} cambios, {} no reportadas) en {:.2}s",
         ahora,

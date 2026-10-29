@@ -518,7 +518,7 @@ impl CertManager {
 
 /// Writes a file readable only by the service user. Elsewhere than Unix
 /// (Windows, for development) it gets the default permissions.
-async fn write_private(path: &Path, contents: &[u8]) -> Result<(), CertError> {
+pub(crate) async fn write_private(path: &Path, contents: &[u8]) -> Result<(), CertError> {
     let mut options = tokio::fs::OpenOptions::new();
     options.write(true).create(true).truncate(true);
     #[cfg(unix)]

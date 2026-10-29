@@ -34,6 +34,7 @@ mod config;
 mod enroll;
 mod error;
 mod files;
+mod notify;
 
 // fn wants_html(headers: &HeaderMap) -> bool {
 //     debug!("WANTS HTML. Accept: {:?}", headers.get(header::ACCEPT));
@@ -156,6 +157,9 @@ async fn main() {
     let certs = Arc::new(CertManager::new(config.certs.clone()).await.unwrap());
     certs.clone().spawn_crl_refresh_task();
 
+    let notifier = Arc::new(notify::Notifier::new(&config).await.unwrap());
+    notifier.clone().spawn_outbox_task(pool.clone());
+
     // Everything except enrollment requires a verified client cert.
     let protected = Router::new()
         .nest("/api", api::get_router())
@@ -170,6 +174,7 @@ async fn main() {
         .nest("/enroll", enroll::get_router())
         .layer(middleware::from_fn(error::log_app_errors))
         .layer(Extension(certs))
+        .layer(Extension(notifier))
         .layer(Extension(Arc::new(config)))
         // The station list is megabytes of JSON. The fastest level still shrinks it about as
         // much, for a fraction of the Pi's CPU.

@@ -68,6 +68,31 @@ impl Default for CertConfig {
     }
 }
 
+fn vapid_key_default() -> PathBuf {
+    PathBuf::from("certs/vapid.key")
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct NotificationsConfig {
+    /// The private key that signs Web Push requests (VAPID). Made on first start if missing.
+    /// Changing it invalidates every browser's subscription.
+    #[serde(default = "vapid_key_default")]
+    pub vapid_key: PathBuf,
+    /// Who push services can contact about our messages: a `mailto:` or `https:` URL.
+    /// Defaults to `public_url`.
+    #[serde(default)]
+    pub contact: Option<String>,
+}
+
+impl Default for NotificationsConfig {
+    fn default() -> Self {
+        Self {
+            vapid_key: vapid_key_default(),
+            contact: None,
+        }
+    }
+}
+
 fn public_url_default() -> String {
     "http://localhost:8001".to_string()
 }
@@ -81,4 +106,6 @@ pub struct Config {
     /// Externally visible base URL (no trailing slash), used for invite links.
     #[serde(default = "public_url_default")]
     pub public_url: String,
+    #[serde(default)]
+    pub notifications: NotificationsConfig,
 }

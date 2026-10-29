@@ -36,6 +36,8 @@ x509-parser = "0.18.1"
 time = "0.3.55"
 p12-keystore = "0.3.2"
 getrandom = "0.3"
+web-push-native = "0.5"
+base64ct = { version = "1.8", features = ["alloc"] }
 
 [features]
 include-static = ["dep:include_dir"]

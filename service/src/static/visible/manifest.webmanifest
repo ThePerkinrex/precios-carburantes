@@ -1,0 +1,15 @@
+{
+	"name": "Precios carburantes",
+	"short_name": "Carburantes",
+	"description": "Fuel prices, your stations and price alerts",
+	"start_url": "/files/index.html",
+	"scope": "/",
+	"display": "standalone",
+	"background_color": "#15233a",
+	"theme_color": "#15233a",
+	"icons": [
+		{ "src": "/files/images/icon-192.png", "sizes": "192x192", "type": "image/png" },
+		{ "src": "/files/images/icon-512.png", "sizes": "512x512", "type": "image/png" },
+		{ "src": "/files/images/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+	]
+}
