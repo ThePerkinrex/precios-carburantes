@@ -100,6 +100,29 @@ fn run_invite_cli(args: &[String], config: &Config, pool: &DbPool) -> Result<(),
     Ok(())
 }
 
+/// The files a browser fetches when installing the app (to the home screen or desktop): the
+/// manifest and the app's icons. Some (Firefox for Android) fetch them without the client cert,
+/// so they're served to anyone, like /enroll. Nothing in them is private. nginx lets the same
+/// paths through.
+const INSTALL_FILES: &[&str] = &[
+    "manifest.webmanifest",
+    "images/icon-192.png",
+    "images/icon-512.png",
+    "images/icon-maskable-512.png",
+    "images/apple-touch-icon.png",
+    "images/favicon.svg",
+    "images/favicon.ico",
+];
+
+fn install_files() -> Router<DbPool> {
+    INSTALL_FILES.iter().fold(Router::new(), |router, file| {
+        router.route(
+            &format!("/files/{file}"),
+            get(move || files::load_file(*file)),
+        )
+    })
+}
+
 async fn not_found() -> Result<Response, AppError> {
     load_file_hidden("not_found.html").await.map(|mut r| {
         *r.status_mut() = StatusCode::NOT_FOUND;
@@ -172,6 +195,7 @@ async fn main() {
 
     let app = protected
         .nest("/enroll", enroll::get_router())
+        .merge(install_files())
         .layer(middleware::from_fn(error::log_app_errors))
         .layer(Extension(certs))
         .layer(Extension(notifier))

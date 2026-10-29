@@ -344,7 +344,7 @@ pub struct Notifier {
 
 impl Notifier {
     pub async fn new(config: &Config) -> Result<Self, Box<dyn std::error::Error>> {
-        let key = load_or_create_key(&config.notifications.vapid_key).await?;
+        let key = load_or_create_key(&config.vapid_key_path()).await?;
         let public_key =
             Base64UrlUnpadded::encode_string(&key.public_key().public_key().to_bytes_uncompressed());
         let contact = config

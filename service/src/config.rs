@@ -68,33 +68,30 @@ impl Default for CertConfig {
     }
 }
 
-fn vapid_key_default() -> PathBuf {
-    PathBuf::from("certs/vapid.key")
-}
-
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, Default)]
 pub struct NotificationsConfig {
     /// The private key that signs Web Push requests (VAPID). Made on first start if missing.
-    /// Changing it invalidates every browser's subscription.
-    #[serde(default = "vapid_key_default")]
-    pub vapid_key: PathBuf,
+    /// Changing it invalidates every browser's subscription. Defaults to `vapid.key` in the CA's
+    /// folder (`certs.ca`), which the service can already write to and keeps private.
+    #[serde(default)]
+    pub vapid_key: Option<PathBuf>,
     /// Who push services can contact about our messages: a `mailto:` or `https:` URL.
     /// Defaults to `public_url`.
     #[serde(default)]
     pub contact: Option<String>,
 }
 
-impl Default for NotificationsConfig {
-    fn default() -> Self {
-        Self {
-            vapid_key: vapid_key_default(),
-            contact: None,
-        }
-    }
-}
-
 fn public_url_default() -> String {
     "http://localhost:8001".to_string()
+}
+
+impl Config {
+    pub fn vapid_key_path(&self) -> PathBuf {
+        self.notifications
+            .vapid_key
+            .clone()
+            .unwrap_or_else(|| self.certs.ca.join("vapid.key"))
+    }
 }
 
 #[derive(Debug, Deserialize, Clone)]

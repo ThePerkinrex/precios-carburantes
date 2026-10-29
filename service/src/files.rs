@@ -16,7 +16,7 @@ mod dynamic_load;
 #[cfg(not(feature = "include-static"))]
 use dynamic_load as load;
 
-pub use load::load_file_hidden;
+pub use load::{load_file, load_file_hidden};
 
 pub async fn file(Path(path): Path<PathBuf>) -> Result<Response, AppError> {
     // info!("!{}", path.display());
