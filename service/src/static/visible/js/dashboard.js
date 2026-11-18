@@ -7,6 +7,8 @@ import { formatDate, formatDateTime, parseFecha } from "./dates.js";
 import { formatEuros } from "./money.js";
 import { gapSegment, timeAxis } from "./time_axis.js";
 import { getPriceHistory, renderBoard } from "./price_board.js";
+import { renderWhy } from "./forecast_why.js";
+import { initWholesale } from "./wholesale_chart.js";
 import { SETTLE_DAYS, TAXES_PAGE, anyCutBetween, loadFuelTaxes, nextTaxChange, settling, taxChanges, untaxedPrice } from "./fuel_taxes.js";
 
 const ccaaSelect = document.getElementById("ccaaSelect");
@@ -30,6 +32,7 @@ const taxNext = document.getElementById("taxNext");
 const taxSummary = document.getElementById("taxSummary");
 const outlookCard = document.getElementById("outlookCard");
 const outlookTable = document.getElementById("outlookTable");
+const whyBox = document.getElementById("whyBox");
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_AREAS = 4;
@@ -342,6 +345,7 @@ async function update() {
 		renderChart(histories, forecasts);
 		renderTable(histories);
 		renderOutlook(forecasts);
+		renderWhy(whyBox, forecasts, { gasolina_95: G95, gasoleo_a: DIESEL });
 		renderWeekdays(weekdayHistory ?? active);
 	} catch (err) {
 		if (id !== requestId) return;
@@ -792,6 +796,8 @@ compareButton.addEventListener("click", () => {
 	addArea(candidates.find((key) => !taken.has(key)));
 	update();
 });
+initWholesale(document.getElementById("wholesaleCard"), { colors: { gasolina_95: G95, gasoleo_a: DIESEL }, muted: "#9ca3af" });
+
 rangeGroup.addEventListener("click", (event) => {
 	const range = event.target.closest("button")?.dataset.range;
 	if (!range) return;

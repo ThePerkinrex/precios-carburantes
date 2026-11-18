@@ -202,7 +202,8 @@ impl<'a> Series<'a> {
         self.day(d).map(|x| x.pump)
     }
 
-    fn net(&self, d: NaiveDate) -> Option<f64> {
+    /// The pump price without taxes.
+    pub fn net(&self, d: NaiveDate) -> Option<f64> {
         self.day(d).map(|x| x.net)
     }
 
@@ -424,6 +425,45 @@ pub struct Forecast {
     pub high: f64,
 }
 
+/// Why the forecast is what it is (Model::explain), in €/L with taxes. `parts` add up to the
+/// forecast change; the rest are the facts behind them, as the model sees them: the change
+/// scheduled taxes would make with full pass-through, the pump price before taxes minus the futures' price (`margin`, and its training mean), and the
+/// changes of the futures' price and of the pump price before taxes over the last 7 and
+/// 28 days.
+#[derive(Serialize, Deserialize)]
+pub struct Explanation {
+    pub parts: Parts,
+    pub scheduled_taxes: f64,
+    pub margin: f64,
+    pub usual_margin: f64,
+    pub wholesale_7d: f64,
+    pub wholesale_28d: f64,
+    pub pump_7d: f64,
+    pub pump_28d: f64,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Parts {
+    /// Scheduled tax changes, and the pass-through of recent ones.
+    pub taxes: f64,
+    /// The pump price's own recent rises and falls.
+    pub trend: f64,
+    /// The pump price's distance from the futures' price, vs usual.
+    pub margin: f64,
+    /// The futures' rises and falls over the last 4 weeks.
+    pub wholesale: f64,
+    /// The target day's weekday.
+    pub weekday: f64,
+    /// The average change in training.
+    pub base: f64,
+}
+
+impl Parts {
+    pub fn sum(&self) -> f64 {
+        self.taxes + self.trend + self.margin + self.wholesale + self.weekday + self.base
+    }
+}
+
 impl Model {
     /// Fits on the samples with a known target and features; None if there are too few.
     pub fn fit<'s>(samples: impl Iterator<Item = &'s Sample>) -> Option<Self> {
@@ -454,6 +494,42 @@ impl Model {
     fn change(&self, s: &Sample) -> Option<f64> {
         let x = s.x.as_ref()?;
         Some((x[0] + self.ridge.predict(x) + s.tax_trend?) / 2.0)
+    }
+
+    /// Splits the forecast change into what each group of inputs adds to it. The model is
+    /// linear, so the parts add up to the change exactly. Each ridge input counts as its
+    /// distance from its training mean, so a part is the push from being unlike the usual day;
+    /// the base is the average change in training past the scheduled taxes.
+    pub fn explain(&self, s: &Sample) -> Option<Explanation> {
+        let x = s.x.as_ref()?;
+        let trend = s.tax_trend? - x[0];
+        let r = &self.ridge;
+        let part = |range: std::ops::Range<usize>| -> f64 {
+            range
+                .map(|k| (x[k] - r.mean[k]) / r.std[k] * r.beta[k])
+                .sum::<f64>()
+                / 2.0
+        };
+        let gross = |k: std::ops::Range<usize>| x[k].iter().sum::<f64>();
+        Some(Explanation {
+            parts: Parts {
+                // Both models add the scheduled tax change in full; the ridge corrects it
+                // for partial pass-through, with the recent tax change.
+                taxes: x[0] + part(0..2),
+                trend: part(2..12) + trend / 2.0,
+                margin: part(12..13),
+                wholesale: part(13..19),
+                weekday: part(19..25),
+                base: r.intercept / 2.0,
+            },
+            scheduled_taxes: x[0],
+            margin: x[12],
+            usual_margin: r.mean[12],
+            wholesale_7d: x[13] + x[16],
+            wholesale_28d: gross(13..16) + gross(16..19),
+            pump_7d: gross(2..9),
+            pump_28d: gross(2..12),
+        })
     }
 
     pub fn forecast(&self, s: &Sample) -> Option<Forecast> {

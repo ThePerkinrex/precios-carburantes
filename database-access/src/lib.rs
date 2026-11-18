@@ -356,6 +356,21 @@ const MIGRATIONS: &[&[&str]] = &[
         "CREATE INDEX idx_notification_outbox_pending ON notification_outbox(next_attempt_at)
             WHERE sent_at IS NULL",
     ],
+    // Why each national forecast is what it is, and the price it's about.
+    //
+    // - pronosticos.explicacion: the forecast change split by input group, and the facts
+    //   behind them, as JSON (national::Explanation in downloader/src/forecast).
+    // - precios_netos: Spain's average pump price without taxes each day (the stations under
+    //   the general taxes, as the forecast sees it), in €/L, to chart against wholesale prices.
+    &[
+        "ALTER TABLE pronosticos ADD COLUMN explicacion TEXT",
+        "CREATE TABLE precios_netos (
+            combustible TEXT NOT NULL,
+            fecha TEXT NOT NULL,
+            neto REAL NOT NULL,
+            PRIMARY KEY (combustible, fecha)
+        ) WITHOUT ROWID",
+    ],
 ];
 
 pub const DEFAULT_DB_PATH: &str = "precios_carburantes.db";

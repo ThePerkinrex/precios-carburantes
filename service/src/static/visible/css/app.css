@@ -781,6 +781,113 @@ select {
 	white-space: normal;
 }
 
+/* The outlook's "Why?": each part of a forecast as a bar from the middle,
+   right for up and left for down, on one scale for both fuels. */
+.why {
+	margin-top: 12px;
+	border-top: 1px solid var(--line);
+	padding-top: 8px;
+}
+
+.why > summary {
+	margin: 0 0 0 8px;
+	font-size: 0.95rem;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.why-list {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+	gap: 8px 24px;
+	margin: 0 8px;
+}
+
+.why-fuel h3 {
+	display: flex;
+	align-items: center;
+	margin: 8px 0 4px;
+	font-size: 0.95rem;
+}
+
+.why-total {
+	margin-left: auto;
+	font-variant-numeric: tabular-nums;
+}
+
+.why-total.up,
+.why-part.up .why-value {
+	color: #b91c1c;
+}
+
+.why-total.down,
+.why-part.down .why-value {
+	color: #15803d;
+}
+
+.why-parts {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.why-part {
+	display: grid;
+	grid-template-columns: 1fr auto;
+	grid-template-areas: "label value" "bar bar" "note note";
+	column-gap: 8px;
+	padding: 6px 0;
+	border-top: 1px solid var(--line);
+}
+
+.why-label {
+	grid-area: label;
+	font-size: 0.9rem;
+}
+
+.why-value {
+	grid-area: value;
+	font-size: 0.9rem;
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+}
+
+.why-part.flat .why-value,
+.why-part.flat .why-label {
+	color: var(--muted);
+}
+
+.why-bar {
+	grid-area: bar;
+	position: relative;
+	height: 8px;
+	margin: 4px 0;
+	background: linear-gradient(var(--line), var(--line)) center / 1px 100% no-repeat;
+}
+
+.why-bar i {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	min-width: 0;
+}
+
+.why-part.up .why-bar i {
+	background: #dc2626;
+	border-radius: 0 4px 4px 0;
+}
+
+.why-part.down .why-bar i {
+	background: #16a34a;
+	border-radius: 4px 0 0 4px;
+}
+
+.why-note {
+	grid-area: note;
+	font-size: 0.75rem;
+	color: var(--muted);
+}
+
 .swatch {
 	display: inline-block;
 	width: 10px;

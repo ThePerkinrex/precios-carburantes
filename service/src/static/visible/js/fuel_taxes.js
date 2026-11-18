@@ -36,6 +36,7 @@ const KNOWN_CPI = {
 	"2026-06": { gasolina_95: 1.3, gasoleo_a: 14.1 },
 	"2026-07": { gasolina_95: 7.3, gasoleo_a: 15.7 },
 	"2026-09": { gasolina_95: 27.5, gasoleo_a: 34.0 },
+	"2026-10": { gasolina_95: 20.7, gasoleo_a: 36.2 },
 };
 
 // A cut for both fuels: a number, or { base, safeguards } where each

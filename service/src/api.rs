@@ -322,6 +322,9 @@ struct NationalForecast {
     cambio: f64,
     bajo: f64,
     alto: f64,
+    /// What each input adds to `cambio`, and the facts behind it (national::Explanation in
+    /// downloader/src/forecast); null for forecasts made before it was stored.
+    explicacion: Option<serde_json::Value>,
 }
 
 /// Each fuel's latest national forecasts; empty until `downloader forecast` has run.
@@ -331,7 +334,7 @@ async fn price_forecast(
     let conn = pool.get().unwrap();
     let rows = conn
         .prepare(
-            "SELECT combustible, horizonte, origen, precio, cambio, bajo, alto FROM pronosticos p
+            "SELECT combustible, horizonte, origen, precio, cambio, bajo, alto, explicacion FROM pronosticos p
             WHERE origen = (SELECT MAX(origen) FROM pronosticos q WHERE q.combustible = p.combustible)
             ORDER BY combustible, horizonte",
         )?
@@ -344,10 +347,97 @@ async fn price_forecast(
                 cambio: row.get(4)?,
                 bajo: row.get(5)?,
                 alto: row.get(6)?,
+                explicacion: row
+                    .get::<_, Option<String>>(7)?
+                    .and_then(|j| serde_json::from_str(&j).ok()),
             })
         })?
         .collect::<Result<_, _>>()?;
     Ok(Json(rows))
+}
+
+/// U.S. gallons per litre and barrels: futures are quoted in dollars per gallon (products)
+/// or per barrel (crude).
+const GALLON_L: f64 = 3.785411784;
+const BARREL_L: f64 = 158.987294928;
+
+#[derive(Deserialize)]
+struct WholesaleParams {
+    /// The first day, YYYY-MM-DD; everything if missing.
+    desde: Option<String>,
+}
+
+/// One day of the market prices pump prices follow, in €/L without taxes. Futures are each
+/// trading day's close (`downloader markets`); the pre-tax pump prices are Spain's average
+/// without Canarias, Ceuta and Melilla (`downloader forecast`). Missing values are null.
+#[derive(Serialize, Default)]
+struct WholesaleDay {
+    fecha: String,
+    /// NY RBOB gasoline and NY Harbor ULSD futures, Brent crude futures.
+    gasolina: Option<f64>,
+    gasoleo: Option<f64>,
+    brent: Option<f64>,
+    /// The average pump price without taxes.
+    neto_gasolina_95: Option<f64>,
+    neto_gasoleo_a: Option<f64>,
+}
+
+async fn wholesale_prices(
+    Query(params): Query<WholesaleParams>,
+    State(pool): State<DbPool>,
+) -> Result<Json<Vec<WholesaleDay>>, AppError> {
+    let conn = pool.get().unwrap();
+    let desde = params.desde.unwrap_or_default();
+    let mut days: std::collections::BTreeMap<String, WholesaleDay> = Default::default();
+    // Dollars per euro on each trading day of the futures, or the last day before it.
+    let mut stmt = conn.prepare(
+        "SELECT m.serie, m.fecha, m.valor / (
+            SELECT u.valor FROM mercados u WHERE u.serie = 'ecb:USD' AND u.fecha <= m.fecha
+            ORDER BY u.fecha DESC LIMIT 1
+        ) FROM mercados m
+        WHERE m.serie IN ('yf:RB=F', 'yf:HO=F', 'yf:BZ=F') AND m.fecha >= ?1",
+    )?;
+    let rows = stmt.query_map([&desde], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, Option<f64>>(2)?,
+        ))
+    })?;
+    for row in rows {
+        let (serie, fecha, eur) = row?;
+        let day = days.entry(fecha.clone()).or_insert_with(|| WholesaleDay {
+            fecha,
+            ..Default::default()
+        });
+        match serie.as_str() {
+            "yf:RB=F" => day.gasolina = eur.map(|v| v / GALLON_L),
+            "yf:HO=F" => day.gasoleo = eur.map(|v| v / GALLON_L),
+            _ => day.brent = eur.map(|v| v / BARREL_L),
+        }
+    }
+    let mut stmt =
+        conn.prepare("SELECT combustible, fecha, neto FROM precios_netos WHERE fecha >= ?1")?;
+    let rows = stmt.query_map([&desde], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, f64>(2)?,
+        ))
+    })?;
+    for row in rows {
+        let (fuel, fecha, neto) = row?;
+        let day = days.entry(fecha.clone()).or_insert_with(|| WholesaleDay {
+            fecha,
+            ..Default::default()
+        });
+        if fuel == "gasoleo_a" {
+            day.neto_gasoleo_a = Some(neto);
+        } else {
+            day.neto_gasolina_95 = Some(neto);
+        }
+    }
+    Ok(Json(days.into_values().collect()))
 }
 
 /// A station's odds that its price of a fuel is lower, the same or higher `horizonte` days
@@ -392,6 +482,7 @@ pub fn get_router() -> Router<DbPool> {
         .route("/prices/history", get(price_history))
         .route("/prices/provinces", get(province_prices))
         .route("/prices/forecast", get(price_forecast))
+        .route("/prices/wholesale", get(wholesale_prices))
         .route("/{id}/history", get(price_history_station))
         .route("/{id}/forecast", get(station_forecast))
         .nest("/user", user::get_router())

@@ -509,4 +509,34 @@ export default {
 	"This browser's push service isn't supported": "El servicio de notificaciones de este navegador no es compatible",
 	"Invalid push subscription": "Suscripción a notificaciones no válida",
 	"You have the most devices you can: remove one to add another": "Ya tienes el máximo de dispositivos: quita uno para añadir otro",
+	// Forecast explanation and wholesale prices (dashboard).
+	"Why?": "¿Por qué?",
+	"What moves each forecast, and by how much. The parts add up to the change.":
+		"Qué mueve cada previsión, y cuánto. Las partes suman el cambio.",
+	"Forecast horizon": "Plazo de la previsión",
+	"Tax changes": "Cambios de impuestos",
+	"None scheduled in the next {n} days.": "Ninguno previsto en los próximos {n} días.",
+	"Scheduled ones would move the price {change} if passed on in full.":
+		"Los previstos moverían el precio {change} si se repercutieran del todo.",
+	"Recent pump price trend": "Tendencia reciente del surtidor",
+	"Before taxes: {week} in the last 7 days, {month} in 28.": "Sin impuestos: {week} en los últimos 7 días, {month} en 28.",
+	"Wholesale futures": "Futuros mayoristas",
+	"With VAT: {week} in the last 7 days, {month} in 28.": "Con IVA: {week} en los últimos 7 días, {month} en 28.",
+	"Gap over wholesale": "Diferencia con el mayorista",
+	"The pump price is {gap} over the futures (with VAT); {usual} on average since 2007.":
+		"El surtidor está {gap} por encima de los futuros (con IVA); {usual} de media desde 2007.",
+	"Day of the week": "Día de la semana",
+	"Some weekdays see more price changes than others.": "Algunos días de la semana hay más cambios de precio que otros.",
+	"Usual drift": "Deriva habitual",
+	"The average change over that many days in past years.": "El cambio medio en ese número de días en años anteriores.",
+	"Wholesale and oil prices": "Precios mayoristas y del petróleo",
+	"Pump prices before taxes, wholesale futures and Brent crude over time":
+		"Precios del surtidor sin impuestos, futuros mayoristas y crudo Brent a lo largo del tiempo",
+	"All in € per litre without taxes: Spain's average pump price (without Canarias, Ceuta and Melilla), New York futures for the same fuel and Brent crude. The gap between the pump and the futures pays for transport, storage, biofuels and the stations' margin. Pump prices follow the futures within days to weeks.":
+		"Todo en € por litro sin impuestos: el precio medio del surtidor en España (sin Canarias, Ceuta y Melilla), los futuros de Nueva York del mismo combustible y el crudo Brent. La diferencia entre el surtidor y los futuros paga el transporte, el almacenamiento, los biocombustibles y el margen de las gasolineras. Los precios del surtidor siguen a los futuros en días o semanas.",
+	"Pump price before taxes": "Surtidor sin impuestos",
+	"New York futures": "Futuros de Nueva York",
+	"Brent crude": "Crudo Brent",
+	"Gap: {gap}": "Diferencia: {gap}",
+	"Couldn't load the wholesale prices.": "No se pudieron cargar los precios mayoristas.",
 };

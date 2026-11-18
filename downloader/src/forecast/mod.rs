@@ -25,6 +25,8 @@ use taxes::Taxes;
 
 const FUELS: [&str; 2] = ["gasolina_95", "gasoleo_a"];
 const REFIT_DAYS: i64 = 7;
+/// How far back each forecast run rewrites the stored pre-tax prices.
+const NET_REWRITE_DAYS: u64 = 30;
 
 pub fn run(args: &[String]) -> Result<(), Box<dyn Error>> {
     let manager = database_access::get_connection_manager(database_access::DEFAULT_DB_PATH)?;
@@ -173,11 +175,15 @@ fn predict(conn: &mut Connection) -> Result<(), Box<dyn Error>> {
             let Some(model) = load::<national::Model>(conn, &format!("nacional:{fuel}:{h}"))? else {
                 continue;
             };
-            let Some(f) = s.sample(t, h).and_then(|x| model.forecast(&x)) else {
+            let Some((f, why)) = s
+                .sample(t, h)
+                .and_then(|x| Some((model.forecast(&x)?, model.explain(&x)?)))
+            else {
                 eprintln!("Pronósticos: sin datos para {fuel} a {h} días desde {t}");
                 continue;
             };
-            national.insert(h, f);
+            debug_assert!((why.parts.sum() - f.change).abs() < 1e-9);
+            national.insert(h, (f, serde_json::to_string(&why)?));
         }
 
         let st = Stations::load(
@@ -196,7 +202,7 @@ fn predict(conn: &mut Connection) -> Result<(), Box<dyn Error>> {
             else {
                 continue;
             };
-            let Some(change) = national.get(&(h as u64)).map(|f| f.change) else {
+            let Some(change) = national.get(&(h as u64)).map(|(f, _)| f.change) else {
                 continue;
             };
             let inputs = inputs(
@@ -214,13 +220,37 @@ fn predict(conn: &mut Connection) -> Result<(), Box<dyn Error>> {
             }
         }
 
+        // The pre-tax price for the dashboard's wholesale chart: the days since the last stored
+        // one's month before, which the backfill or late snapshots may have changed.
+        let stored: Option<String> = conn.query_row(
+            "SELECT MAX(fecha) FROM precios_netos WHERE combustible = ?",
+            [fuel],
+            |r| r.get(0),
+        )?;
+        let since = stored
+            .and_then(|d| chrono::NaiveDate::parse_from_str(&d, "%Y-%m-%d").ok())
+            .map(|d| d - Days::new(NET_REWRITE_DAYS));
+        let net: Vec<_> = s
+            .dates()
+            .filter(|&d| since.is_none_or(|since| d >= since))
+            .filter_map(|d| Some((d, s.net(d)?)))
+            .collect();
+
         let tx = conn.transaction()?;
-        for (h, f) in &national {
+        for (h, (f, why)) in &national {
             tx.execute(
-                "INSERT OR REPLACE INTO pronosticos (origen, combustible, horizonte, precio, cambio, bajo, alto, creado)
-                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-                params![t.to_string(), fuel, *h as i64, price, f.change, f.low, f.high, created],
+                "INSERT OR REPLACE INTO pronosticos (origen, combustible, horizonte, precio, cambio, bajo, alto, creado, explicacion)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                params![t.to_string(), fuel, *h as i64, price, f.change, f.low, f.high, created, why],
             )?;
+        }
+        {
+            let mut stmt = tx.prepare(
+                "INSERT OR REPLACE INTO precios_netos (combustible, fecha, neto) VALUES (?1, ?2, ?3)",
+            )?;
+            for (d, v) in &net {
+                stmt.execute(params![fuel, d.to_string(), v])?;
+            }
         }
         tx.execute(
             "DELETE FROM pronosticos_estaciones WHERE combustible = ?",

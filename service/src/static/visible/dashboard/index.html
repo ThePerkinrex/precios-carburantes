@@ -115,7 +115,33 @@
 							<tbody></tbody>
 						</table>
 					</div>
+					<details id="whyBox" class="collapsible why" hidden>
+						<summary>Why?</summary>
+						<p class="card-note">What moves each forecast, and by how much. The parts add up to the change.</p>
+						<div id="whyHorizon" class="segmented" role="radiogroup" aria-label="Forecast horizon"></div>
+						<div id="whyList" class="why-list"></div>
+					</details>
 				</section>
+
+				<details id="wholesaleCard" class="card collapsible" hidden>
+					<summary><h2>Wholesale and oil prices</h2></summary>
+					<div class="card-head">
+						<div id="wholesaleFuel" class="segmented" role="radiogroup" aria-label="Fuel">
+							<button type="button" role="radio" data-fuel="gasolina_95">Gasolina 95</button>
+							<button type="button" role="radio" data-fuel="gasoleo_a">Gasóleo A</button>
+						</div>
+						<div id="wholesaleRange" class="segmented" role="radiogroup" aria-label="Time window">
+							<button type="button" role="radio" data-range="3m">3M</button>
+							<button type="button" role="radio" data-range="1y">1Y</button>
+							<button type="button" role="radio" data-range="5y">5Y</button>
+							<button type="button" role="radio" data-range="all">All</button>
+						</div>
+					</div>
+					<div class="chart-box">
+						<canvas id="wholesaleChart" aria-label="Pump prices before taxes, wholesale futures and Brent crude over time"></canvas>
+					</div>
+					<p class="card-note">All in € per litre without taxes: Spain's average pump price (without Canarias, Ceuta and Melilla), New York futures for the same fuel and Brent crude. The gap between the pump and the futures pays for transport, storage, biofuels and the stations' margin. Pump prices follow the futures within days to weeks.</p>
+				</details>
 
 				<details class="card weekday collapsible">
 					<summary><h2>Cheapest day to fill up</h2></summary>

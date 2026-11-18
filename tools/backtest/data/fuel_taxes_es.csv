@@ -22,6 +22,7 @@ from,published,region,fuel,component,value,unit,confidence,source,note
 2026-11-01,2026-09-30,ES,both,cut,130,eur_per_1000l,exact,RDL 25/2026,base cut before the safeguard was known
 2026-11-01,2026-10-15,ES,both,cut,200,eur_per_1000l,published-approx,RDL 25/2026 safeguard: CPI 09/2026 +27.5 % / +34.0 %,published = INE CPI release (approximate date)
 2026-12-01,2026-09-30,ES,both,cut,60,eur_per_1000l,exact,RDL 25/2026,base cut; safeguards hang on CPI 10/2026 and 09/2026 (see fuel_taxes.js)
+2026-12-01,2026-11-13,ES,both,cut,200,eur_per_1000l,published-approx,RDL 25/2026 safeguard: CPI 10/2026 +20.7 % / +36.2 %,published = INE CPI release (approximate date)
 2027-01-01,2026-09-30,ES,both,cut,0,eur_per_1000l,exact,RDL 25/2026,end of the cuts
 2022-04-01,2022-03-30,ALL,both,bonus,,eur_per_l,exact,RDL 6/2022,"discount at the pump, after IVA, everywhere incl. Canarias (0.20); documentation only: the Ministry's prices don't include it (no national step on 2022-04-01 or 2023-01-01 in the backfill)"
 2022-07-01,2022-03-30,ALL,both,bonus,,eur_per_l,exact,RDL 6/2022,planned end when first published
